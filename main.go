@@ -26,9 +26,9 @@ const (
 	ComponentAI
 )
 
-type Position struct {
-	X, Y int
-}
+type Position struct{ X, Y int }
+
+var zeroPos = Position{}
 
 func (pos Position) Less(other Position) bool {
 	return pos.Y < other.Y || pos.X < other.X
@@ -36,6 +36,34 @@ func (pos Position) Less(other Position) bool {
 
 func (pos Position) Equal(other Position) bool {
 	return pos.X == other.X && pos.Y == other.Y
+}
+
+func (pos Position) Clamp(max Position) Position {
+	if pos.X < 0 {
+		pos.X = 0
+	}
+	if pos.Y < 0 {
+		pos.Y = 0
+	}
+	if pos.X > max.X {
+		pos.X = max.X
+	}
+	if pos.Y > max.Y {
+		pos.Y = max.Y
+	}
+	return pos
+}
+
+func (pos Position) Div(n int) Position {
+	pos.X /= n
+	pos.Y /= n
+	return pos
+}
+
+func (pos Position) Mul(n int) Position {
+	pos.X *= n
+	pos.Y *= n
+	return pos
 }
 
 func (pos Position) Add(other Position) Position {
@@ -47,6 +75,16 @@ func (pos Position) Add(other Position) Position {
 func (pos Position) Sub(other Position) Position {
 	pos.X -= other.X
 	pos.Y -= other.Y
+	return pos
+}
+
+func (pos Position) Abs() Position {
+	if pos.X < 0 {
+		pos.X = -pos.X
+	}
+	if pos.Y < 0 {
+		pos.Y = -pos.Y
+	}
 	return pos
 }
 
@@ -75,10 +113,13 @@ type World struct {
 	Entities  []ComponentType
 	Names     []string
 	Positions []Position
-	Glyphs    []string
-	Stats     []Stats
+	Glyphs    []rune
+	Stats     []Stats // TODO: this being dense is quite wasteful for walls
 
 	logs []string
+
+	// TODO: collect render state
+	viewSize Position
 
 	// TODO: collect collision system state
 	coll  []int
@@ -110,7 +151,7 @@ func (w *World) AddEntity() Entity {
 	w.Entities = append(w.Entities, ComponentNone)
 	w.Names = append(w.Names, "")
 	w.Positions = append(w.Positions, Position{})
-	w.Glyphs = append(w.Glyphs, "")
+	w.Glyphs = append(w.Glyphs, 0)
 	w.Stats = append(w.Stats, Stats{})
 	return ent
 }
@@ -142,15 +183,15 @@ func (e Entity) SetPosition(pos Position) {
 	e.w.Positions[e.id] = pos
 }
 
-func (e Entity) Glyph() string {
+func (e Entity) Glyph() rune {
 	if !e.Has(ComponentGlyph) {
-		return ""
+		return 0
 	}
 	return e.w.Glyphs[e.id]
 }
-func (e Entity) SetGlyph(Glyph string) {
+func (e Entity) SetGlyph(r rune) {
 	e.w.Entities[e.id] |= ComponentGlyph
-	e.w.Glyphs[e.id] = Glyph
+	e.w.Glyphs[e.id] = r
 }
 
 func (e Entity) Stats() Stats {
@@ -190,12 +231,39 @@ func rollStats() Stats {
 	}
 }
 
-func (w *World) RollChar(name, glyph string) Entity {
+func (w *World) addRenderable(pos Position, glyph rune) Entity {
 	ent := w.AddEntity()
 	ent.AddComponent(ComponentCollide)
-	ent.SetName(name)
 	ent.SetGlyph(glyph)
-	ent.SetPosition(Position{0, 0})
+	ent.SetPosition(pos)
+	return ent
+}
+
+func (w *World) AddBox(tl, br Position, glyph rune) {
+	// TODO: the box should be an entity, rather than each cell
+	sz := br.Sub(tl).Abs()
+	pos := tl
+	for i := 0; i < sz.X; i++ {
+		w.addRenderable(pos, glyph)
+		pos.X++
+	}
+	for i := 0; i < sz.Y; i++ {
+		w.addRenderable(pos, glyph)
+		pos.Y++
+	}
+	for i := 0; i < sz.X; i++ {
+		w.addRenderable(pos, glyph)
+		pos.X--
+	}
+	for i := 0; i < sz.Y; i++ {
+		w.addRenderable(pos, glyph)
+		pos.Y--
+	}
+}
+
+func (w *World) RollChar(name string, glyph rune) Entity {
+	ent := w.addRenderable(Position{0, 0}, glyph)
+	ent.SetName(name)
 	ent.SetStats(rollStats())
 	return ent
 }
@@ -304,36 +372,122 @@ func (w *World) Move(move Position) {
 		// TODO: choose something random
 		// TODO: position
 		if _, occupied := w.collides(len(w.Entities), Position{0, 0}); !occupied {
-			w.RollChar("enemy", "x").AddComponent(ComponentInput | ComponentAI)
+			w.RollChar("enemy", 'x').AddComponent(ComponentInput | ComponentAI)
 			w.Log("spawned an enemy")
 		}
 	}
 }
 
-func (w *World) Render() {
-	w.Log("%v souls v %v demons", w.CountAll(ComponentSoul), w.CountAll(ComponentAI))
-
-	if len(w.logs) > 0 {
-		for _, s := range w.logs {
-			fmt.Printf("- %s\n", s)
+func (w *World) Render() (rerr error) {
+	buf := make([]termbox.Cell, w.viewSize.X*w.viewSize.Y)
+	defer func() {
+		if rerr == nil {
+			termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
+			copy(termbox.CellBuffer(), buf)
+			rerr = termbox.Flush()
 		}
-		fmt.Printf("\n")
-		w.logs = w.logs[:0]
-	}
+	}()
 
+	// collect world extent, and compute a viewport focus position
+	var (
+		topLeft, bottomRight Position
+		focus                Position
+		first                bool
+	)
 	for id, t := range w.Entities {
 		if t&renderMask == renderMask {
-			var desc string
-			if t&ComponentName == ComponentName {
-				desc += fmt.Sprintf(" %q", w.Names[id])
+			pos := w.Positions[id]
+			if t&ComponentSoul != 0 {
+				// TODO: centroid between all souls would be a way to move
+				// beyond "last wins"
+				focus = pos
 			}
-			if t&ComponentStats == ComponentStats {
-				desc += fmt.Sprintf(" %+v", w.Stats[id])
+			if first {
+				topLeft = pos
+				bottomRight = pos
+				first = false
+				continue
 			}
-			fmt.Printf("%s @%v%s\n", w.Glyphs[id], w.Positions[id], desc)
+			if pos.X < topLeft.X {
+				topLeft.X = pos.X
+			}
+			if pos.Y < topLeft.Y {
+				topLeft.Y = pos.Y
+			}
+			if pos.X > bottomRight.X {
+				bottomRight.X = pos.X
+			}
+			if pos.Y > bottomRight.Y {
+				bottomRight.Y = pos.Y
+			}
 		}
 	}
-	fmt.Printf("\n")
+
+	// calculate viewport to center the focus point
+	viewOffset := w.viewSize.Div(2).Sub(focus)
+
+	// render all glyphs in view
+	for id, t := range w.Entities {
+		if t&renderMask == renderMask {
+			pos := w.Positions[id].Add(viewOffset)
+			if pos.Less(zeroPos) {
+				continue
+			}
+			if w.viewSize.Less(pos) {
+				continue
+			}
+			buf[pos.Y*w.viewSize.X+pos.X].Ch = w.Glyphs[id]
+		}
+	}
+
+	// render status header
+	status := fmt.Sprintf("%v souls v %v demons", w.CountAll(ComponentSoul), w.CountAll(ComponentAI))
+	x := w.viewSize.X - len(status)
+	if x < 0 {
+		x = 0
+	}
+	for _, r := range status {
+		buf[x].Ch = r
+		x++
+		if x >= w.viewSize.X {
+			break
+		}
+	}
+
+	// render log at bottom of screen
+	// TODO: draw a nice frame around the log area
+	if len(w.logs) > 0 {
+		n := 5 // TODO: work with offset above to opportunistically expand
+		if n > len(w.logs) {
+			n = len(w.logs)
+		}
+		for i, y := len(w.logs)-n, w.viewSize.Y-n; i < len(w.logs); {
+			mess := w.logs[i]
+
+			x := 4
+			off := y*w.viewSize.X + x
+			for _, r := range mess {
+				buf[off].Ch = r
+				x++
+				off++
+				if x >= w.viewSize.X {
+					break
+				}
+			}
+
+			i++
+			y++
+		}
+	}
+
+	// if len(w.logs) > 0 {
+	// 	for _, s := range w.logs {
+	// 		fmt.Printf("- %s\n", s)
+	// 	}
+	// 	fmt.Printf("\n")
+	// }
+
+	return nil
 }
 
 func (w *World) CountAll(mask ComponentType) int {
@@ -430,15 +584,27 @@ func (w *World) move(id int, move Position) Position {
 func key2move(ev termbox.Event) (Position, bool) {
 	switch ev.Key {
 	case termbox.KeyArrowDown:
-		return Position{0, -1}, true
-	case termbox.KeyArrowUp:
 		return Position{0, 1}, true
+	case termbox.KeyArrowUp:
+		return Position{0, -1}, true
 	case termbox.KeyArrowLeft:
 		return Position{-1, 0}, true
 	case termbox.KeyArrowRight:
 		return Position{1, 0}, true
 	}
 	return Position{}, true
+}
+
+func termboxSize() Position {
+	w, h := termbox.Size()
+	return Position{w, h}
+}
+
+func signal(ch chan<- struct{}) {
+	select {
+	case ch <- struct{}{}:
+	default:
+	}
 }
 
 func main() {
@@ -450,6 +616,8 @@ func main() {
 
 		termbox.SetInputMode(termbox.InputEsc)
 
+		resized := make(chan struct{}, 1)
+		redraw := make(chan struct{}, 1)
 		done := make(chan error)
 		moves := make(chan Position, 1)
 
@@ -458,8 +626,12 @@ func main() {
 			for {
 				switch ev := termbox.PollEvent(); ev.Type {
 				case termbox.EventKey:
-					if ev.Key == termbox.KeyCtrlC {
+					switch ev.Key {
+					case termbox.KeyCtrlC:
 						break evloop
+					case termbox.KeyCtrlL:
+						signal(redraw)
+						continue
 					}
 
 					if move, ok := key2move(ev); ok {
@@ -472,9 +644,8 @@ func main() {
 
 					fmt.Printf("KEY: %+v\n", ev)
 
-					// XXX
-					// case termbox.EventResize:
-					//	 fmt.Printf("RESIZE: %+v\n", ev)
+				case termbox.EventResize:
+					signal(resized)
 
 				case termbox.EventError:
 					done <- ev.Err
@@ -486,15 +657,28 @@ func main() {
 
 		for {
 			var w World
-			player := w.RollChar("you", "@")
+			w.viewSize = termboxSize()
+
+			w.AddBox(Position{-5, -5}, Position{5, 5}, '#')
+
+			player := w.RollChar("you", '@')
 			player.AddComponent(ComponentInput | ComponentSoul)
 			w.Log("%s enter the world @%v", player.Name(), player.Position())
 
 			w.Render()
 			for w.CountAll(ComponentSoul) > 0 {
 				select {
+
 				case err := <-done:
 					return err
+
+				case <-resized:
+					w.viewSize = termboxSize()
+
+				case <-redraw:
+					if err := termbox.Sync(); err != nil {
+						return err
+					}
 
 				case move := <-moves:
 					w.Move(move)
