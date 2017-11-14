@@ -44,3 +44,15 @@ func (b Box) ExpandBy(d Point) Box {
 func (b Box) Contains(pt Point) bool {
 	return !(pt.Less(b.TopLeft) || b.BottomRight.Less(pt))
 }
+
+// DistanceTo returns a signed distance to the given point
+// from the nearest box corner.
+func (b Box) DistanceTo(pt Point) Point {
+	if pt.Less(b.TopLeft) {
+		return pt.Sub(b.TopLeft)
+	}
+	if b.BottomRight.Less(pt) {
+		return pt.Sub(b.BottomRight)
+	}
+	return Zero
+}
