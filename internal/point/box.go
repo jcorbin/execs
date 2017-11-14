@@ -14,7 +14,7 @@ func (b Box) Size() Point {
 	return pt
 }
 
-// ExpandTo expands a coy of the box to include the given point, returning the
+// ExpandTo expands a copy of the box to include the given point, returning the
 // copy.
 func (b Box) ExpandTo(pt Point) Box {
 	if pt.X < b.TopLeft.X {
