@@ -17,34 +17,6 @@ const (
 	renderMask = ComponentPosition | ComponentGlyph
 )
 
-type Box struct {
-	TopLeft     point.Point
-	BottomRight point.Point
-}
-
-func (b Box) Size() point.Point {
-	pt := b.BottomRight.Sub(b.TopLeft).Abs()
-	pt.X++
-	pt.Y++
-	return pt
-}
-
-func (b Box) ExpandTo(pt point.Point) Box {
-	if pt.X < b.TopLeft.X {
-		b.TopLeft.X = pt.X
-	}
-	if pt.Y < b.TopLeft.Y {
-		b.TopLeft.Y = pt.Y
-	}
-	if pt.X > b.BottomRight.X {
-		b.BottomRight.X = pt.X
-	}
-	if pt.Y > b.BottomRight.Y {
-		b.BottomRight.Y = pt.Y
-	}
-	return b
-}
-
 type World struct {
 	ecs.Core
 
@@ -70,9 +42,9 @@ func (w *World) addRenderable(pos point.Point, glyph rune) ecs.Entity {
 	return ent
 }
 
-func (w *World) Bounds() Box {
+func (w *World) Bounds() point.Box {
 	var (
-		box   Box
+		box   point.Box
 		first bool
 	)
 	for id, t := range w.Entities {
