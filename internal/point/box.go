@@ -39,3 +39,8 @@ func (b Box) ExpandBy(d Point) Box {
 	b.BottomRight = b.BottomRight.Add(d)
 	return b
 }
+
+// Contains returns true if a given point is inside the box.
+func (b Box) Contains(pt Point) bool {
+	return !(pt.Less(b.TopLeft) || b.BottomRight.Less(pt))
+}
