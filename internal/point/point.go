@@ -83,6 +83,11 @@ func (pt Point) Sign() Point {
 	return pt
 }
 
+// Dot return the dot product of this point with another.
+func (pt Point) Dot(other Point) int {
+	return pt.X*other.X + pt.Y*other.Y
+}
+
 func sign(i int) int {
 	if i < 0 {
 		return -1
