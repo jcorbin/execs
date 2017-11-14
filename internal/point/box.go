@@ -31,3 +31,11 @@ func (b Box) ExpandTo(pt Point) Box {
 	}
 	return b
 }
+
+// ExpandBy symmetrically expands a copy of the box by a given x/y
+// displacement, returning the copy.
+func (b Box) ExpandBy(d Point) Box {
+	b.TopLeft = b.TopLeft.Sub(d)
+	b.BottomRight = b.BottomRight.Add(d)
+	return b
+}
