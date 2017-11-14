@@ -14,7 +14,7 @@ func (b Box) Size() Point {
 	return pt
 }
 
-// ExpandTo expands a coy of the box to include the given point, returning the
+// ExpandTo expands a copy of the box to include the given point, returning the
 // copy.
 func (b Box) ExpandTo(pt Point) Box {
 	if pt.X < b.TopLeft.X {
@@ -30,4 +30,29 @@ func (b Box) ExpandTo(pt Point) Box {
 		b.BottomRight.Y = pt.Y
 	}
 	return b
+}
+
+// ExpandBy symmetrically expands a copy of the box by a given x/y
+// displacement, returning the copy.
+func (b Box) ExpandBy(d Point) Box {
+	b.TopLeft = b.TopLeft.Sub(d)
+	b.BottomRight = b.BottomRight.Add(d)
+	return b
+}
+
+// Contains returns true if a given point is inside the box.
+func (b Box) Contains(pt Point) bool {
+	return !(pt.Less(b.TopLeft) || b.BottomRight.Less(pt))
+}
+
+// DistanceTo returns a signed distance to the given point
+// from the nearest box corner.
+func (b Box) DistanceTo(pt Point) Point {
+	if pt.Less(b.TopLeft) {
+		return pt.Sub(b.TopLeft)
+	}
+	if b.BottomRight.Less(pt) {
+		return pt.Sub(b.BottomRight)
+	}
+	return Zero
 }
