@@ -163,9 +163,22 @@ func (v *View) render() (rerr error) {
 // Start takes control of the terminal and starts interaction loop (running on
 // a new goroutine).
 func (v *View) Start() error {
+	v.renderLock.Lock()
+	defer v.renderLock.Unlock()
+
+	if v.running {
+		return nil
+	}
+	v.running = true
+
 	if err := termbox.Init(); err != nil {
 		return err
 	}
+
+	v.err = nil
+	v.keys = make(chan KeyEvent, keyBufferSize)
+	v.done = make(chan struct{})
+	v.size = termboxSize()
 
 	priorInputMode := termbox.SetInputMode(termbox.InputCurrent)
 	defer termbox.SetInputMode(priorInputMode)
@@ -176,25 +189,20 @@ func (v *View) Start() error {
 	return nil
 }
 
-// Stop stops any interaction started by Start.
+// Stop stops any interaction loop started by Start, and waits for it to
+// finish.
 func (v *View) Stop() {
 	v.renderLock.Lock()
+	defer v.renderLock.Unlock()
 	v.running = false
-	v.renderLock.Unlock()
+	if v.done != nil {
+		<-v.done
+	}
 }
 
 func (v *View) pollEvents() {
 	defer termbox.Close()
-
-	if v.running {
-		return
-	}
-	v.running = true
-
-	v.err = nil
-	v.keys = make(chan KeyEvent, keyBufferSize)
-	v.done = make(chan struct{})
-	v.size = termboxSize()
+	defer close(v.done)
 
 	v.err = func() error {
 		for v.running {
@@ -221,12 +229,6 @@ func (v *View) pollEvents() {
 			case termbox.EventResize:
 				v.renderLock.Lock()
 				v.size.X, v.size.Y = ev.Width, ev.Height
-				if n := v.size.X * v.size.Y; n > cap(v.grid.Data) {
-					m := len(v.grid.Data)
-					data := make([]termbox.Cell, m, n)
-					copy(data, v.grid.Data)
-					v.grid.Data = data
-				}
 				if err := v.render(); err != nil {
 					return err
 				}
@@ -238,10 +240,6 @@ func (v *View) pollEvents() {
 		}
 		return nil
 	}()
-
-	close(v.done)
-	v.keys = nil
-	v.done = nil
 }
 
 func termboxSize() point.Point {
