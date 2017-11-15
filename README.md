@@ -40,7 +40,7 @@ Meta progress:
 ### [Three](../../tree/three)
 
 Feeling exhilarated from yesterday's progress, I took a day to focus on
-building a home:
+building a [home](../../tree/home):
 
 - `internal/point/point.go`: a cleaned up version of Two's `main.Point` for re-use.
 - `internal/view/grid.go`: a `Point` + `termbox.Cell` structure, called `Grid`,
