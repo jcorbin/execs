@@ -24,11 +24,17 @@ type View struct {
 	err     error
 	size    point.Point
 
+	ctx Context
+}
+
+// Context encapsulates all state to be rendered by the view.
+type Context struct {
 	// TODO: avoiding "layer"s or "window"s for now, but really...
-	header []string
-	footer []string
-	logs   []string
-	grid   Grid
+	Header []string
+	Footer []string
+	Logs   []string
+	Avail  point.Point
+	Grid   Grid
 }
 
 // KeyEvent represents a terminal key event.
@@ -47,117 +53,96 @@ func (v *View) Done() <-chan struct{} { return v.done }
 // Err returns any error after done has signaled.
 func (v *View) Err() error { return v.err }
 
+// Log grabs the rendering lock, and adds a log to the context's log buffer;
+// see Context.Log.
+func (v *View) Log(mess string, args ...interface{}) {
+	v.renderLock.Lock()
+	defer v.renderLock.Unlock()
+	v.ctx.Log(mess, args...)
+}
+
 // SetHeader copies the given lines into the internal header buffer, replacing
 // any prior.
-func (v *View) SetHeader(lines ...string) {
-	v.renderLock.Lock()
-	if cap(v.header) < len(lines) {
-		v.header = make([]string, len(lines))
+func (ctx *Context) SetHeader(lines ...string) {
+	if cap(ctx.Header) < len(lines) {
+		ctx.Header = make([]string, len(lines))
 	} else {
-		v.header = v.header[:len(lines)]
+		ctx.Header = ctx.Header[:len(lines)]
 	}
-	copy(v.header, lines)
-	v.renderLock.Unlock()
+	copy(ctx.Header, lines)
 }
 
 // SetFooter copies the given lines into the internal footer buffer, replacing
 // any prior.
-func (v *View) SetFooter(lines ...string) {
-	v.renderLock.Lock()
-	if cap(v.footer) < len(lines) {
-		v.footer = make([]string, len(lines))
+func (ctx *Context) SetFooter(lines ...string) {
+	if cap(ctx.Footer) < len(lines) {
+		ctx.Footer = make([]string, len(lines))
 	} else {
-		v.footer = v.footer[:len(lines)]
+		ctx.Footer = ctx.Footer[:len(lines)]
 	}
-	copy(v.footer, lines)
-	v.renderLock.Unlock()
+	copy(ctx.Footer, lines)
 }
 
 // Log adds a line to the internal log buffer. As much tail of the log buffer
 // is displayed after the header as possible; at least 5 lines.
-func (v *View) Log(mess string, args ...interface{}) {
-	v.logs = append(v.logs, fmt.Sprintf(mess, args...))
+func (ctx *Context) Log(mess string, args ...interface{}) {
+	ctx.Logs = append(ctx.Logs, fmt.Sprintf(mess, args...))
 }
 
-// Update updates the grid, by passing it to a function, and then using
-// whatever grid is returned; triggers a render, returning any error. The
-// function also gets how much space is available (after header and footer); it
-// may use this to choose to limit the returned grid, although this is not
-// required.
-func (v *View) Update(f func(Grid, point.Point) Grid) error {
-	v.renderLock.Lock()
-	defer v.renderLock.Unlock()
-	if v.size.X <= 0 || v.size.Y <= 0 {
-		v.size = termboxSize()
-	}
-	avail := v.size.Sub(point.Point{Y: len(v.footer) + len(v.header)})
-	g := f(v.grid, avail)
-	v.grid = g
-	return v.render()
-}
-
-// Render renders the current view, returning any terminal drawing error.
-func (v *View) Render() (rerr error) {
-	v.renderLock.Lock()
-	defer v.renderLock.Unlock()
-	if v.size.X <= 0 || v.size.Y <= 0 {
-		v.size = termboxSize()
-	}
-	return v.render()
-}
-
-func (v *View) render() (rerr error) {
+func (ctx *Context) render(termGrid Grid) {
 	const minLogLines = 5
 
-	if v.size.X <= 0 || v.size.Y <= 0 {
-		return fmt.Errorf("bogus terminal size %v", v.size)
-	}
-
-	buf := Grid{
-		Size: v.size,
-		Data: make([]termbox.Cell, v.size.X*v.size.Y),
-	}
-	defer func() {
-		if rerr == nil {
-			rerr = termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
-		}
-		if rerr == nil {
-			copy(termbox.CellBuffer(), buf.Data)
-			rerr = termbox.Flush()
-		}
-	}()
-
-	header := v.header
-	space := v.size.Sub(v.grid.Size)
+	header := ctx.Header
+	space := termGrid.Size.Sub(ctx.Grid.Size)
 	space.Y -= len(header)
-	space.Y -= len(v.footer)
+	space.Y -= len(ctx.Footer)
 
-	if len(v.logs) > 0 {
-		nLogs := len(v.logs)
+	if len(ctx.Logs) > 0 {
+		nLogs := len(ctx.Logs)
 		if nLogs > minLogLines {
 			nLogs = minLogLines
 		}
 		if n := nLogs + len(header); n > cap(header) {
 			nh := make([]string, len(header), n)
 			copy(nh, header)
-			v.header = nh
+			ctx.Header = nh
 			header = nh[:n]
 		} else {
 			header = header[:n]
 		}
-		copy(header[len(v.header):], v.logs[len(v.logs)-nLogs:])
-		space.Y -= len(v.logs)
+		copy(header[len(ctx.Header):], ctx.Logs[len(ctx.Logs)-nLogs:])
+		space.Y -= len(ctx.Logs)
 	}
 
-	buf.Copy(v.grid)
+	termGrid.Copy(ctx.Grid)
 	for i := 0; i < len(header); i++ {
-		buf.WriteString(i, AlignLeft, header[i])
+		termGrid.WriteString(i, AlignLeft, header[i])
 	}
-	for i, j := len(v.footer)-1, 1; i >= 0; i, j = i-1, j+1 {
-		buf.WriteString(v.size.Y-j, AlignRight, v.footer[i])
+	for i, j := len(ctx.Footer)-1, 1; i >= 0; i, j = i-1, j+1 {
+		termGrid.WriteString(termGrid.Size.Y-j, AlignRight, ctx.Footer[i])
 	}
+}
 
-	return nil
+func (v *View) render() error {
+	if v.size.X <= 0 || v.size.Y <= 0 {
+		v.size = termboxSize()
+	}
+	if v.size.X <= 0 || v.size.Y <= 0 {
+		return fmt.Errorf("bogus terminal size %v", v.size)
+	}
+	buf := make([]termbox.Cell, v.size.X*v.size.Y)
+
+	v.ctx.render(Grid{
+		Size: v.size,
+		Data: buf,
+	})
+
+	err := termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
+	if err == nil {
+		copy(termbox.CellBuffer(), buf)
+		err = termbox.Flush()
+	}
+	return err
 }
 
 // Start takes control of the terminal and starts interaction loop (running on
@@ -212,7 +197,10 @@ func (v *View) pollEvents() {
 				case termbox.KeyCtrlC:
 					return nil
 				case termbox.KeyCtrlL:
-					if err := v.Render(); err != nil {
+					v.renderLock.Lock()
+					err := v.render()
+					v.renderLock.Unlock()
+					if err != nil {
 						return err
 					}
 					continue
