@@ -6,14 +6,14 @@ Each branch is an orphan containing an attempt.
 
 ## The Road So Far
 
-### One
+### [One](../../tree/one)
 
 My first attempt didn't get so far. Coasting on memory of reading blog posts, I
 dove in and tried to scale Abstraction mountain. This went about as well as
 you'd expect for a low level character. Fortunately I only spent about an hour
 on this attempt.
 
-### Two
+### [Two](../../tree/two)
 
 With the sting of death fresh in my nerves, I went back to the blog posts. I
 picked one that seemed ruthlessly simple; in fact I picked exactly BECAUSE I
