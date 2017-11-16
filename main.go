@@ -215,7 +215,7 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 	for i, killed := range w.killed {
 		killer := w.killer[i]
 		w.combatLog(killed, killer, "killed by")
-		w.Entities[killed] = ecs.ComponentNone // TODO: destroy api
+		w.Entities[killed] &= ^(componentCollide | componentInput | componentHP)
 	}
 
 	// count remaining souls
