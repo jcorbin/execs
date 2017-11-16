@@ -16,77 +16,109 @@ const keyBufferSize = 1100
 // and footer. Additionally a log is provided, whose tail is displayed beneath
 // the header.
 type View struct {
-	renderLock sync.Mutex
-
-	running bool // TODO: atomic
+	polling bool
+	pollErr error
 	keys    chan KeyEvent
+	resize  chan struct{}
+	redraw  chan struct{}
 	done    chan struct{}
-	err     error
 	size    point.Point
 
-	ctx Context
+	ctxLock sync.Mutex
+	ctx     Context
 }
 
-// Context encapsulates all state to be rendered by the view.
-type Context struct {
-	// TODO: avoiding "layer"s or "window"s for now, but really...
-	Header []string
-	Footer []string
-	Logs   []string
-	Avail  point.Point
-	Grid   Grid
-}
-
-// KeyEvent represents a terminal key event.
-type KeyEvent struct {
-	Mod termbox.Modifier
-	Key termbox.Key
-	Ch  rune
-}
-
-// Keys returns a channel to read for key events.
-func (v *View) Keys() <-chan KeyEvent { return v.keys }
-
-// Done returns a signal channel that will send once the view loop is done.
-func (v *View) Done() <-chan struct{} { return v.done }
-
-// Err returns any error after done has signaled.
-func (v *View) Err() error { return v.err }
-
-// Log grabs the rendering lock, and adds a log to the context's log buffer;
-// see Context.Log.
-func (v *View) Log(mess string, args ...interface{}) {
-	v.renderLock.Lock()
-	defer v.renderLock.Unlock()
-	v.ctx.Log(mess, args...)
-}
-
-// SetHeader copies the given lines into the internal header buffer, replacing
-// any prior.
-func (ctx *Context) SetHeader(lines ...string) {
-	if cap(ctx.Header) < len(lines) {
-		ctx.Header = make([]string, len(lines))
-	} else {
-		ctx.Header = ctx.Header[:len(lines)]
+func (v *View) runWith(f func() error) (rerr error) {
+	if v.polling {
+		panic("invalid view state")
 	}
-	copy(ctx.Header, lines)
-}
 
-// SetFooter copies the given lines into the internal footer buffer, replacing
-// any prior.
-func (ctx *Context) SetFooter(lines ...string) {
-	if cap(ctx.Footer) < len(lines) {
-		ctx.Footer = make([]string, len(lines))
-	} else {
-		ctx.Footer = ctx.Footer[:len(lines)]
+	v.polling = true
+
+	if err := termbox.Init(); err != nil {
+		return err
 	}
-	copy(ctx.Footer, lines)
+
+	priorInputMode := termbox.SetInputMode(termbox.InputCurrent)
+	defer termbox.SetInputMode(priorInputMode)
+	termbox.SetInputMode(termbox.InputEsc)
+
+	priorOutputMode := termbox.SetOutputMode(termbox.OutputCurrent)
+	defer termbox.SetOutputMode(priorOutputMode)
+	termbox.SetOutputMode(termbox.Output256)
+
+	v.pollErr = nil
+	v.resize = make(chan struct{}, 1)
+	v.redraw = make(chan struct{}, 1)
+	v.keys = make(chan KeyEvent, keyBufferSize)
+	v.done = make(chan struct{})
+	v.size = termboxSize()
+
+	go v.pollEvents()
+	defer func() {
+		go termbox.Interrupt()
+		v.polling = false
+		if v.done != nil {
+			<-v.done
+		}
+		if rerr == nil {
+			rerr = v.pollErr
+		}
+	}()
+
+	return f()
 }
 
-// Log adds a line to the internal log buffer. As much tail of the log buffer
-// is displayed after the header as possible; at least 5 lines.
-func (ctx *Context) Log(mess string, args ...interface{}) {
-	ctx.Logs = append(ctx.Logs, fmt.Sprintf(mess, args...))
+func (v *View) runClient(client Client) error {
+	raise(v.resize)
+
+	// TODO: observability / introspection / other Nice To Haves?
+
+	for {
+		select {
+
+		case <-v.done:
+			return client.Close()
+
+		case <-v.resize:
+			v.size = termboxSize()
+			if !point.Zero.Less(v.size) {
+				return fmt.Errorf("bogus terminal size %v", v.size)
+			}
+
+		case <-v.redraw:
+
+		case k := <-v.keys:
+			if err := client.HandleKey(v, k); err != nil {
+				return err
+			}
+
+		}
+
+		if err := v.render(client); err != nil {
+			return err
+		}
+	}
+}
+
+func (v *View) render(client Client) error {
+	v.ctxLock.Lock()
+	defer v.ctxLock.Unlock()
+	v.ctx.Avail = v.size.Sub(point.Point{Y: len(v.ctx.Footer) + len(v.ctx.Header)})
+	if err := client.Render(&v.ctx); err != nil {
+		return err
+	}
+
+	buf := make([]termbox.Cell, v.size.X*v.size.Y)
+	v.ctx.render(Grid{Size: v.size, Data: buf})
+	if err := termbox.Clear(termbox.ColorDefault, termbox.ColorDefault); err != nil {
+		return fmt.Errorf("termbox.Clear failed: %v", err)
+	}
+	copy(termbox.CellBuffer(), buf)
+	if err := termbox.Flush(); err != nil {
+		return fmt.Errorf("termbox.Flush failed: %v", err)
+	}
+	return nil
 }
 
 func (ctx *Context) render(termGrid Grid) {
@@ -123,88 +155,19 @@ func (ctx *Context) render(termGrid Grid) {
 	}
 }
 
-func (v *View) render() error {
-	if v.size.X <= 0 || v.size.Y <= 0 {
-		v.size = termboxSize()
-	}
-	if v.size.X <= 0 || v.size.Y <= 0 {
-		return fmt.Errorf("bogus terminal size %v", v.size)
-	}
-	buf := make([]termbox.Cell, v.size.X*v.size.Y)
-
-	v.ctx.render(Grid{
-		Size: v.size,
-		Data: buf,
-	})
-
-	err := termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
-	if err == nil {
-		copy(termbox.CellBuffer(), buf)
-		err = termbox.Flush()
-	}
-	return err
-}
-
-// Start takes control of the terminal and starts interaction loop (running on
-// a new goroutine).
-func (v *View) Start() error {
-	v.renderLock.Lock()
-	defer v.renderLock.Unlock()
-
-	if v.running {
-		return nil
-	}
-	v.running = true
-
-	if err := termbox.Init(); err != nil {
-		return err
-	}
-
-	v.err = nil
-	v.keys = make(chan KeyEvent, keyBufferSize)
-	v.done = make(chan struct{})
-	v.size = termboxSize()
-
-	priorInputMode := termbox.SetInputMode(termbox.InputCurrent)
-	defer termbox.SetInputMode(priorInputMode)
-
-	termbox.SetInputMode(termbox.InputEsc)
-
-	go v.pollEvents()
-	return nil
-}
-
-// Stop stops any interaction loop started by Start, and waits for it to
-// finish.
-func (v *View) Stop() {
-	v.renderLock.Lock()
-	defer v.renderLock.Unlock()
-	go termbox.Interrupt()
-	v.running = false
-	if v.done != nil {
-		<-v.done
-	}
-}
-
 func (v *View) pollEvents() {
 	defer termbox.Close()
 	defer close(v.done)
 
-	v.err = func() error {
-		for v.running {
+	v.pollErr = func() error {
+		for v.polling {
 			switch ev := termbox.PollEvent(); ev.Type {
 			case termbox.EventKey:
 				switch ev.Key {
 				case termbox.KeyCtrlC:
 					return nil
 				case termbox.KeyCtrlL:
-					if err := func() error {
-						v.renderLock.Lock()
-						defer v.renderLock.Unlock()
-						return v.render() // TODO: should call renderable
-					}(); err != nil {
-						return err
-					}
+					raise(v.redraw)
 					continue
 				}
 				switch ev.Ch {
@@ -217,14 +180,7 @@ func (v *View) pollEvents() {
 				}
 
 			case termbox.EventResize:
-				if err := func() error {
-					v.renderLock.Lock()
-					defer v.renderLock.Unlock()
-					v.size.X, v.size.Y = ev.Width, ev.Height
-					return v.render() // TODO: should call renderable
-				}(); err != nil {
-					return err
-				}
+				raise(v.resize)
 
 			case termbox.EventError:
 				return ev.Err
@@ -237,4 +193,11 @@ func (v *View) pollEvents() {
 func termboxSize() point.Point {
 	w, h := termbox.Size()
 	return point.Point{X: w, Y: h}
+}
+
+func raise(ch chan<- struct{}) {
+	select {
+	case ch <- struct{}{}:
+	default:
+	}
 }
