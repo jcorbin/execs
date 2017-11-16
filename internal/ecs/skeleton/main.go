@@ -4,7 +4,6 @@ import (
 	"log"
 
 	"github.com/jcorbin/execs/internal/ecs"
-	"github.com/jcorbin/execs/internal/point"
 	"github.com/jcorbin/execs/internal/view"
 )
 
@@ -32,8 +31,8 @@ func createWorld(v *View) *world {
 	return w
 }
 
-func (w *world) Render(grid view.Grid, avail point.Point) view.Grid {
-	// TODO: translate world state into a grid, return it
+func (w *world) Render(ctx *view.Context) {
+	// TODO: translate world state into ctx
 
 }
 
