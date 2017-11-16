@@ -197,11 +197,11 @@ func (v *View) pollEvents() {
 				case termbox.KeyCtrlC:
 					return nil
 				case termbox.KeyCtrlL:
-					v.renderLock.Lock()
-					// TODO: should call renderable
-					err := v.render()
-					v.renderLock.Unlock()
-					if err != nil {
+					if err := func() error {
+						v.renderLock.Lock()
+						defer v.renderLock.Unlock()
+						return v.render() // TODO: should call renderable
+					}(); err != nil {
 						return err
 					}
 					continue
@@ -216,13 +216,14 @@ func (v *View) pollEvents() {
 				}
 
 			case termbox.EventResize:
-				v.renderLock.Lock()
-				v.size.X, v.size.Y = ev.Width, ev.Height
-				// TODO: should call renderable
-				if err := v.render(); err != nil {
+				if err := func() error {
+					v.renderLock.Lock()
+					defer v.renderLock.Unlock()
+					v.size.X, v.size.Y = ev.Width, ev.Height
+					return v.render() // TODO: should call renderable
+				}(); err != nil {
 					return err
 				}
-				v.renderLock.Unlock()
 
 			case termbox.EventError:
 				return ev.Err

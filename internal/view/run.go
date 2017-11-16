@@ -60,15 +60,16 @@ func (v *View) stepit(s Stepable) {
 	ra, _ := s.(Renderable)
 	for {
 		if ra != nil {
-			v.renderLock.Lock()
-			if v.size.X <= 0 || v.size.Y <= 0 {
-				v.size = termboxSize()
-			}
-			v.ctx.Avail = v.size.Sub(point.Point{Y: len(v.ctx.Footer) + len(v.ctx.Header)})
-			ra.Render(&v.ctx)
-			err := v.render()
-			v.renderLock.Unlock()
-			if err != nil {
+			if err := func() error {
+				v.renderLock.Lock()
+				defer v.renderLock.Unlock()
+				if v.size.X <= 0 || v.size.Y <= 0 {
+					v.size = termboxSize()
+				}
+				v.ctx.Avail = v.size.Sub(point.Point{Y: len(v.ctx.Footer) + len(v.ctx.Header)})
+				ra.Render(&v.ctx)
+				return v.render()
+			}(); err != nil {
 				v.err = err
 				return
 			}
