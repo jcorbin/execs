@@ -17,6 +17,8 @@ const (
 	componentPosition
 	componentCollide
 	componentGlyph
+	componentBG
+	componentFG
 	componentHP
 	componentStats
 	componentInput
@@ -39,6 +41,8 @@ type world struct {
 	Names     []string
 	Positions []point.Point
 	Glyphs    []rune
+	BG        []termbox.Attribute
+	FG        []termbox.Attribute
 	HP        []int
 	Stats     []stats // TODO: this being dense is quite wasteful for walls
 
@@ -72,6 +76,8 @@ func (w *world) AddEntity() ecs.Entity {
 	w.Names = append(w.Names, "")
 	w.Positions = append(w.Positions, point.Point{})
 	w.Glyphs = append(w.Glyphs, 0)
+	w.BG = append(w.BG, 0)
+	w.FG = append(w.FG, 0)
 	w.HP = append(w.HP, 0)
 	w.Stats = append(w.Stats, stats{})
 	return ent
@@ -135,10 +141,22 @@ func (w *world) Render(ctx *view.Context) error {
 	}
 
 	it.Reset()
-	for id, _, ok := it.Next(); ok; id, _, ok = it.Next() {
+	for id, t, ok := it.Next(); ok; id, t, ok = it.Next() {
 		pos := w.Positions[id].Add(offset)
 		if !pos.Less(point.Zero) && !ctx.Grid.Size.Less(pos) {
 			var fg, bg termbox.Attribute
+			if t.All(componentFG) {
+				fg = w.FG[id]
+			}
+			if t.All(componentBG) {
+				bg = w.BG[id]
+			}
+			if fg != 0 {
+				fg++
+			}
+			if bg != 0 {
+				bg++
+			}
 			ctx.Grid.Set(pos.X, pos.Y, w.Glyphs[id], fg, bg)
 		}
 	}
