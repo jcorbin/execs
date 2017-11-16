@@ -75,6 +75,13 @@ func (pt Point) Abs() Point {
 	return pt
 }
 
+// Neg negates a copy of this point, returning the copy.
+func (pt Point) Neg() Point {
+	pt.X = -pt.X
+	pt.Y = -pt.Y
+	return pt
+}
+
 // Sign returns a copy of this point reduced to the values -1, 0, or 1 depending
 // on the sign of the original values.
 func (pt Point) Sign() Point {
