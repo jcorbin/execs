@@ -94,6 +94,11 @@ func (w *world) addRenderable(pos point.Point, glyph rune) ecs.Entity {
 
 const maxHP = 20
 
+var (
+	wallBGColors = []termbox.Attribute{233, 234, 235, 236, 237, 238, 239}
+	wallFGColors = []termbox.Attribute{234, 235, 236, 237, 238, 239, 240}
+)
+
 func (w *world) Render(ctx *view.Context) error {
 	ctx.SetHeader(
 		fmt.Sprintf("%v souls v %v demons", w.CountAll(playMoveMask), w.CountAll(aiMoveMask)),
@@ -294,7 +299,11 @@ func (w *world) addBox(box point.Box, glyph rune) {
 		{n: sz.Y, d: point.Point{Y: -1}},
 	} {
 		for i := 0; i < r.n; i++ {
-			w.addRenderable(pos, glyph).AddComponent(componentCollide)
+			wall := w.addRenderable(pos, glyph)
+			wall.AddComponent(componentCollide | componentBG | componentFG)
+			ci := rand.Intn(len(wallBGColors))
+			w.BG[wall.ID()] = wallBGColors[ci]
+			w.FG[wall.ID()] = wallFGColors[ci]
 			pos = pos.Add(r.d)
 		}
 	}
