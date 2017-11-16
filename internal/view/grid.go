@@ -33,6 +33,23 @@ const (
 	AlignRight
 )
 
+func (g Grid) Set(x, y int, ch rune, fg, bg termbox.Attribute) {
+	g.Data[y*g.Size.X+x] = termbox.Cell{Ch: ch, Fg: fg, Bg: bg}
+}
+
+func (g Grid) Merge(x, y int, ch rune, fg, bg termbox.Attribute) {
+	i := y*g.Size.X + x
+	if ch != 0 {
+		g.Data[i].Ch = ch
+	}
+	if fg != 0 {
+		g.Data[i].Fg = fg
+	}
+	if bg != 0 {
+		g.Data[i].Bg = bg
+	}
+}
+
 // Copy copies another grid into this one, centered and clipped as necessary.
 func (g Grid) Copy(og Grid) {
 	diff := g.Size.Sub(og.Size)
