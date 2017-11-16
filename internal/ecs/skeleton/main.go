@@ -16,15 +16,13 @@ import (
 // )
 
 type world struct {
-	View *view.View
 	ecs.Core
-	// XXX
+
+	// TODO: your state here
 }
 
 func createWorld(v *View) *world {
-	w := world{
-		View: v,
-	}
+	var w world
 
 	// TODO: something interesting
 
