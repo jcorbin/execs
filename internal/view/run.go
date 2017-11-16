@@ -5,7 +5,7 @@ import "github.com/jcorbin/execs/internal/point"
 // Stepable represents something that can run bound to a View; see View.Run.
 type Stepable interface {
 	// TODO: maybe decompose finer grained, e.g. a step method
-	Step() bool
+	Step(*View) bool
 }
 
 // Errable may be implemented by a Stepable to afford errors after stepping
@@ -74,7 +74,7 @@ func (v *View) stepit(s Stepable) {
 				return
 			}
 		}
-		if !s.Step() {
+		if !s.Step(v) {
 			break
 		}
 		// TODO: observability / introspection / other Nice To Haves?

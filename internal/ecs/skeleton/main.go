@@ -37,7 +37,7 @@ func (w *world) Render(grid view.Grid, avail point.Point) view.Grid {
 
 }
 
-func (w *world) Step() bool {
+func (w *world) Step(v *view.View) bool {
 	select {
 	case k := <-v.Keys():
 		// TODO: do something in response to the key
