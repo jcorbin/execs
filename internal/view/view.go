@@ -198,6 +198,7 @@ func (v *View) pollEvents() {
 					return nil
 				case termbox.KeyCtrlL:
 					v.renderLock.Lock()
+					// TODO: should call renderable
 					err := v.render()
 					v.renderLock.Unlock()
 					if err != nil {
@@ -217,6 +218,7 @@ func (v *View) pollEvents() {
 			case termbox.EventResize:
 				v.renderLock.Lock()
 				v.size.X, v.size.Y = ev.Width, ev.Height
+				// TODO: should call renderable
 				if err := v.render(); err != nil {
 					return err
 				}
