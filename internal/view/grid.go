@@ -50,7 +50,7 @@ func (g Grid) Copy(og Grid) {
 		offset.Y = -y
 	}
 
-	offset = offset.Clamp(point.Zero, g.Size)
+	offset = offset.Max(point.Zero).Min(g.Size)
 
 	for yi := 0; yi < g.Size.Y && y < og.Size.Y; y, yi = y+1, yi+1 {
 		x := ix

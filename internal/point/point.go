@@ -16,20 +16,26 @@ func (pt Point) Equal(other Point) bool {
 	return pt.X == other.X && pt.Y == other.Y
 }
 
-// Clamp returns a copy of this point with its X and Y components guaranteed to
-// be no smaller than min's nor larger than max's.
-func (pt Point) Clamp(min, max Point) Point {
-	if pt.X < min.X {
-		pt.X = min.X
+// Min returns a copy of this point with each component the
+// minimum of the two points' components.
+func (pt Point) Min(other Point) Point {
+	if other.X < pt.X {
+		pt.X = other.X
 	}
-	if pt.Y < min.Y {
-		pt.Y = min.Y
+	if other.Y < pt.Y {
+		pt.Y = other.Y
 	}
-	if pt.X > max.X {
-		pt.X = max.X
+	return pt
+}
+
+// Max returns a copy of this point with each component the
+// maximum of the two points' components.
+func (pt Point) Max(other Point) Point {
+	if other.X > pt.X {
+		pt.X = other.X
 	}
-	if pt.Y > max.Y {
-		pt.Y = max.Y
+	if other.Y > pt.Y {
+		pt.Y = other.Y
 	}
 	return pt
 }
