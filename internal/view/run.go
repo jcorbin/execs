@@ -15,10 +15,9 @@ type Errable interface {
 	Err() error
 }
 
-// Renderable is implemented by a Stepable to render the view prior to each
-// step.
+// Renderable is the interface used to update view context state when
+// rendering.
 type Renderable interface {
-	Stepable
 	Render(*Context)
 }
 
