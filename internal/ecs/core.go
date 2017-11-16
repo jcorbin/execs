@@ -8,6 +8,12 @@ const (
 	ComponentNone ComponentType = 0
 )
 
+// All returns true if the type has all of the mask types set.
+func (t ComponentType) All(mask ComponentType) bool { return t&mask == mask }
+
+// Any returns true if the type has any of the mask types set.
+func (t ComponentType) Any(mask ComponentType) bool { return t&mask != 0 }
+
 // Core is the core of the Entity Component System, tracking the entities in
 // play. It is meant to be embedded in the root of a collection of game data.
 type Core struct {
