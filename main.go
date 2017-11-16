@@ -136,7 +136,8 @@ func (w *world) Render(ctx *view.Context) error {
 	for id, _, ok := it.Next(); ok; id, _, ok = it.Next() {
 		pos := w.Positions[id].Add(offset)
 		if !pos.Less(point.Zero) && !ctx.Grid.Size.Less(pos) {
-			ctx.Grid.Data[pos.Y*ctx.Grid.Size.X+pos.X].Ch = w.Glyphs[id]
+			var fg, bg termbox.Attribute
+			ctx.Grid.Set(pos.X, pos.Y, w.Glyphs[id], fg, bg)
 		}
 	}
 
