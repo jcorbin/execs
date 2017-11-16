@@ -5,9 +5,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jcorbin/execs/internal/point"
 	termbox "github.com/nsf/termbox-go"
+
+	"github.com/jcorbin/execs/internal/point"
 )
+
+const keyBufferSize = 1100
 
 // View implements a terminal user interaction, based around a grid, header,
 // and footer. Additionally a log is provided, whose tail is displayed beneath
@@ -169,7 +172,7 @@ func (v *View) Start() error {
 
 	termbox.SetInputMode(termbox.InputEsc)
 
-	go v.run()
+	go v.pollEvents()
 	return nil
 }
 
@@ -180,10 +183,8 @@ func (v *View) Stop() {
 	v.renderLock.Unlock()
 }
 
-func (v *View) run() {
+func (v *View) pollEvents() {
 	defer termbox.Close()
-
-	const keyBufferSize = 1100
 
 	if v.running {
 		return
