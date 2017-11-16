@@ -56,3 +56,32 @@ func (b Box) DistanceTo(pt Point) Point {
 	}
 	return Zero
 }
+
+// Min returns a copy of the box each corner min'd to the given point.
+func (b Box) Min(pt Point) Box {
+	b.TopLeft = b.TopLeft.Min(pt)
+	b.BottomRight = b.BottomRight.Min(pt)
+	return b
+}
+
+// Min returns a copy of the box each corner max'd to the given point.
+func (b Box) Max(pt Point) Box {
+	b.TopLeft = b.TopLeft.Max(pt)
+	b.BottomRight = b.BottomRight.Max(pt)
+	return b
+}
+
+// Add returns a copy of the box with the given point added to the corners.
+func (b Box) Add(pt Point) Box {
+	b.TopLeft = b.TopLeft.Add(pt)
+	b.BottomRight = b.BottomRight.Add(pt)
+	return b
+}
+
+// Sub returns a copy of the box with the given point subtracted from the
+// corners.
+func (b Box) Sub(pt Point) Box {
+	b.TopLeft = b.TopLeft.Sub(pt)
+	b.BottomRight = b.BottomRight.Sub(pt)
+	return b
+}
