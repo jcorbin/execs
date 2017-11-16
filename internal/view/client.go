@@ -1,11 +1,15 @@
 package view
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/jcorbin/execs/internal/point"
 	termbox "github.com/nsf/termbox-go"
 )
+
+// Stop may be returned by a client method to mean "we're done, break run loop".
+var Stop = errors.New("client stop")
 
 // Client is the interface exposed to the user of View; its various methods are
 // called in a loop that provides terminal orchestration.
@@ -41,7 +45,7 @@ func JustKeepRunning(factory func(v *View) (Client, error)) error {
 		for v.polling {
 			if client, err := factory(&v); err != nil {
 				return err
-			} else if err := v.runClient(client); err != nil {
+			} else if err := v.runClient(client); err != nil && err != Stop {
 				return err
 			}
 		}
@@ -53,7 +57,11 @@ func JustKeepRunning(factory func(v *View) (Client, error)) error {
 // caused by the client, or view).
 func (v *View) Run(client Client) error {
 	return v.runWith(func() error {
-		return v.runClient(client)
+		err := v.runClient(client)
+		if err == Stop {
+			return nil
+		}
+		return err
 	})
 }
 

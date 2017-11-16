@@ -71,7 +71,7 @@ func (v *View) runWith(f func() error) (rerr error) {
 
 func (v *View) runClient(client Client) (rerr error) {
 	defer func() {
-		if cerr := client.Close(); rerr == nil {
+		if cerr := client.Close(); rerr == nil || rerr == Stop {
 			rerr = cerr
 		}
 	}()
