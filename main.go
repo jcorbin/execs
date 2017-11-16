@@ -86,6 +86,8 @@ func (w *world) addRenderable(pos point.Point, glyph rune) ecs.Entity {
 	return ent
 }
 
+const maxHP = 20
+
 func (w *world) Render(ctx *view.Context) error {
 	ctx.SetHeader(
 		fmt.Sprintf("%v souls v %v demons", w.CountAll(playMoveMask), w.CountAll(aiMoveMask)),
@@ -285,7 +287,7 @@ func (w *world) rollChar(name string, glyph rune) ecs.Entity {
 	ent.AddComponent(componentName | componentCollide | componentHP | componentStats)
 	id := ent.ID()
 	w.Names[id] = name
-	w.HP[id] = 20
+	w.HP[id] = maxHP
 	w.Stats[id] = stats{
 		Str:  rollStat(),
 		Def:  rollStat(),
