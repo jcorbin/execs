@@ -69,7 +69,13 @@ func (v *View) runWith(f func() error) (rerr error) {
 	return f()
 }
 
-func (v *View) runClient(client Client) error {
+func (v *View) runClient(client Client) (rerr error) {
+	defer func() {
+		if cerr := client.Close(); rerr == nil {
+			rerr = cerr
+		}
+	}()
+
 	raise(v.resize)
 
 	// TODO: observability / introspection / other Nice To Haves?
