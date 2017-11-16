@@ -21,14 +21,6 @@ type world struct {
 	// TODO: your state here
 }
 
-func createWorld(v *View) *world {
-	var w world
-
-	// TODO: something interesting
-
-	return w
-}
-
 func (w *world) Render(ctx *view.Context) {
 	// TODO: translate world state into ctx
 
@@ -48,7 +40,11 @@ func (w *world) Step(v *view.View) bool {
 
 func main() {
 	if err := view.JustKeepRunning(func(v *view.View) (view.Stepable, error) {
-		return createWorld(v), nil
+		var w world
+
+		// TODO: something interesting
+
+		return w, nil
 	}); err != nil {
 		log.Fatal(err)
 	}
