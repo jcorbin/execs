@@ -179,7 +179,7 @@ func (v *View) Start() error {
 func (v *View) Stop() {
 	v.renderLock.Lock()
 	defer v.renderLock.Unlock()
-	termbox.Interrupt()
+	go termbox.Interrupt()
 	v.running = false
 	if v.done != nil {
 		<-v.done
