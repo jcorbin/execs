@@ -83,15 +83,6 @@ func (w *world) AddEntity() ecs.Entity {
 	return ent
 }
 
-func (w *world) addRenderable(pos point.Point, glyph rune) ecs.Entity {
-	ent := w.AddEntity()
-	ent.AddComponent(renderMask)
-	id := ent.ID()
-	w.Glyphs[id] = glyph
-	w.Positions[id] = pos
-	return ent
-}
-
 const maxHP = 20
 
 var (
@@ -320,11 +311,16 @@ func (w *world) addBox(box point.Box, glyph rune) {
 		{n: sz.Y, d: point.Point{Y: -1}},
 	} {
 		for i := 0; i < r.n; i++ {
-			wall := w.addRenderable(pos, glyph)
-			wall.AddComponent(componentCollide | componentBG | componentFG)
 			c := wallColors[rand.Intn(len(wallColors))]
-			w.BG[wall.ID()] = c
-			w.FG[wall.ID()] = c + 1
+			wall := w.AddEntity()
+			wall.AddComponent(
+				componentPosition | componentCollide |
+					componentGlyph | componentBG | componentFG)
+			id := wall.ID()
+			w.Glyphs[id] = glyph
+			w.Positions[id] = pos
+			w.BG[id] = c
+			w.FG[id] = c + 1
 			pos = pos.Add(r.d)
 		}
 	}
@@ -340,9 +336,14 @@ func (w *world) addBox(box point.Box, glyph rune) {
 }
 
 func (w *world) rollChar(name string, glyph rune) ecs.Entity {
-	ent := w.addRenderable(point.Zero, glyph)
-	ent.AddComponent(componentName | componentCollide | componentHP | componentStats)
+	ent := w.AddEntity()
+	ent.AddComponent(
+		componentPosition | componentCollide |
+			componentName | componentGlyph |
+			componentHP | componentStats)
 	id := ent.ID()
+	w.Glyphs[id] = glyph
+	w.Positions[id] = point.Zero
 	w.Names[id] = name
 	w.HP[id] = maxHP
 	w.Stats[id] = stats{
