@@ -137,9 +137,9 @@ func (ctx *Context) render(termGrid Grid) {
 
 	if len(ctx.Logs) > 0 {
 		nLogs := len(ctx.Logs)
-		if nLogs > minLogLines {
-			nLogs = minLogLines
-		}
+		// if nLogs > minLogLines {
+		// 	nLogs = minLogLines
+		// }
 		if n := nLogs + len(header); n > cap(header) {
 			nh := make([]string, len(header), n)
 			copy(nh, header)
