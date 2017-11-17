@@ -19,12 +19,11 @@ type View struct {
 	polling bool
 	pollErr error
 	keys    chan KeyEvent
-	resize  chan struct{}
 	redraw  chan struct{}
 	done    chan struct{}
-	size    point.Point
 
 	ctxLock sync.Mutex
+	size    point.Point
 	ctx     Context
 }
 
@@ -48,7 +47,6 @@ func (v *View) runWith(f func() error) (rerr error) {
 	termbox.SetOutputMode(termbox.Output256)
 
 	v.pollErr = nil
-	v.resize = make(chan struct{}, 1)
 	v.redraw = make(chan struct{}, 1)
 	v.keys = make(chan KeyEvent, keyBufferSize)
 	v.done = make(chan struct{})
@@ -76,7 +74,7 @@ func (v *View) runClient(client Client) (rerr error) {
 		}
 	}()
 
-	raise(v.resize)
+	raise(v.redraw)
 
 	// TODO: observability / introspection / other Nice To Haves?
 
@@ -85,12 +83,6 @@ func (v *View) runClient(client Client) (rerr error) {
 
 		case <-v.done:
 			return client.Close()
-
-		case <-v.resize:
-			v.size = termboxSize()
-			if !point.Zero.Less(v.size) {
-				return fmt.Errorf("bogus terminal size %v", v.size)
-			}
 
 		case <-v.redraw:
 
@@ -110,6 +102,14 @@ func (v *View) runClient(client Client) (rerr error) {
 func (v *View) render(client Client) error {
 	v.ctxLock.Lock()
 	defer v.ctxLock.Unlock()
+
+	if !point.Zero.Less(v.size) {
+		v.size = termboxSize()
+	}
+	if !point.Zero.Less(v.size) {
+		return fmt.Errorf("bogus terminal size %v", v.size)
+	}
+
 	v.ctx.Avail = v.size.Sub(point.Point{Y: len(v.ctx.Footer) + len(v.ctx.Header)})
 	if err := client.Render(&v.ctx); err != nil {
 		return err
@@ -186,7 +186,16 @@ func (v *View) pollEvents() {
 				}
 
 			case termbox.EventResize:
-				raise(v.resize)
+				// TODO: would rather defer this into the client running code
+				// to coalesce resize events; that seems to be the intent of
+				// termbox.Clear, but we've already built our grid by the time
+				// we clear that... basically a simpler/lower layer than
+				// termbox would be really nice...
+				v.ctxLock.Lock()
+				v.size.X = ev.Width
+				v.size.Y = ev.Height
+				v.ctxLock.Unlock()
+				raise(v.redraw)
 
 			case termbox.EventError:
 				return ev.Err
