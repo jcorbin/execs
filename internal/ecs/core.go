@@ -82,7 +82,7 @@ func (it Iterator) test(t ComponentType) bool {
 }
 
 // Count returns a count of how many entities are yet to come.
-func (it *Iterator) Count() int {
+func (it Iterator) Count() int {
 	ents := it.ents
 	n := 0
 	for i := it.i; i < len(ents); i++ {
