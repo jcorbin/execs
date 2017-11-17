@@ -143,6 +143,8 @@ func (w *world) Render(ctx *view.Context) error {
 		}
 	}
 
+	zVals := make([]uint8, len(ctx.Grid.Data))
+
 	it = w.Iter(componentPosition, componentGlyph|componentBG)
 	for id, t, ok := it.Next(); ok; id, t, ok = it.Next() {
 		pos := w.Positions[id].Add(offset)
@@ -152,36 +154,47 @@ func (w *world) Render(ctx *view.Context) error {
 				fg, bg termbox.Attribute
 			)
 
+			var zVal uint8
+
 			if t.All(componentGlyph) {
 				ch = w.Glyphs[id]
+				zVal = 1
 			}
 
 			// TODO: move to hp update
 			switch t & (componentSoul | componentAI | componentHP) {
 			case componentSoul | componentHP:
+				zVal = 255
 				fg = soulColors[1+(len(soulColors)-2)*w.HP[id]/maxHP]
 			case componentAI | componentHP:
+				zVal = 254
 				fg = aiColors[1+(len(soulColors)-2)*w.HP[id]/maxHP]
 			case componentSoul:
+				zVal = 127
 				fg = soulColors[0]
 			case componentAI:
+				zVal = 126
 				fg = aiColors[0]
 			default:
+				zVal = 2
 				if t.All(componentFG) {
 					fg = w.FG[id]
 				}
 			}
 
-			if t.All(componentBG) {
-				bg = w.BG[id]
+			if i := pos.Y*ctx.Grid.Size.X + pos.X; zVals[i] < zVal {
+				zVals[i] = zVal
+				if t.All(componentBG) {
+					bg = w.BG[id]
+				}
+				if fg != 0 {
+					fg++
+				}
+				if bg != 0 {
+					bg++
+				}
+				ctx.Grid.Merge(pos.X, pos.Y, ch, fg, bg)
 			}
-			if fg != 0 {
-				fg++
-			}
-			if bg != 0 {
-				bg++
-			}
-			ctx.Grid.Merge(pos.X, pos.Y, ch, fg, bg)
 		}
 	}
 
