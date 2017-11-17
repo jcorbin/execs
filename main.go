@@ -95,10 +95,9 @@ func (w *world) addRenderable(pos point.Point, glyph rune) ecs.Entity {
 const maxHP = 20
 
 var (
-	aiColors     = []termbox.Attribute{124, 160, 196, 202, 208, 214}
-	soulColors   = []termbox.Attribute{19, 20, 21, 27, 33, 39}
-	wallBGColors = []termbox.Attribute{233, 234, 235, 236, 237, 238, 239}
-	wallFGColors = []termbox.Attribute{234, 235, 236, 237, 238, 239, 240}
+	aiColors   = []termbox.Attribute{124, 160, 196, 202, 208, 214}
+	soulColors = []termbox.Attribute{19, 20, 21, 27, 33, 39}
+	wallColors = []termbox.Attribute{233, 234, 235, 236, 237, 238, 239}
 )
 
 func (w *world) Render(ctx *view.Context) error {
@@ -314,9 +313,9 @@ func (w *world) addBox(box point.Box, glyph rune) {
 		for i := 0; i < r.n; i++ {
 			wall := w.addRenderable(pos, glyph)
 			wall.AddComponent(componentCollide | componentBG | componentFG)
-			ci := rand.Intn(len(wallBGColors))
-			w.BG[wall.ID()] = wallBGColors[ci]
-			w.FG[wall.ID()] = wallFGColors[ci]
+			c := wallColors[rand.Intn(len(wallColors))]
+			w.BG[wall.ID()] = c
+			w.FG[wall.ID()] = c + 1
 			pos = pos.Add(r.d)
 		}
 	}
