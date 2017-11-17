@@ -33,10 +33,12 @@ const (
 	AlignRight
 )
 
+// Set sets a cell in the grid.
 func (g Grid) Set(x, y int, ch rune, fg, bg termbox.Attribute) {
 	g.Data[y*g.Size.X+x] = termbox.Cell{Ch: ch, Fg: fg, Bg: bg}
 }
 
+// Merge merges data into a cell in the grid.
 func (g Grid) Merge(x, y int, ch rune, fg, bg termbox.Attribute) {
 	i := y*g.Size.X + x
 	if ch != 0 {
