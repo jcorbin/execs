@@ -21,30 +21,31 @@ type world struct {
 	// TODO: your state here
 }
 
-func (w *world) Render(ctx *view.Context) {
+func (w *world) Render(ctx *view.Context) error {
 	// TODO: translate world state into ctx
 
+	return nil
 }
 
-func (w *world) Step(v *view.View) bool {
-	select {
-	case k := <-v.Keys():
-		// TODO: do something in response to the key
+func (w *world) Close() error {
+	// TODO: shutdown any long-running resources
 
-	case <-v.Done():
-		return false
-	}
+	return nil
+}
 
-	return true
+func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
+	// TODO: do something with it
+
+	return nil
 }
 
 func main() {
-	if err := view.JustKeepRunning(func(v *view.View) (view.Stepable, error) {
+	if err := view.JustKeepRunning(func(v *view.View) (view.Client, error) {
 		var w world
 
 		// TODO: something interesting
 
-		return w, nil
+		return &w, nil
 	}); err != nil {
 		log.Fatal(err)
 	}
