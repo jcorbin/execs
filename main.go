@@ -61,13 +61,11 @@ type world struct {
 	BG        []termbox.Attribute
 	FG        []termbox.Attribute
 	HP        []int
-	Stats     []stats // TODO: this being dense is quite wasteful for walls
+	Stats     []stats
 
-	// TODO: collect collision system state
 	coll  []int
 	colls []collision
 
-	// TODO: collect combat system state
 	damaged []damage
 	killed  []int
 	killer  []int
@@ -89,7 +87,6 @@ type damage struct {
 
 func (w *world) AddEntity() ecs.Entity {
 	ent := w.Core.AddEntity()
-	// TODO: support re-use
 	w.Names = append(w.Names, "")
 	w.Positions = append(w.Positions, point.Point{})
 	w.Glyphs = append(w.Glyphs, 0)
@@ -159,6 +156,7 @@ func (w *world) Render(ctx *view.Context) error {
 				ch = w.Glyphs[id]
 			}
 
+			// TODO: move to hp update
 			switch t & (componentSoul | componentAI | componentHP) {
 			case componentSoul | componentHP:
 				fg = soulColors[1+(len(soulColors)-2)*w.HP[id]/maxHP]
