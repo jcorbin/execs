@@ -267,7 +267,7 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 	// count remaining souls
 	if w.CountAll(playMoveMask) == 0 {
 		w.log("game over")
-		return view.Stop
+		return view.ErrStop
 	}
 
 	// maybe spawn
