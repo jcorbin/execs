@@ -8,8 +8,8 @@ import (
 	termbox "github.com/nsf/termbox-go"
 )
 
-// Stop may be returned by a client method to mean "we're done, break run loop".
-var Stop = errors.New("client stop")
+// ErrStop may be returned by a client method to mean "we're done, break run loop".
+var ErrStop = errors.New("client stop")
 
 // Client is the interface exposed to the user of View; its various methods are
 // called in a loop that provides terminal orchestration.
@@ -45,7 +45,7 @@ func JustKeepRunning(factory func(v *View) (Client, error)) error {
 		for v.polling {
 			if client, err := factory(&v); err != nil {
 				return err
-			} else if err := v.runClient(client); err != nil && err != Stop {
+			} else if err := v.runClient(client); err != nil && err != ErrStop {
 				return err
 			}
 		}
@@ -58,7 +58,7 @@ func JustKeepRunning(factory func(v *View) (Client, error)) error {
 func (v *View) Run(client Client) error {
 	return v.runWith(func() error {
 		err := v.runClient(client)
-		if err == Stop {
+		if err == ErrStop {
 			return nil
 		}
 		return err
