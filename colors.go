@@ -20,6 +20,33 @@ type colorTable struct {
 	lookup map[termbox.Attribute]int
 }
 
+func (ct *colorTable) addLevelTransitions(
+	colors []termbox.Attribute,
+	zeroOn, zeroUp int,
+	oneDown, oneOn, oneUp int,
+) {
+	n := len(colors)
+	c0 := colors[0]
+
+	for i, c1 := range colors {
+		if c1 == c0 {
+			continue
+		}
+
+		ct.addTransition(c0, c0, (n-i)*zeroOn)
+		ct.addTransition(c0, c1, (n-i)*zeroUp)
+
+		ct.addTransition(c1, c0, (n-1)*oneDown)
+		ct.addTransition(c1, c1, (n-1)*oneOn)
+
+		for _, c2 := range colors {
+			if c2 != c1 && c2 != c0 {
+				ct.addTransition(c1, c2, (n-1)*oneUp)
+			}
+		}
+	}
+}
+
 func (ct *colorTable) AddEntity() ecs.Entity {
 	ent := ct.Table.AddEntity()
 	ct.color = append(ct.color, 0)

@@ -86,10 +86,19 @@ func (w *world) AddEntity() ecs.Entity {
 const maxHP = 20
 
 var (
-	aiColors   = []termbox.Attribute{124, 160, 196, 202, 208, 214}
-	soulColors = []termbox.Attribute{19, 20, 21, 27, 33, 39}
-	wallColors = []termbox.Attribute{233, 234, 235, 236, 237, 238, 239}
+	aiColors    = []termbox.Attribute{124, 160, 196, 202, 208, 214}
+	soulColors  = []termbox.Attribute{19, 20, 21, 27, 33, 39}
+	wallColors  = []termbox.Attribute{233, 234, 235, 236, 237, 238, 239}
+	floorColors = []termbox.Attribute{232, 233, 234}
+
+	wallTable  colorTable
+	floorTable colorTable
 )
+
+func init() {
+	wallTable.addLevelTransitions(wallColors, 4, 1, 4, 3, 2)
+	floorTable.addLevelTransitions(floorColors, 6, 1, 6, 2, 1)
+}
 
 func (w *world) Render(ctx *view.Context) error {
 	ctx.SetHeader(
@@ -298,8 +307,10 @@ func main() {
 }
 
 func (w *world) addBox(box point.Box, glyph rune) {
+	rng := rand.New(rand.NewSource(rand.Int63()))
+
 	// TODO: the box should be an entity, rather than each cell
-	sz, pos := box.Size(), box.TopLeft
+	last, sz, pos := wallTable.Ref(0), box.Size(), box.TopLeft
 	for _, r := range []struct {
 		n int
 		d point.Point
@@ -310,7 +321,6 @@ func (w *world) addBox(box point.Box, glyph rune) {
 		{n: sz.Y, d: point.Point{Y: -1}},
 	} {
 		for i := 0; i < r.n; i++ {
-			c := wallColors[rand.Intn(len(wallColors))]
 			wall := w.AddEntity()
 			wall.AddComponent(
 				componentPosition | componentCollide |
@@ -318,13 +328,13 @@ func (w *world) addBox(box point.Box, glyph rune) {
 			id := wall.ID()
 			w.Glyphs[id] = glyph
 			w.Positions[id] = pos
+			c, _ := wallTable.toColor(last)
 			w.BG[id] = c
 			w.FG[id] = c + 1
 			pos = pos.Add(r.d)
+			last = wallTable.ChooseNext(rng, last)
 		}
 	}
-
-	rng := rand.New(rand.NewSource(rand.Int63()))
 
 	floorTable.genTile(rng, box, func(pos point.Point, bg termbox.Attribute) {
 		floor := w.AddEntity()
