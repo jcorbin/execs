@@ -8,17 +8,33 @@ var (
 )
 
 func init() {
-	var c1, c2, c3 termbox.Attribute = 232, 233, 234
+	const (
+		zeroOn  = 6
+		zeroUp  = 1
+		oneDown = 6
+		oneOn   = 2
+		oneUp   = 1
+	)
 
-	floorTable.addTransition(c1, c1, 64)
-	floorTable.addTransition(c1, c2, 16)
-	floorTable.addTransition(c1, c3, 8)
+	n := len(floorColors)
+	c0 := floorColors[0]
 
-	floorTable.addTransition(c2, c1, 16)
-	floorTable.addTransition(c2, c2, 4)
-	floorTable.addTransition(c2, c3, 2)
+	for i, c1 := range floorColors {
+		if c1 == c0 {
+			continue
+		}
 
-	floorTable.addTransition(c3, c1, 16)
-	floorTable.addTransition(c3, c2, 2)
-	floorTable.addTransition(c3, c3, 4)
+		floorTable.addTransition(c0, c0, (n-i)*zeroOn)
+		floorTable.addTransition(c0, c1, (n-i)*zeroUp)
+
+		floorTable.addTransition(c1, c0, (n-1)*oneDown)
+		floorTable.addTransition(c1, c1, (n-1)*oneOn)
+
+		for _, c2 := range floorColors {
+			if c2 != c1 && c2 != c0 {
+				continue
+			}
+			floorTable.addTransition(c1, c2, (n-1)*oneUp)
+		}
+	}
 }
