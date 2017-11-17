@@ -191,6 +191,10 @@ func (w *world) Render(ctx *view.Context) error {
 func (w *world) Close() error { return nil }
 
 func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
+	if k.Key == termbox.KeyEsc {
+		return view.ErrStop
+	}
+
 	// collect collidables
 	w.prepareCollidables()
 
