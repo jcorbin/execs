@@ -7,6 +7,9 @@ type Entity struct {
 	id   int
 }
 
+// InvalidEntity represents an invalid entity, the zero value.
+var InvalidEntity = Entity{}
+
 // AddComponent adds one or more component type to the entity (if it doesn't
 // already have them).
 func (e Entity) AddComponent(t ComponentType) { e.core.Entities[e.id] |= t }
@@ -38,3 +41,9 @@ func (core *Core) AddEntity() Entity {
 	core.Entities = append(core.Entities, ComponentNone)
 	return ent
 }
+
+// Owns returns true if the given entity belongs to this Core.
+func (core *Core) Owns(ent Entity) bool { return ent.core == core }
+
+// Ref returns an entity reference for the given id.
+func (core *Core) Ref(id int) Entity { return Entity{core: core, id: id} }
