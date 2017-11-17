@@ -7,7 +7,6 @@ import (
 	"sort"
 
 	"github.com/jcorbin/execs/internal/ecs"
-	"github.com/jcorbin/execs/internal/markov"
 	"github.com/jcorbin/execs/internal/point"
 	"github.com/jcorbin/execs/internal/view"
 	termbox "github.com/nsf/termbox-go"
@@ -34,50 +33,6 @@ const (
 	collMask     = componentPosition | componentCollide
 	combatMask   = componentCollide | componentStats
 )
-
-const (
-	componentTableColor ecs.ComponentType = 1 << iota
-)
-
-type colorTable struct {
-	markov.Table
-	color  []termbox.Attribute
-	lookup map[termbox.Attribute]int
-}
-
-func (ct *colorTable) AddEntity() ecs.Entity {
-	ent := ct.Table.AddEntity()
-	ct.color = append(ct.color, 0)
-	return ent
-}
-
-func (ct *colorTable) toEntity(a termbox.Attribute) ecs.Entity {
-	if id, def := ct.lookup[a]; def {
-		return ct.Ref(id)
-	}
-	ent := ct.AddEntity()
-	ent.AddComponent(componentTableColor)
-	id := ent.ID()
-	ct.color[id] = a
-	if ct.lookup == nil {
-		ct.lookup = make(map[termbox.Attribute]int, 1)
-	}
-	ct.lookup[a] = id
-	return ent
-}
-
-func (ct *colorTable) toColor(ent ecs.Entity) (termbox.Attribute, bool) {
-	if !ent.Type().All(componentTableColor) {
-		return 0, false
-	}
-	return ct.color[ent.ID()], true
-}
-
-func (ct *colorTable) addTransition(a, b termbox.Attribute, w int) (ae, be ecs.Entity) {
-	ae, be = ct.toEntity(a), ct.toEntity(b)
-	ct.AddTransition(ae, be, w)
-	return
-}
 
 type world struct {
 	View *view.View
@@ -131,29 +86,10 @@ func (w *world) AddEntity() ecs.Entity {
 const maxHP = 20
 
 var (
-	aiColors    = []termbox.Attribute{124, 160, 196, 202, 208, 214}
-	soulColors  = []termbox.Attribute{19, 20, 21, 27, 33, 39}
-	wallColors  = []termbox.Attribute{233, 234, 235, 236, 237, 238, 239}
-	floorColors = []termbox.Attribute{232, 233, 234}
+	aiColors   = []termbox.Attribute{124, 160, 196, 202, 208, 214}
+	soulColors = []termbox.Attribute{19, 20, 21, 27, 33, 39}
+	wallColors = []termbox.Attribute{233, 234, 235, 236, 237, 238, 239}
 )
-
-var floorTable colorTable
-
-func init() {
-	var c1, c2, c3 termbox.Attribute = 232, 233, 234
-
-	floorTable.addTransition(c1, c1, 64)
-	floorTable.addTransition(c1, c2, 16)
-	floorTable.addTransition(c1, c3, 8)
-
-	floorTable.addTransition(c2, c1, 16)
-	floorTable.addTransition(c2, c2, 4)
-	floorTable.addTransition(c2, c3, 2)
-
-	floorTable.addTransition(c3, c1, 16)
-	floorTable.addTransition(c3, c2, 2)
-	floorTable.addTransition(c3, c3, 4)
-}
 
 func (w *world) Render(ctx *view.Context) error {
 	ctx.SetHeader(
@@ -390,19 +326,12 @@ func (w *world) addBox(box point.Box, glyph rune) {
 
 	rng := rand.New(rand.NewSource(rand.Int63()))
 
-	// TODO: better 2d generation
-	last := floorTable.Ref(0)
-	for pos.Y = box.TopLeft.Y + 1; pos.Y < box.BottomRight.Y+1; pos.Y++ {
-		first := last
-		for pos.X = box.TopLeft.X + 1; pos.X < box.BottomRight.X+1; pos.X++ {
-			floor := w.AddEntity()
-			floor.AddComponent(componentPosition | componentBG)
-			w.Positions[floor.ID()] = pos
-			w.BG[floor.ID()], _ = floorTable.toColor(last)
-			last = floorTable.ChooseNext(rng, last)
-		}
-		last = floorTable.ChooseNext(rng, first)
-	}
+	floorTable.genTile(rng, box, func(pos point.Point, bg termbox.Attribute) {
+		floor := w.AddEntity()
+		floor.AddComponent(componentPosition | componentBG)
+		w.Positions[floor.ID()] = pos
+		w.BG[floor.ID()] = bg
+	})
 }
 
 func (w *world) rollChar(name string, glyph rune) ecs.Entity {
