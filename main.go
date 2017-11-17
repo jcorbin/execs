@@ -146,11 +146,19 @@ func (w *world) Render(ctx *view.Context) error {
 		}
 	}
 
-	it.Reset()
+	it = w.Iter(componentPosition, componentGlyph|componentBG)
 	for id, t, ok := it.Next(); ok; id, t, ok = it.Next() {
 		pos := w.Positions[id].Add(offset)
 		if !pos.Less(point.Zero) && !ctx.Grid.Size.Less(pos) {
-			var fg, bg termbox.Attribute
+			var (
+				ch     rune
+				fg, bg termbox.Attribute
+			)
+
+			if t.All(componentGlyph) {
+				ch = w.Glyphs[id]
+			}
+
 			switch t & (componentSoul | componentAI | componentHP) {
 			case componentSoul | componentHP:
 				fg = soulColors[1+(len(soulColors)-2)*w.HP[id]/maxHP]
@@ -174,7 +182,7 @@ func (w *world) Render(ctx *view.Context) error {
 			if bg != 0 {
 				bg++
 			}
-			ctx.Grid.Set(pos.X, pos.Y, w.Glyphs[id], fg, bg)
+			ctx.Grid.Merge(pos.X, pos.Y, ch, fg, bg)
 		}
 	}
 
