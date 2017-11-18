@@ -15,32 +15,42 @@ const componentTransition ecs.ComponentType = 1<<63 - iota
 //
 // FIXME say more.
 type Table struct {
-	ecs.Core
+	*ecs.Core
 
 	weights [][]int
-	next    [][]int
+	next    [][]ecs.EntityID
 }
 
-// AddEntity adds an entity add reserves space in the table for it.
-func (t *Table) AddEntity() ecs.Entity {
-	ent := t.Core.AddEntity()
-	ent.AddComponent(componentTransition)
-	t.weights = append(t.weights, nil)
-	t.next = append(t.next, nil)
-	return ent
+// NewTable creates a new markov transition table for the given Core's entity
+// space.
+func NewTable(core *ecs.Core) *Table {
+	tab := &Table{
+		Core: core,
+		// TODO: consider eliminating the padding for EntityID(0)
+		weights: [][]int{nil},
+		next:    [][]ecs.EntityID{nil},
+	}
+	core.RegisterAllocator(componentTransition, tab.allocTransition)
+	core.RegisterCreator(componentTransition, nil, tab.destroyTransition)
+	return tab
+}
+
+func (tab *Table) allocTransition(id ecs.EntityID, t ecs.ComponentType) {
+	tab.weights = append(tab.weights, nil)
+	tab.next = append(tab.next, nil)
+}
+
+func (tab *Table) destroyTransition(id ecs.EntityID, t ecs.ComponentType) {
+	tab.weights[id] = tab.weights[id][:0]
+	tab.next[id] = tab.next[id][:0]
 }
 
 // AddTransition adds an entity transition to the table.
-func (t *Table) AddTransition(a, b ecs.Entity, weight int) {
-	if !t.Owns(a) {
-		panic("foreign a entity")
-	}
-	if !t.Owns(b) {
-		panic("foreign b entity")
-	}
+func (tab *Table) AddTransition(a, b ecs.Entity, weight int) {
+	aid := tab.Deref(a)
+	bid := tab.Deref(b)
 
-	aid, bid := a.ID(), b.ID()
-	next, weights := t.next[aid], t.weights[aid]
+	next, weights := tab.next[aid], tab.weights[aid]
 
 	i := sort.Search(len(next), func(i int) bool { return next[i] >= bid })
 	if i < len(next) && next[i] == bid {
@@ -57,7 +67,7 @@ func (t *Table) AddTransition(a, b ecs.Entity, weight int) {
 	}
 	copy(next[i+1:], next[i:])
 	next[i] = bid
-	t.next[aid] = next
+	tab.next[aid] = next
 
 	if n <= cap(weights) {
 		weights = weights[:n]
@@ -66,45 +76,43 @@ func (t *Table) AddTransition(a, b ecs.Entity, weight int) {
 	}
 	copy(weights[i+1:], weights[i:])
 	weights[i] = weight
-	t.weights[aid] = weights
+	tab.weights[aid] = weights
 }
 
 // ChooseNext returns a randomly chosen entity that was previously added as a
 // transition.
-func (t *Table) ChooseNext(rng *rand.Rand, ent ecs.Entity) ecs.Entity {
-	if !t.Owns(ent) {
-		panic("foreign entity")
-	}
-	id := ent.ID()
+func (tab *Table) ChooseNext(rng *rand.Rand, ent ecs.Entity) ecs.Entity {
+	id := tab.Deref(ent)
 	i, sum := -1, 0
-	for j, w := range t.weights[id] {
+	for j, w := range tab.weights[id] {
 		sum += w
 		if rng.Intn(sum) <= w {
 			i = j
 		}
 	}
 	if i < 0 {
-		return ecs.InvalidEntity
+		return ecs.NilEntity
 	}
-	id = t.next[id][i]
-	return t.Ref(id)
+	id = tab.next[id][i]
+	return tab.Ref(id)
 }
 
 type serd struct {
-	ID      int   `json:"id"`
-	Next    []int `json:"next"`
-	Weights []int `json:"weights"`
+	ID      ecs.EntityID   `json:"id"`
+	Next    []ecs.EntityID `json:"next"`
+	Weights []int          `json:"weights"`
 }
 
 // MarhsalJSON marshal's the markov transition data into a json array.
-func (t *Table) MarhsalJSON() ([]byte, error) {
-	it := t.IterAll(componentTransition)
+func (tab *Table) MarhsalJSON() ([]byte, error) {
+	it := tab.Iter(ecs.All(componentTransition))
 	data := make([]serd, 0, it.Count())
-	for id, _, ok := it.Next(); ok; id, _, ok = it.Next() {
+	for it.Next() {
+		id := it.ID()
 		data = append(data, serd{
 			ID:      id,
-			Next:    t.next[id],
-			Weights: t.weights[id],
+			Next:    tab.next[id],
+			Weights: tab.weights[id],
 		})
 	}
 	return json.Marshal(data)
@@ -112,8 +120,8 @@ func (t *Table) MarhsalJSON() ([]byte, error) {
 
 // UnmarshalJSON unmarshal's markov transition data into this table; table must
 // be empty.
-func (t *Table) UnmarshalJSON(d []byte) error {
-	if len(t.Entities) > 0 {
+func (tab *Table) UnmarshalJSON(d []byte) error {
+	if len(tab.Entities) > 0 {
 		return errors.New("markov table already has data")
 	}
 	var data []serd
@@ -121,17 +129,17 @@ func (t *Table) UnmarshalJSON(d []byte) error {
 		return err
 	}
 
-	n := -1
+	n := ecs.EntityID(0)
 	for _, dat := range data {
 		if dat.ID >= n {
-			n = dat.ID + 1
+			n = dat.ID
 		}
 	}
-	t.next = make([][]int, n)
-	t.weights = make([][]int, n)
+	tab.next = make([][]ecs.EntityID, n)
+	tab.weights = make([][]int, n)
 	for _, dat := range data {
-		t.next[dat.ID] = dat.Next
-		t.weights[dat.ID] = dat.Weights
+		tab.next[dat.ID] = dat.Next
+		tab.weights[dat.ID] = dat.Weights
 	}
 	return nil
 }
