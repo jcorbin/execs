@@ -1,109 +1,64 @@
 package ecs
 
-// ComponentType is a bit field indicating presence of an entity's components.
-type ComponentType uint64
-
-const (
-	// ComponentNone means "free" or "unallocated" entity.
-	ComponentNone ComponentType = 0
-)
-
-// All returns true if the type has all of the mask types set.
-func (t ComponentType) All(mask ComponentType) bool { return t&mask == mask }
-
-// Any returns true if the type has any of the mask types set.
-func (t ComponentType) Any(mask ComponentType) bool { return t&mask != 0 }
-
-// Core is the core of the Entity Component System, tracking the entities in
-// play. It is meant to be embedded in the root of a collection of game data.
+// Core is the core of an Entity Component System: it manages the entity IDs
+// and types. IDs are off-by-one indices in the Entities slice (since the 0 ID
+// is invalid, ID 1 maps to Entities[0]). Types are simply the values in the slice
+//
+// There are 3 kinds of lifecycle function:
+// - an allocator is called to allocate static data space when an Entity of
+//   any Type is created.
+// - a creator is called when an Entity has all of its Type bits added to it;
+//   it may initialize static data, allocate dynamic data, or do other Type
+//   specific things.
+// - a destroyer is called when an Entity has any of its Type bits removed fro
+//   it; it may clear static data, de-allocate dynamic data, or do other Type
+//   specific things.
 type Core struct {
 	Entities []ComponentType
 
-	// TODO: type registration, alloc/free hooks
+	allocators, creators, destroyers []entityFunc
 }
 
-// CountAll counts how many entities have all of the given components.
-func (core Core) CountAll(mask ComponentType) int {
-	n := 0
-	for _, t := range core.Entities {
-		if t&mask == mask {
-			n++
+type entityFunc struct {
+	t ComponentType
+	f func(EntityID, ComponentType)
+}
+
+// EntityID is the ID of an Entity in a Core; the 0 value is an invalid ID,
+// meaning "null entity".
+type EntityID int
+
+// ComponentType represents the type of an Entity in a Core.
+type ComponentType uint64
+
+// NoType means that the Entities slot is unused.
+const NoType ComponentType = 0
+
+// All returns true only if all of the masked type bits are set.
+func (t ComponentType) All(mask ComponentType) bool { return t&mask == mask }
+
+// Any returns true only if at least one of the masked type bits is set.
+func (t ComponentType) Any(mask ComponentType) bool { return t&mask != 0 }
+
+// RegisterAllocator registers an allocator function; it panics if any
+// allocator is registered that overlaps the given type.
+func (co *Core) RegisterAllocator(t ComponentType, allocator func(EntityID, ComponentType)) {
+	for _, ef := range co.allocators {
+		if ef.t.Any(t) {
+			panic("aspect type conflict")
 		}
 	}
-	return n
+	co.allocators = append(co.allocators, entityFunc{t, allocator})
 }
 
-// CountAny counts how many entities have at least one of the given components.
-func (core Core) CountAny(mask ComponentType) int {
-	n := 0
-	for _, t := range core.Entities {
-		if t&mask != 0 {
-			n++
-		}
+// RegisterCreator register a creator or destroyer function (one or both
+// SHOULD be given). The Type may overlap any number of other
+// creator/destroyer Types, so the functions should be written cooperatively.
+func (co *Core) RegisterCreator(t ComponentType, creator, destroyer func(EntityID, ComponentType)) {
+	if creator != nil {
+		co.creators = append(co.creators, entityFunc{t, creator})
 	}
-	return n
-}
-
-// Iter returns an iterator that will iterate over all entities with type t
-// where t.All(all) is true if all is not 0 and t.Any(any) is true if any is
-// not 0.  all of the given components.
-func (core Core) Iter(all, any ComponentType) Iterator {
-	return Iterator{
-		ents: core.Entities,
-		all:  all,
-		any:  any,
+	if destroyer != nil {
+		co.destroyers = append(co.destroyers, entityFunc{t, destroyer})
 	}
-}
-
-// IterAll returns an iterator over entities with all of the given components.
-func (core Core) IterAll(mask ComponentType) Iterator { return core.Iter(mask, 0) }
-
-// IterAny returns an iterator over entities with any of the given components.
-func (core Core) IterAny(mask ComponentType) Iterator { return core.Iter(0, mask) }
-
-// Iterator iterates over entities of specific type(s) within a Core.
-type Iterator struct {
-	ents     []ComponentType
-	i        int
-	all, any ComponentType
-}
-
-// Reset resets the iterator, causing it to iterates over again.
-func (it *Iterator) Reset() { it.i = 0 }
-
-func (it Iterator) test(t ComponentType) bool {
-	if it.all != 0 && !t.All(it.all) {
-		return false
-	}
-	if it.any != 0 && !t.Any(it.any) {
-		return false
-	}
-	return true
-}
-
-// Count returns a count of how many entities are yet to come.
-func (it Iterator) Count() int {
-	ents := it.ents
-	n := 0
-	for i := it.i; i < len(ents); i++ {
-		if it.test(ents[i]) {
-			n++
-		}
-	}
-	return n
-}
-
-// Next returns the next entity id, its type, and true if there are any
-// entities yet to iterate; otherwise false is return with a 0 id and
-// ComponentNone type.
-func (it *Iterator) Next() (int, ComponentType, bool) {
-	ents, i := it.ents, it.i
-	for i < len(ents) {
-		if it.test(ents[i]) {
-			it.i = i + 1
-			return i, ents[i], true
-		}
-		i++
-	}
-	return 0, ComponentNone, false
 }
