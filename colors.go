@@ -10,6 +10,21 @@ import (
 	"github.com/jcorbin/execs/internal/point"
 )
 
+var (
+	aiColors    = []termbox.Attribute{124, 160, 196, 202, 208, 214}
+	soulColors  = []termbox.Attribute{19, 20, 21, 27, 33, 39}
+	wallColors  = []termbox.Attribute{233, 234, 235, 236, 237, 238, 239}
+	floorColors = []termbox.Attribute{232, 233, 234}
+
+	wallTable  colorTable
+	floorTable colorTable
+)
+
+func init() {
+	wallTable.addLevelTransitions(wallColors, 4, 1, 4, 3, 2)
+	floorTable.addLevelTransitions(floorColors, 6, 1, 6, 2, 1)
+}
+
 const (
 	componentTableColor ecs.ComponentType = 1 << iota
 )
