@@ -20,4 +20,13 @@ func (tcl TypeClause) Test(t ComponentType) bool {
 	return true
 }
 
+// Clause is a convenience constructor.
+func Clause(all, any ComponentType) TypeClause { return TypeClause{all, any} }
+
+// All is a convenience constructor.
+func All(t ComponentType) TypeClause { return TypeClause{All: t} }
+
+// Any is a convenience constructor.
+func Any(t ComponentType) TypeClause { return TypeClause{Any: t} }
+
 // TODO: boolean logic methods?

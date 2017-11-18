@@ -4,12 +4,6 @@ package ecs
 // given TypeClause.
 func (co *Core) Iter(tcl TypeClause) Iterator { return Iterator{co, 0, tcl} }
 
-// IterAll is a convenient way of saying Iter(TypeClause{All: all}).
-func (co *Core) IterAll(all ComponentType) Iterator { return co.Iter(TypeClause{All: all}) }
-
-// IterAny is a convenient way of saying Iter(TypeClause(Any: any}).
-func (co *Core) IterAny(any ComponentType) Iterator { return co.Iter(TypeClause{Any: any}) }
-
 // Iterator points into a Core's Entities, iterating over them with optional
 // type filter criteria.
 type Iterator struct {
