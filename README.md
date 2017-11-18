@@ -115,4 +115,32 @@ And here's some other minor notes:
 - entity references got way more useful
 - iterated on the skeleton main.go for new view situation
 
+### [Six](../../tree/six)
+
+Today I dove back into the depths of ECS land. Having glimpsed possibilities
+when reading [about the Beta approach][es-beta], and being plussed by how well
+the markov table part went, I set out to build a "body" system:
+- no more "arbitrary" Str, Def, Dex, and Luck; instead each world entity can have a body
+- a body is itself an ECS composed of body parts; each body part has hp, a
+  damage rating, and an armor rating
+- the body parts exist in a hierarchical relation ship, such that if your arm
+  is destroyed, so is your hand; this makes it possible to kill by destroying
+  the head or torso
+- severed body parts now drop into the world as separate item entities
+- death now happens when you're "disembodied": when all body parts have dropped
+  into the world, leaving an entity's body empty
+
+For bonus, I made it so that if your head is still intact (i.e. you were killed
+by torso destruction), then you get to continue on as a spirit for 5 turns.
+Spirits can still collide, but since combat is based on presence of a body, no
+damage happens (this happens to enemies as well of course).
+
+Combat sub-targets are chosen automatically for you, but as soon as I level up
+the view controller enough to support it, I'll add a mini-game allowing the
+player to choose (e.g. to attack a leg, instead of going for the kill).
+
+Next up I have plans for all those spare body parts... also maybe reclaim
+something from destroyed body parts (e.g. the remaining damage/armor points on
+whatever body part(s) you destroy)...
+
 [es-beta]: http://entity-systems.wikidot.com/rdbms-beta
