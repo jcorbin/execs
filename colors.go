@@ -15,9 +15,31 @@ const (
 )
 
 type colorTable struct {
-	markov.Table
+	ecs.Core
+	*markov.Table
 	color  []termbox.Attribute
-	lookup map[termbox.Attribute]int
+	lookup map[termbox.Attribute]ecs.EntityID
+}
+
+func newColorTable() *colorTable {
+	ct := &colorTable{
+		// TODO: consider eliminating the padding for EntityID(0)
+		color:  []termbox.Attribute{0},
+		lookup: make(map[termbox.Attribute]ecs.EntityID, 1),
+	}
+	ct.Table = markov.NewTable(&ct.Core)
+	ct.RegisterAllocator(componentTableColor, ct.allocTableColor)
+	ct.RegisterCreator(componentTableColor, nil, ct.destroyTableColor)
+	return ct
+}
+
+func (ct *colorTable) allocTableColor(id ecs.EntityID, t ecs.ComponentType) {
+	ct.color = append(ct.color, 0)
+}
+
+func (ct *colorTable) destroyTableColor(id ecs.EntityID, t ecs.ComponentType) {
+	delete(ct.lookup, ct.color[id])
+	ct.color[id] = 0
 }
 
 func (ct *colorTable) addLevelTransitions(
@@ -47,23 +69,13 @@ func (ct *colorTable) addLevelTransitions(
 	}
 }
 
-func (ct *colorTable) AddEntity() ecs.Entity {
-	ent := ct.Table.AddEntity()
-	ct.color = append(ct.color, 0)
-	return ent
-}
-
 func (ct *colorTable) toEntity(a termbox.Attribute) ecs.Entity {
 	if id, def := ct.lookup[a]; def {
 		return ct.Ref(id)
 	}
-	ent := ct.AddEntity()
-	ent.AddComponent(componentTableColor)
+	ent := ct.AddEntity(componentTableColor)
 	id := ent.ID()
 	ct.color[id] = a
-	if ct.lookup == nil {
-		ct.lookup = make(map[termbox.Attribute]int, 1)
-	}
 	ct.lookup[a] = id
 	return ent
 }
