@@ -4,21 +4,21 @@ package ecs
 // the iterator is limeted to entities that have all of those type bits set.
 // Similarly if any non-0, then the iterator is limited to entities that at
 // least one of those type bits set.
-func (co *Core) Iter(all, any Type) Iterator { return Iterator{co, 0, all, any} }
+func (co *Core) Iter(all, any ComponentType) Iterator { return Iterator{co, 0, all, any} }
 
 // IterAll is a convenient way of saying Iter(all, 0).
-func (co *Core) IterAll(all Type) Iterator { return Iterator{co, 0, all, 0} }
+func (co *Core) IterAll(all ComponentType) Iterator { return Iterator{co, 0, all, 0} }
 
 // IterAny is a convenient way of saying Iter(0, any).
-func (co *Core) IterAny(any Type) Iterator { return Iterator{co, 0, 0, any} }
+func (co *Core) IterAny(any ComponentType) Iterator { return Iterator{co, 0, 0, any} }
 
 // Iterator points into a Core's Entities, iterating over them with optional
 // type filter criteria.
 type Iterator struct {
 	co  *Core
 	i   int
-	all Type
-	any Type
+	all ComponentType
+	any ComponentType
 }
 
 // Next advances the iterator to point at the next matching entity, and
@@ -53,7 +53,7 @@ func (it Iterator) Count() int {
 
 // Type returns the type of the current entity, or NoType if iteration is
 // done.
-func (it Iterator) Type() Type {
+func (it Iterator) Type() ComponentType {
 	if it.i < len(it.co.Entities) {
 		return it.co.Entities[it.i]
 	}

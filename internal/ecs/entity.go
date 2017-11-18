@@ -11,7 +11,7 @@ var NilEntity = Entity{}
 
 // Type returns the type of the referenced entity, or NoType if the reference
 // is empty.
-func (ent Entity) Type() Type {
+func (ent Entity) Type() ComponentType {
 	if ent.co == nil || ent.id == 0 {
 		return NoType
 	}
@@ -50,7 +50,7 @@ func (co *Core) Ref(id EntityID) Entity { return Entity{co, id} }
 //
 // Invokes all allocators if it allocates a new EntityID in Entities. Invokes
 // any creator functions.
-func (co *Core) AddEntity(t Type) Entity {
+func (co *Core) AddEntity(t ComponentType) Entity {
 	ent := Entity{co: co}
 	for i, it := range co.Entities {
 		if it != NoType {
@@ -76,7 +76,7 @@ func (co *Core) AddEntity(t Type) Entity {
 
 // Add sets bits in the entity's type, calling any creator functions that are
 // newly satisfied by the new type.
-func (ent Entity) Add(t Type) {
+func (ent Entity) Add(t ComponentType) {
 	old := ent.co.Entities[ent.id-1]
 	new := old | t
 	ent.co.Entities[ent.id-1] = new
@@ -89,7 +89,7 @@ func (ent Entity) Add(t Type) {
 
 // Delete clears bits in the entity's type, calling any destroyer functions
 // that are no longer satisfied by the new type.
-func (ent Entity) Delete(t Type) {
+func (ent Entity) Delete(t ComponentType) {
 	old := ent.co.Entities[ent.id-1]
 	new := old & ^t
 	ent.co.Entities[ent.id-1] = new
