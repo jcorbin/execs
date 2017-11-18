@@ -73,6 +73,13 @@ func (v *View) Log(mess string, args ...interface{}) {
 	v.ctx.Log(mess, args...)
 }
 
+// ClearLog clears the internal log buffer.
+func (v *View) ClearLog() {
+	v.ctxLock.Lock()
+	defer v.ctxLock.Unlock()
+	v.ctx.Logs = v.ctx.Logs[:0]
+}
+
 // SetHeader copies the given lines into the internal header buffer, replacing
 // any prior.
 func (ctx *Context) SetHeader(lines ...string) {
