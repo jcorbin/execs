@@ -1,24 +1,21 @@
 package ecs
 
-// Iter returns a new iterator over the Core's Entities. If all is non-0, then
-// the iterator is limeted to entities that have all of those type bits set.
-// Similarly if any non-0, then the iterator is limited to entities that at
-// least one of those type bits set.
-func (co *Core) Iter(all, any ComponentType) Iterator { return Iterator{co, 0, all, any} }
+// Iter returns a new iterator over the Core's Entities which satisify the
+// given TypeClause.
+func (co *Core) Iter(tcl TypeClause) Iterator { return Iterator{co, 0, tcl} }
 
-// IterAll is a convenient way of saying Iter(all, 0).
-func (co *Core) IterAll(all ComponentType) Iterator { return Iterator{co, 0, all, 0} }
+// IterAll is a convenient way of saying Iter(TypeClause{All: all}).
+func (co *Core) IterAll(all ComponentType) Iterator { return co.Iter(TypeClause{All: all}) }
 
-// IterAny is a convenient way of saying Iter(0, any).
-func (co *Core) IterAny(any ComponentType) Iterator { return Iterator{co, 0, 0, any} }
+// IterAny is a convenient way of saying Iter(TypeClause(Any: any}).
+func (co *Core) IterAny(any ComponentType) Iterator { return co.Iter(TypeClause{Any: any}) }
 
 // Iterator points into a Core's Entities, iterating over them with optional
 // type filter criteria.
 type Iterator struct {
 	co  *Core
 	i   int
-	all ComponentType
-	any ComponentType
+	tcl TypeClause
 }
 
 // Next advances the iterator to point at the next matching entity, and
@@ -27,13 +24,9 @@ type Iterator struct {
 func (it *Iterator) Next() bool {
 	for ; it.i < len(it.co.Entities); it.i++ {
 		t := it.co.Entities[it.i]
-		if it.all != 0 && !t.All(it.all) {
-			continue
+		if it.tcl.Test(t) {
+			return true
 		}
-		if it.any != 0 && !t.Any(it.any) {
-			continue
-		}
-		return true
 	}
 	return false
 }
