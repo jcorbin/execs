@@ -42,6 +42,25 @@ func (t ComponentType) All(mask ComponentType) bool { return mask != NoType && t
 // mask is NoType, always returns true.
 func (t ComponentType) Any(mask ComponentType) bool { return mask == NoType || t&mask != 0 }
 
+// Empty returns true only if there are no active entities.
+func (co *Core) Empty() bool {
+	for _, t := range co.Entities {
+		if t != NoType {
+			return false
+		}
+	}
+	return true
+}
+
+// Clear destroys all active entities.
+func (co *Core) Clear() {
+	for i, t := range co.Entities {
+		if t != NoType {
+			co.Ref(EntityID(i + 1)).Destroy()
+		}
+	}
+}
+
 // RegisterAllocator registers an allocator function; it panics if any
 // allocator is registered that overlaps the given type.
 func (co *Core) RegisterAllocator(t ComponentType, allocator func(EntityID, ComponentType)) {
@@ -62,24 +81,5 @@ func (co *Core) RegisterCreator(t ComponentType, creator, destroyer func(EntityI
 	}
 	if destroyer != nil {
 		co.destroyers = append(co.destroyers, entityFunc{t, destroyer})
-	}
-}
-
-// Empty returns true only if there are no active entities.
-func (co *Core) Empty() bool {
-	for _, t := range co.Entities {
-		if t != NoType {
-			return false
-		}
-	}
-	return true
-}
-
-// Clear destroys all active entities.
-func (co *Core) Clear() {
-	for i, t := range co.Entities {
-		if t != NoType {
-			co.Ref(EntityID(i + 1)).Destroy()
-		}
 	}
 }
