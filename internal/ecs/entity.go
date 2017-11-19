@@ -59,21 +59,27 @@ func (co *Core) AddEntity(nt ComponentType) Entity {
 // Add sets bits in the entity's type, calling any creator functions that are
 // newly satisfied by the new type.
 func (ent Entity) Add(t ComponentType) {
-	old := ent.co.Entities[ent.id-1]
-	ent.co.setType(ent.id, old|t)
+	if ent.co != nil && ent.id > 0 {
+		old := ent.co.Entities[ent.id-1]
+		ent.co.setType(ent.id, old|t)
+	}
 }
 
 // Delete clears bits in the entity's type, calling any destroyer functions
 // that are no longer satisfied by the new type.
 func (ent Entity) Delete(t ComponentType) {
-	old := ent.co.Entities[ent.id-1]
-	ent.co.setType(ent.id, old & ^t)
+	if ent.co != nil && ent.id > 0 {
+		old := ent.co.Entities[ent.id-1]
+		ent.co.setType(ent.id, old & ^t)
+	}
 }
 
 // Destroy sets the entity's type to NoType, invoking any destroyer functions
 // that match the prior type.`
 func (ent Entity) Destroy() {
-	ent.co.setType(ent.id, NoType)
+	if ent.co != nil && ent.id > 0 {
+		ent.co.setType(ent.id, NoType)
+	}
 }
 
 func (co *Core) allocate() EntityID {
