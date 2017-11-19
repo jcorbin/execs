@@ -94,6 +94,16 @@ func (rel *Relation) Insert(r RelationType, a, b Entity) Entity {
 	return rel.insert(r, a, b)
 }
 
+// InsertMany allows a function to insert many relations without incurring
+// indexing cost; indexing is deferred until the with function returns, at
+// which point indices are fixed.
+func (rel *Relation) InsertMany(with func(func(r RelationType, a, b Entity) Entity)) {
+	if fixIndex := rel.deferIndexing(); fixIndex != nil {
+		defer fixIndex()
+	}
+	with(rel.insert)
+}
+
 func (rel *Relation) insert(r RelationType, a, b Entity) Entity {
 	aid := rel.aCore.Deref(a)
 	bid := rel.bCore.Deref(b)
