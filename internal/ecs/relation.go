@@ -58,6 +58,11 @@ func (t RelationType) Any(mask RelationType) bool { return t&mask != 0 }
 
 const relType ComponentType = 1 << (63 - iota)
 
+// RelType converts a RelationType into a ComponentType.
+func RelType(t RelationType) ComponentType {
+	return ComponentType(t) | relType
+}
+
 func (rel *Relation) allocRel(id EntityID, t ComponentType) {
 	i := len(rel.aids)
 	rel.aids = append(rel.aids, 0)
