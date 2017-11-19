@@ -30,22 +30,26 @@ func (G *Graph) Roots(
 	triset := make(map[EntityID]bool, it.Count())
 	n := 0
 	for it.Next() {
-		ent := it.Entity()
-		i := ent.ID() - 1
-		r := RelationType(G.Entities[i] & ^relType)
-		a := G.aCore.Ref(G.aids[i])
-		b := G.aCore.Ref(G.bids[i])
-		if where == nil || where(ent, a, b, r) {
-			aid, bid := G.aids[i], G.bids[i]
-			if _, def := triset[aid]; !def {
-				triset[aid] = true
-				n++
-			}
-			if in := triset[bid]; in {
-				n--
-			}
-			triset[bid] = false
+		i := it.ID() - 1
+
+		if where != nil && !where(
+			it.Entity(),
+			G.aCore.Ref(G.aids[i]),
+			G.aCore.Ref(G.bids[i]),
+			RelationType(it.Type() & ^relType),
+		) {
+			continue
 		}
+
+		aid, bid := G.aids[i], G.bids[i]
+		if _, def := triset[aid]; !def {
+			triset[aid] = true
+			n++
+		}
+		if in := triset[bid]; in {
+			n--
+		}
+		triset[bid] = false
 	}
 
 	result := make([]Entity, 0, n)
