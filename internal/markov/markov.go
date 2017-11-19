@@ -21,18 +21,23 @@ type Table struct {
 	next    [][]ecs.EntityID
 }
 
-// NewTable creates a new markov transition table for the given Core's entity
-// space.
+// NewTable creates a new markov transition table for the given Core.
 func NewTable(core *ecs.Core) *Table {
-	tab := &Table{
-		Core: core,
-		// TODO: consider eliminating the padding for EntityID(0)
-		weights: [][]int{nil},
-		next:    [][]ecs.EntityID{nil},
-	}
+	tab := &Table{}
+	tab.Init(core)
+	return tab
+}
+
+// Init sets up a new markov transition table for the given Core's entity
+// space; this method is useful to setup an embedded table from another
+// constructor.
+func (tab *Table) Init(core *ecs.Core) {
+	// TODO: consider eliminating the padding for EntityID(0)
+	tab.Core = core
+	tab.weights = [][]int{nil}
+	tab.next = [][]ecs.EntityID{nil}
 	core.RegisterAllocator(componentTransition, tab.allocTransition)
 	core.RegisterCreator(componentTransition, nil, tab.destroyTransition)
-	return tab
 }
 
 func (tab *Table) allocTransition(id ecs.EntityID, t ecs.ComponentType) {
