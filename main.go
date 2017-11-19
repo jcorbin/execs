@@ -30,6 +30,7 @@ const (
 	wcBG
 	wcFG
 	wcInput
+	wcWaiting
 	wcBody
 	wcSoul
 	wcItem
@@ -39,6 +40,7 @@ const (
 const (
 	renderMask   = wcPosition | wcGlyph
 	playMoveMask = wcPosition | wcInput | wcSoul
+	charMask     = wcPosition | wcCollide | wcName | wcGlyph | wcBody
 	aiMoveMask   = wcPosition | wcInput | wcAI
 	collMask     = wcPosition | wcCollide
 	combatMask   = wcCollide | wcBody
@@ -47,6 +49,7 @@ const (
 type world struct {
 	logFile *os.File
 	logger  *log.Logger
+	rng     *rand.Rand
 	View    *view.View
 	ecs.Core
 
@@ -59,7 +62,8 @@ type world struct {
 	bodies    []*body
 	items     []interface{}
 
-	coll  []int
+	// TODO: consider making this an ecs.Relation
+	coll  []ecs.EntityID
 	colls []collision
 }
 
@@ -74,17 +78,45 @@ type timerAction uint8
 
 const (
 	timerDestroy timerAction = iota
-	timerSetType
+	// timerSetType FIXME
 	timerCallback
 )
 
 type collision struct {
-	sourceID int
-	targetID int
+	sourceID, targetID ecs.EntityID
 }
 
-func (w *world) AddEntity() ecs.Entity {
-	ent := w.Core.AddEntity()
+func newWorld(v *view.View) (*world, error) {
+	w := &world{
+		rng:  rand.New(rand.NewSource(rand.Int63())),
+		View: v,
+
+		// TODO: consider eliminating the padding for EntityID(0)
+		Names:     []string{""},
+		Positions: []point.Point{point.Point{}},
+		Glyphs:    []rune{0},
+		BG:        []termbox.Attribute{0},
+		FG:        []termbox.Attribute{0},
+		timers:    []timer{timer{}},
+		bodies:    []*body{nil},
+		items:     []interface{}{nil},
+	}
+
+	f, err := os.Create(fmt.Sprintf("%v.log", time.Now().Format(time.RFC3339)))
+	if err != nil {
+		return nil, err
+	}
+	w.logger = log.New(f, "", 0)
+	w.log("logging to %q", f.Name())
+
+	w.RegisterAllocator(wcName|wcPosition|wcGlyph|wcBG|wcFG|wcBody|wcItem|wcTimer, w.allocWorld)
+	w.RegisterCreator(wcBody, w.createBody, w.destroyBody)
+	w.RegisterCreator(wcItem, nil, w.destroyItem)
+
+	return w, nil
+}
+
+func (w *world) allocWorld(id ecs.EntityID, t ecs.ComponentType) {
 	w.Names = append(w.Names, "")
 	w.Positions = append(w.Positions, point.Point{})
 	w.Glyphs = append(w.Glyphs, 0)
@@ -93,28 +125,55 @@ func (w *world) AddEntity() ecs.Entity {
 	w.bodies = append(w.bodies, nil)
 	w.items = append(w.items, nil)
 	w.timers = append(w.timers, timer{})
-	return ent
 }
 
-func (w *world) DestroyEntity(id int) {
-	w.Entities[id] = ecs.ComponentNone
-	w.bodies[id] = nil
+func (w *world) createBody(id ecs.EntityID, t ecs.ComponentType) {
+	w.bodies[id] = newBody()
+}
+
+func (w *world) destroyBody(id ecs.EntityID, t ecs.ComponentType) {
+	// TODO: could reset the body ecs for re-use
+	if bo := w.bodies[id]; bo != nil {
+		if !bo.Empty() {
+			name := w.getName(id, "???")
+			name = fmt.Sprintf("remains of %s", name)
+			w.newItem(w.Positions[id], name, '%', bo)
+			w.bodies[id] = nil
+		}
+	}
+}
+
+func (w *world) destroyItem(id ecs.EntityID, t ecs.ComponentType) {
+	item := w.items[id]
+	w.items[id] = nil
+	switch v := item.(type) {
+	case *body:
+		for i := range w.bodies {
+			if w.bodies[i] == nil {
+				v.Clear()
+				w.bodies[i] = v
+				break
+			}
+		}
+	}
 }
 
 func (w *world) Render(ctx *view.Context) error {
 	ctx.SetHeader(
-		fmt.Sprintf("%v souls v %v demons", w.CountAll(wcSoul), w.CountAll(wcAI)),
+		fmt.Sprintf("%v souls v %v demons", w.Iter(ecs.All(wcSoul)).Count(), w.Iter(ecs.All(wcAI)).Count()),
 	)
 
-	it := w.IterAll(wcSoul | wcBody)
+	it := w.Iter(ecs.All(wcSoul | wcBody))
 	hpParts := make([]string, 0, it.Count())
-	for id, _, ok := it.Next(); ok; id, _, ok = it.Next() {
-		bo := w.bodies[id]
+	for it.Next() {
+		bo := w.bodies[it.ID()]
 		parts := make([]string, 0, len(bo.Entities))
-		bo.Descend(0, 0, func(id, level int) bool {
-			parts = append(parts, fmt.Sprintf("%s:%v", bo.DescribePart(id), bo.hp[id]))
-			return true
-		})
+		for _, root := range bo.Roots() {
+			bo.Descend(root, func(ent ecs.Entity, level int) bool {
+				parts = append(parts, fmt.Sprintf("%s:%v", bo.DescribePart(ent), bo.hp[ent.ID()]))
+				return true
+			})
+		}
 		hp, maxHP := bo.HPRange()
 
 		// TODO: render a doll like
@@ -134,10 +193,10 @@ func (w *world) Render(ctx *view.Context) error {
 		bbox  point.Box
 		focus point.Point
 	)
-	it = w.IterAll(renderMask)
-	for id, t, ok := it.Next(); ok; id, t, ok = it.Next() {
-		pos := w.Positions[id]
-		if t&wcSoul != 0 {
+	it = w.Iter(ecs.All(renderMask))
+	for it.Next() {
+		pos := w.Positions[it.ID()]
+		if it.Type().All(wcSoul) {
 			// TODO: centroid between all souls would be a way to move beyond
 			// "last wins"
 			focus = pos
@@ -165,9 +224,9 @@ func (w *world) Render(ctx *view.Context) error {
 
 	zVals := make([]uint8, len(ctx.Grid.Data))
 
-	it = w.Iter(wcPosition, wcGlyph|wcBG)
-	for id, t, ok := it.Next(); ok; id, t, ok = it.Next() {
-		pos := w.Positions[id].Add(offset)
+	it = w.Iter(ecs.Clause(wcPosition, wcGlyph|wcBG))
+	for it.Next() {
+		pos := w.Positions[it.ID()].Add(offset)
 		if !pos.Less(point.Zero) && !ctx.Grid.Size.Less(pos) {
 			var (
 				ch     rune
@@ -176,21 +235,21 @@ func (w *world) Render(ctx *view.Context) error {
 
 			var zVal uint8
 
-			if t.All(wcGlyph) {
-				ch = w.Glyphs[id]
+			if it.Type().All(wcGlyph) {
+				ch = w.Glyphs[it.ID()]
 				zVal = 1
 			}
 
 			// TODO: move to hp update
-			if t.All(wcBody) && t.Any(wcSoul|wcAI) {
+			if it.Type().All(wcBody) && it.Type().Any(wcSoul|wcAI) {
 				zVal = 255
 				colors := soulColors
-				if !t.All(wcSoul) {
+				if !it.Type().All(wcSoul) {
 					zVal--
 					colors = aiColors
 				}
 
-				hp, maxHP := w.bodies[id].HPRange()
+				hp, maxHP := w.bodies[it.ID()].HPRange()
 				// XXX range error FIXME
 				i := 1 + (len(colors)-2)*hp/maxHP
 				if i < 0 {
@@ -203,26 +262,26 @@ func (w *world) Render(ctx *view.Context) error {
 					fg = colors[i]
 				}
 
-			} else if t.All(wcSoul) {
+			} else if it.Type().All(wcSoul) {
 				zVal = 127
 				fg = soulColors[0]
-			} else if t.All(wcAI) {
+			} else if it.Type().All(wcAI) {
 				zVal = 126
 				fg = aiColors[0]
-			} else if t.All(wcItem) {
+			} else if it.Type().All(wcItem) {
 				zVal = 10
 				fg = 35
 			} else {
 				zVal = 2
-				if t.All(wcFG) {
-					fg = w.FG[id]
+				if it.Type().All(wcFG) {
+					fg = w.FG[it.ID()]
 				}
 			}
 
 			if i := pos.Y*ctx.Grid.Size.X + pos.X; zVals[i] < zVal {
 				zVals[i] = zVal
-				if t.All(wcBG) {
-					bg = w.BG[id]
+				if it.Type().All(wcBG) {
+					bg = w.BG[it.ID()]
 				}
 				if fg != 0 {
 					fg++
@@ -247,29 +306,29 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 
 	v.ClearLog()
 
-	rng := rand.New(rand.NewSource(rand.Int63()))
-
 	// run timers
-	it := w.IterAll(wcTimer)
-	for id, _, ok := it.Next(); ok; id, _, ok = it.Next() {
-		if w.timers[id].n <= 0 {
+	it := w.Iter(ecs.All(wcTimer))
+	for it.Next() {
+		if w.timers[it.ID()].n <= 0 {
 			continue
 		}
-		w.timers[id].n--
-		if w.timers[id].n > 0 {
+		w.timers[it.ID()].n--
+		if w.timers[it.ID()].n > 0 {
 			continue
 		}
-		w.Entities[id] &= ^wcTimer
-		switch w.timers[id].a {
+		ent := it.Entity()
+		ent.Delete(wcTimer)
+		switch w.timers[it.ID()].a {
 		case timerDestroy:
-			w.DestroyEntity(id)
-		case timerSetType:
-			w.Entities[id] = w.timers[id].t
+			ent.Destroy()
+		// FIXME
+		// case timerSetType:
+		// 	w.Entities[it.ID()] = w.timers[it.ID()].t
 		case timerCallback:
-			f := w.timers[id].f
+			f := w.timers[it.ID()].f
 			if f != nil {
-				w.timers[id].f = nil
-				f(w.Ref(id))
+				w.timers[it.ID()].f = nil
+				f(ent)
 			}
 		}
 	}
@@ -282,16 +341,17 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 
 	// apply player move
 	if move, ok := key2move(k); ok {
-		it := w.IterAll(playMoveMask)
-		for id, _, ok := it.Next(); ok; id, _, ok = it.Next() {
-			target = w.move(id, move)
+		it := w.Iter(ecs.All(playMoveMask))
+		for it.Next() {
+			target = w.move(it.ID(), move)
 		}
 	}
 
 	// chase player
-	it = w.IterAll(aiMoveMask)
-	for id, _, ok := it.Next(); ok; id, _, ok = it.Next() {
-		w.move(id, target.Sub(w.Positions[id]).Sign())
+	it = w.Iter(ecs.All(aiMoveMask))
+	for it.Next() {
+		move := target.Sub(w.Positions[it.ID()]).Sign()
+		w.move(it.ID(), move)
 	}
 
 	// collisions deal damage
@@ -302,44 +362,52 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 		if w.Entities[coll.targetID]&combatMask != combatMask {
 			continue
 		}
-		w.attack(rng, coll.sourceID, coll.targetID)
+		w.attack(coll.sourceID, coll.targetID)
 	}
 
 	// count remaining souls
-	if w.CountAll(wcSoul) == 0 {
+	if w.Iter(ecs.All(wcSoul)).Count() == 0 {
 		w.log("game over")
 		return view.ErrStop
 	}
 
 	// maybe spawn
 	// TODO: randomize position?
-	if _, occupied := w.collides(len(w.Entities), point.Zero); !occupied {
+	if _, occupied := w.collides(0, point.Zero); !occupied {
 		sum := 0
-		it := w.IterAll(wcBody)
-		for id, _, ok := it.Next(); ok; id, _, ok = it.Next() {
-			sum += w.bodies[id].HP()
+		it := w.Iter(ecs.All(wcBody))
+		for it.Next() {
+			sum += w.bodies[it.ID()].HP()
 		}
-		bo := newBody(rng)
-		if hp := bo.HP(); rng.Intn(sum+hp) < hp {
-			enemy := w.newChar("enemy", 'X', bo)
-			enemy.AddComponent(wcInput | wcAI)
-			id := enemy.ID()
-			w.log("%s enters the world @%v stats: %+v", w.Names[id], w.Positions[id], w.bodies[id].Stats())
+
+		var enemy ecs.Entity
+		if it := w.Iter(ecs.All(charMask | wcWaiting)); it.Next() {
+			enemy = it.Entity()
+		} else {
+			enemy = w.newChar("enemy", 'X')
+			enemy.Add(wcWaiting)
+		}
+		bo := w.bodies[enemy.ID()]
+		if hp := bo.HP(); w.rng.Intn(sum+hp) < hp {
+			enemy.Delete(wcWaiting)
+			enemy.Add(wcInput | wcAI)
+			w.log("%s enters the world @%v stats: %+v",
+				w.Names[enemy.ID()],
+				w.Positions[enemy.ID()],
+				bo.Stats())
 		}
 	}
 
 	return nil
 }
 
-func (w *world) setTimer(id, n int, a timerAction) *timer {
-	w.Entities[id] |= wcTimer
+func (w *world) setTimer(id ecs.EntityID, n int, a timerAction) *timer {
+	w.Ref(id).Add(wcTimer)
 	w.timers[id] = timer{n: n, a: a}
 	return &w.timers[id]
 }
 
 func (w *world) addBox(box point.Box, glyph rune) {
-	rng := rand.New(rand.NewSource(rand.Int63()))
-
 	// TODO: the box should be an entity, rather than each cell
 	last, sz, pos := wallTable.Ref(0), box.Size(), box.TopLeft
 	for _, r := range []struct {
@@ -352,56 +420,39 @@ func (w *world) addBox(box point.Box, glyph rune) {
 		{n: sz.Y, d: point.Point{Y: -1}},
 	} {
 		for i := 0; i < r.n; i++ {
-			wall := w.AddEntity()
-			wall.AddComponent(
-				wcPosition | wcCollide |
-					wcGlyph | wcBG | wcFG)
-			id := wall.ID()
-			w.Glyphs[id] = glyph
-			w.Positions[id] = pos
+			wall := w.AddEntity(wcPosition | wcCollide | wcGlyph | wcBG | wcFG)
+			w.Glyphs[wall.ID()] = glyph
+			w.Positions[wall.ID()] = pos
 			c, _ := wallTable.toColor(last)
-			w.BG[id] = c
-			w.FG[id] = c + 1
+			w.BG[wall.ID()] = c
+			w.FG[wall.ID()] = c + 1
 			pos = pos.Add(r.d)
-			last = wallTable.ChooseNext(rng, last)
+			last = wallTable.ChooseNext(w.rng, last)
 		}
 	}
 
-	floorTable.genTile(rng, box, func(pos point.Point, bg termbox.Attribute) {
-		floor := w.AddEntity()
-		floor.AddComponent(wcPosition | wcBG)
+	floorTable.genTile(w.rng, box, func(pos point.Point, bg termbox.Attribute) {
+		floor := w.AddEntity(wcPosition | wcBG)
 		w.Positions[floor.ID()] = pos
 		w.BG[floor.ID()] = bg
 	})
 }
 
 func (w *world) newItem(pos point.Point, name string, glyph rune, val interface{}) ecs.Entity {
-	ent := w.AddEntity()
-	ent.AddComponent(wcPosition | wcName | wcGlyph | wcItem)
-	id := ent.ID()
-	w.Positions[id] = pos
-	w.Glyphs[id] = glyph
-	w.Names[id] = name
-	w.items[id] = val
+	ent := w.AddEntity(wcPosition | wcName | wcGlyph | wcItem)
+	w.Positions[ent.ID()] = pos
+	w.Glyphs[ent.ID()] = glyph
+	w.Names[ent.ID()] = name
+	w.items[ent.ID()] = val
 	return ent
 }
 
-func (w *world) newChar(name string, glyph rune, bo *body) ecs.Entity {
-	rng := rand.New(rand.NewSource(rand.Int63()))
-
-	ent := w.AddEntity()
-	ent.AddComponent(
-		wcPosition | wcCollide |
-			wcName | wcGlyph | wcBody)
-
-	id := ent.ID()
-	w.Glyphs[id] = glyph
-	w.Positions[id] = point.Zero
-	w.Names[id] = name
-	if bo == nil {
-		bo = newBody(rng)
-	}
-	w.bodies[id] = bo
+func (w *world) newChar(name string, glyph rune) ecs.Entity {
+	ent := w.AddEntity(charMask)
+	w.Glyphs[ent.ID()] = glyph
+	w.Positions[ent.ID()] = point.Zero
+	w.Names[ent.ID()] = name
+	w.bodies[ent.ID()].build(w.rng)
 	return ent
 }
 
@@ -419,7 +470,7 @@ func (w *world) log(mess string, args ...interface{}) {
 	w.logger.Printf(s)
 }
 
-func (w *world) getName(id int, deflt string) string {
+func (w *world) getName(id ecs.EntityID, deflt string) string {
 	if w.Entities[id]&wcName == 0 {
 		return deflt
 	}
@@ -431,14 +482,14 @@ func (w *world) getName(id int, deflt string) string {
 
 func (w *world) prepareCollidables() {
 	// TODO: maintain a cleverer structure, like a quad-tree, instead
-	it := w.IterAll(collMask)
+	it := w.Iter(ecs.All(collMask))
 	if n := it.Count(); cap(w.coll) < n {
-		w.coll = make([]int, 0, n)
+		w.coll = make([]ecs.EntityID, 0, n)
 	} else {
 		w.coll = w.coll[:0]
 	}
-	for id, _, ok := it.Next(); ok; id, _, ok = it.Next() {
-		w.coll = append(w.coll, id)
+	for it.Next() {
+		w.coll = append(w.coll, it.ID())
 	}
 
 	if n := len(w.coll) * len(w.coll); cap(w.colls) < n {
@@ -451,7 +502,7 @@ func (w *world) prepareCollidables() {
 	})
 }
 
-func (w *world) collides(id int, pos point.Point) (int, bool) {
+func (w *world) collides(id ecs.EntityID, pos point.Point) (ecs.EntityID, bool) {
 	for _, hitID := range w.coll {
 		if hitID != id {
 			if hitPos := w.Positions[hitID]; hitPos.Equal(pos) {
@@ -471,7 +522,7 @@ func (w *world) collides(id int, pos point.Point) (int, bool) {
 	// return 0, false
 }
 
-func (w *world) move(id int, move point.Point) point.Point {
+func (w *world) move(id ecs.EntityID, move point.Point) point.Point {
 	pos := w.Positions[id]
 	new := pos.Add(move)
 	if hitID, hit := w.collides(id, new); hit {
@@ -516,38 +567,19 @@ func key2move(k view.KeyEvent) (point.Point, bool) {
 
 func main() {
 	if err := view.JustKeepRunning(func(v *view.View) (view.Client, error) {
-		var w world
-		w.View = v
-
-		// TODO: world.rng probably
-		// rng := rand.New(rand.NewSource(rand.Int63()))
-
-		f, err := os.Create(fmt.Sprintf("%v.log", time.Now().Format(time.RFC3339)))
+		w, err := newWorld(v)
 		if err != nil {
 			return nil, err
 		}
-		w.logger = log.New(f, "", 0)
-		w.log("logging to %q", f.Name())
 
 		pt := point.Point{X: 12, Y: 8}
 
 		w.addBox(point.Box{TopLeft: pt.Neg(), BottomRight: pt}, '#')
-		player := w.newChar("you", 'X', nil)
-		player.AddComponent(wcInput | wcSoul)
-		id := player.ID()
-		w.log("%s enter the world @%v stats: %+v", w.Names[id], w.Positions[id], w.bodies[id].Stats())
+		player := w.newChar("you", 'X')
+		player.Add(wcInput | wcSoul)
+		w.log("%s enter the world @%v stats: %+v", w.Names[player.ID()], w.Positions[player.ID()], w.bodies[player.ID()].Stats())
 
-		// bo := w.bodies[id]
-		// bo.Descend(0, 0, func(id, level int) bool {
-		// 	if level == 0 {
-		// 		w.log("the %s is connected to the...", bo.DescribePart(id))
-		// 	} else {
-		// 		w.log("%s...%s; is connected to the...", strings.Repeat("  ", level), bo.DescribePart(id))
-		// 	}
-		// 	return true
-		// })
-
-		return &w, nil
+		return w, nil
 	}); err != nil {
 		log.Fatal(err)
 	}

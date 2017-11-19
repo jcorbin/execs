@@ -62,8 +62,7 @@ type bodyPart struct {
 	bodyStats
 }
 
-func newBody(rng *rand.Rand) *body {
-	// TODO: use rng
+func newBody() *body {
 	bo := &body{
 		// TODO: consider eliminating the padding for EntityID(0)
 		fmt:   []string{""},
@@ -73,7 +72,6 @@ func newBody(rng *rand.Rand) *body {
 		armor: []int{0},
 	}
 	bo.RegisterAllocator(bcPart, bo.allocPart)
-	bo.build()
 	return bo
 }
 
@@ -85,7 +83,7 @@ func (bo *body) allocPart(id ecs.EntityID, t ecs.ComponentType) {
 	bo.armor = append(bo.armor, 0)
 }
 
-func (bo *body) build() {
+func (bo *body) build(rng *rand.Rand) {
 	head := bo.AddPart(bcHead, 5, 3, 4)
 	torso := bo.AddPart(bcTorso, 8, 0, 2)
 
@@ -198,33 +196,30 @@ func (bo *body) ascend(
 	}
 }
 
-func (bo *body) choosePart(want func(prior, id ecs.EntityID) bool) ecs.Entity {
-	var choice ecs.EntityID
+func (bo *body) choosePart(want func(prior, ent ecs.Entity) bool) ecs.Entity {
+	var choice ecs.Entity
 	it := bo.Iter(ecs.All(bcPart | bcHP))
 	for it.Next() {
-		if want(choice, it.ID()) {
-			choice = it.ID()
+		if want(choice, it.Entity()) {
+			choice = it.Entity()
 		}
 	}
-	if choice == 0 {
-		return ecs.NilEntity
-	}
-	return bo.Ref(choice)
+	return choice
 }
 
-func (bo *body) chooseRandomPart(rng *rand.Rand, score func(id ecs.EntityID) int) ecs.Entity {
+func (bo *body) chooseRandomPart(rng *rand.Rand, score func(ent ecs.Entity) int) ecs.Entity {
 	sum := 0
-	return bo.choosePart(func(prior, id ecs.EntityID) bool {
-		if w := score(id); w > 0 {
+	return bo.choosePart(func(prior, ent ecs.Entity) bool {
+		if w := score(ent); w > 0 {
 			sum += w
-			return prior == 0 || rng.Intn(sum) < w
+			return prior == ecs.NilEntity || rng.Intn(sum) < w
 		}
 		return false
 	})
 }
 
-func (bo *body) PartName(id ecs.EntityID) string {
-	switch bo.Entities[id] & bcPartMask {
+func (bo *body) PartName(ent ecs.Entity) string {
+	switch ent.Type() & bcPartMask {
 	case bcHead:
 		return "head"
 	case bcTorso:
@@ -240,57 +235,53 @@ func (bo *body) PartName(id ecs.EntityID) string {
 	case bcTail:
 		return "tail"
 	}
-	return fmt.Sprintf("?%08x?", []ecs.ComponentType{
-		bo.Entities[id],
-		bo.Entities[id] & bcPartMask,
-	})
-	// return ""
+	return ""
 }
 
-func (bo *body) DescribePart(id ecs.EntityID) string {
-	s := bo.PartName(id)
+func (bo *body) DescribePart(ent ecs.Entity) string {
+	s := bo.PartName(ent)
 	if s == "" {
 		s = "???"
 	}
-	switch bo.Entities[id] & bcLocMask {
+	switch ent.Type() & bcLocMask {
 	case bcRight:
 		s = "right " + s
 	case bcLeft:
 		s = "left " + s
 	}
-	if bo.Entities[id].All(bcName) {
-		s = fmt.Sprintf(bo.fmt[id], s)
+	if ent.Type().All(bcName) {
+		s = fmt.Sprintf(bo.fmt[ent.ID()], s)
 	}
 	return s
 }
 
-func (w *world) attack(rng *rand.Rand, srcID, targID int) {
+func (w *world) attack(srcID, targID ecs.EntityID) {
 	const numSpiritTurns = 5
 
 	src, targ := w.bodies[srcID], w.bodies[targID]
 	srcName := w.getName(srcID, "!?!")
 	targName := w.getName(targID, "?!?")
 
-	aPart := src.chooseRandomPart(rng, func(id ecs.EntityID) int {
-		if src.dmg[id] <= 0 {
+	aPart := src.chooseRandomPart(w.rng, func(ent ecs.Entity) int {
+		if src.dmg[ent.ID()] <= 0 {
 			return 0
 		}
-		return 4*src.dmg[id] + 2*src.armor[id] + src.hp[id]
+		return 4*src.dmg[ent.ID()] + 2*src.armor[ent.ID()] + src.hp[ent.ID()]
 	})
 	if aPart == ecs.NilEntity {
 		w.log("%s has nothing to hit %s with.", srcName, targName)
 		return
 	}
 
-	bPart := targ.chooseRandomPart(rng, func(id ecs.EntityID) int {
-		if targ.hp[id] <= 0 {
+	bPart := targ.chooseRandomPart(w.rng, func(ent ecs.Entity) int {
+		if targ.hp[ent.ID()] <= 0 {
 			return 0
 		}
-		switch targ.Entities[id] & bcPartMask {
+		switch ent.Type() & bcPartMask {
 		case bcTorso:
-			return 100 * (1 + targ.maxHP[id] - targ.hp[id])
+			return 100 * (1 + targ.maxHP[ent.ID()] - targ.hp[ent.ID()])
 		case bcHead:
-			return 10 * (1 + targ.maxHP[id] - targ.hp[id])
+			return 10 * (1 + targ.maxHP[ent.ID()] - targ.hp[ent.ID()])
 		}
 		return 0
 	})
@@ -309,10 +300,10 @@ func (w *world) attack(rng *rand.Rand, srcID, targID int) {
 		return true
 	})
 
-	aDesc := src.DescribePart(aPart.ID())
-	bDesc := targ.DescribePart(bPart.ID())
+	aDesc := src.DescribePart(aPart)
+	bDesc := targ.DescribePart(bPart)
 
-	if 1.0-bEff*rng.Float64()/aEff*rng.Float64() < -1.0 {
+	if 1.0-bEff*w.rng.Float64()/aEff*w.rng.Float64() < -1.0 {
 		w.log("%s's %s misses %s's %s", srcName, aDesc, targName, bDesc)
 		return
 	}
@@ -340,7 +331,7 @@ func (w *world) attack(rng *rand.Rand, srcID, targID int) {
 	}
 
 	// dmg > 0
-	part, destroyed := targ.damagePart(bPart.ID(), dmg)
+	part, destroyed := targ.damagePart(bPart, dmg)
 	w.log("%s's %s dealt %v damage to %s's %s", srcName, aDesc, dmg, targName, bDesc)
 	if !destroyed {
 		return
@@ -350,7 +341,7 @@ func (w *world) attack(rng *rand.Rand, srcID, targID int) {
 		w.newItem(w.Positions[targID], fmt.Sprintf("remains of %s", targName), '%', severed)
 		if roots := severed.Roots(); len(roots) > 0 {
 			for _, ent := range roots {
-				w.log("%s's %s has dropped on the floor", targName, severed.DescribePart(ent.ID()))
+				w.log("%s's %s has dropped on the floor", targName, severed.DescribePart(ent))
 			}
 		}
 	}
@@ -362,33 +353,33 @@ func (w *world) attack(rng *rand.Rand, srcID, targID int) {
 
 	// head not destroyed -> become spirit
 	if part.Type.All(bcHead) {
-		w.DestroyEntity(targID)
+		w.Ref(targID).Destroy()
 		w.log("%s destroyed by %s (headshot)", targName, srcName)
 	} else {
 		w.Glyphs[targID] = '⟡'
-		w.Entities[targID] &= ^wcBody
+		w.Ref(targID).Delete(wcBody)
 		w.bodies[targID] = nil
 		w.setTimer(targID, numSpiritTurns, timerDestroy)
 		w.log("%s was disembodied by %s (moving as spirit for %v turns)", targName, srcName, numSpiritTurns)
 	}
 }
 
-func (bo *body) damagePart(id ecs.EntityID, dmg int) (bodyPart, bool) {
-	hp := bo.hp[id]
+func (bo *body) damagePart(ent ecs.Entity, dmg int) (bodyPart, bool) {
+	hp := bo.hp[ent.ID()]
 	hp -= dmg
-	bo.hp[id] = hp
+	bo.hp[ent.ID()] = hp
 	if hp > 0 {
 		return bodyPart{}, false
 	}
 	part := bodyPart{
-		Type: bo.Entities[id],
-		Name: bo.PartName(id),
-		Desc: bo.DescribePart(id),
+		Type: ent.Type(),
+		Name: bo.PartName(ent),
+		Desc: bo.DescribePart(ent),
 		bodyStats: bodyStats{
-			HP:     bo.hp[id],
-			MaxHP:  bo.maxHP[id],
-			Damage: bo.dmg[id],
-			Armor:  bo.armor[id],
+			HP:     bo.hp[ent.ID()],
+			MaxHP:  bo.maxHP[ent.ID()],
+			Damage: bo.dmg[ent.ID()],
+			Armor:  bo.armor[ent.ID()],
 		},
 	}
 	return part, true
