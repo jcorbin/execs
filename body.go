@@ -7,6 +7,8 @@ import (
 	"github.com/jcorbin/execs/internal/ecs"
 )
 
+// TODO: more explicit guard against orphans
+
 const (
 	bcHP ecs.ComponentType = 1 << iota
 	bcPart
@@ -29,7 +31,9 @@ const (
 	bcLocMask  = bcRight | bcLeft
 )
 
-type entRel struct{ a, b int }
+const (
+	brControl ecs.RelationType = 1 << iota
+)
 
 type body struct {
 	ecs.Core
@@ -40,7 +44,7 @@ type body struct {
 	dmg   []int
 	armor []int
 
-	controls []entRel
+	rel ecs.Graph
 }
 
 type bodyStats struct {
@@ -59,10 +63,29 @@ type bodyPart struct {
 }
 
 func newBody(rng *rand.Rand) *body {
-	var bo body
-
 	// TODO: use rng
+	bo := &body{
+		// TODO: consider eliminating the padding for EntityID(0)
+		fmt:   []string{""},
+		maxHP: []int{0},
+		hp:    []int{0},
+		dmg:   []int{0},
+		armor: []int{0},
+	}
+	bo.RegisterAllocator(bcPart, bo.allocPart)
+	bo.build()
+	return bo
+}
 
+func (bo *body) allocPart(id ecs.EntityID, t ecs.ComponentType) {
+	bo.fmt = append(bo.fmt, "")
+	bo.maxHP = append(bo.maxHP, 0)
+	bo.hp = append(bo.hp, 0)
+	bo.dmg = append(bo.dmg, 0)
+	bo.armor = append(bo.armor, 0)
+}
+
+func (bo *body) build() {
 	head := bo.AddPart(bcHead, 5, 3, 4)
 	torso := bo.AddPart(bcTorso, 8, 0, 2)
 
@@ -78,24 +101,21 @@ func newBody(rng *rand.Rand) *body {
 	rightFoot := bo.AddPart(bcRight|bcFoot, 3, 6, 2)
 	leftFoot := bo.AddPart(bcLeft|bcFoot, 3, 6, 2)
 
-	bo.controls = append(bo.controls,
-		entRel{a: head.ID(), b: torso.ID()},
-		entRel{a: torso.ID(), b: rightArm.ID()},
-		entRel{a: torso.ID(), b: leftArm.ID()},
-		entRel{a: torso.ID(), b: rightLeg.ID()},
-		entRel{a: torso.ID(), b: leftLeg.ID()},
-		entRel{a: rightArm.ID(), b: rightHand.ID()},
-		entRel{a: leftArm.ID(), b: leftHand.ID()},
-		entRel{a: rightLeg.ID(), b: rightFoot.ID()},
-		entRel{a: leftLeg.ID(), b: leftFoot.ID()},
-	)
-
-	return &bo
+	bo.rel.InsertMany(func(insert func(r ecs.RelationType, a, b ecs.Entity) ecs.Entity) {
+		insert(brControl, head, torso)
+		insert(brControl, torso, rightArm)
+		insert(brControl, torso, leftArm)
+		insert(brControl, torso, rightLeg)
+		insert(brControl, torso, leftLeg)
+		insert(brControl, rightArm, rightHand)
+		insert(brControl, leftArm, leftHand)
+		insert(brControl, rightLeg, rightFoot)
+		insert(brControl, leftLeg, leftFoot)
+	})
 }
 
 func (bo *body) AddPart(t ecs.ComponentType, hp, dmg, armor int) ecs.Entity {
-	ent := bo.AddEntity()
-	ent.AddComponent(bcHP | bcPart | t)
+	ent := bo.AddEntity(bcHP | bcPart | t)
 	id := ent.ID()
 	bo.maxHP[id] = hp
 	bo.hp[id] = hp
@@ -104,114 +124,106 @@ func (bo *body) AddPart(t ecs.ComponentType, hp, dmg, armor int) ecs.Entity {
 	return ent
 }
 
-func (bo *body) AddEntity() ecs.Entity {
-	ent := bo.Core.AddEntity()
-	bo.fmt = append(bo.fmt, "")
-	bo.maxHP = append(bo.maxHP, 0)
-	bo.hp = append(bo.hp, 0)
-	bo.dmg = append(bo.dmg, 0)
-	bo.armor = append(bo.armor, 0)
-	return ent
-}
-
 func (bo *body) Stats() bodyStats {
 	var s bodyStats
-	bo.Descend(0, 0, func(id, level int) bool {
-		s.HP += bo.hp[id]
-		s.MaxHP += bo.maxHP[id]
-		s.Damage += bo.dmg[id]
-		s.Armor += bo.armor[id]
-		return true
-	})
+	it := bo.Iter(ecs.All(bcHP | bcPart))
+	for it.Next() {
+		s.HP += bo.hp[it.ID()]
+		s.MaxHP += bo.maxHP[it.ID()]
+		s.Damage += bo.dmg[it.ID()]
+		s.Armor += bo.armor[it.ID()]
+	}
 	return s
 }
 
 func (bo *body) HPRange() (hp, maxHP int) {
-	it := bo.IterAll(bcHP)
-	for id, _, ok := it.Next(); ok; id, _, ok = it.Next() {
-		hp += bo.hp[id]
-		maxHP += bo.maxHP[id]
+	it := bo.Iter(ecs.All(bcHP))
+	for it.Next() {
+		hp += bo.hp[it.ID()]
+		maxHP += bo.maxHP[it.ID()]
 	}
 	return
 }
 
 func (bo *body) HP() int {
 	hp := 0
-	it := bo.IterAll(bcHP)
-	for id, _, ok := it.Next(); ok; id, _, ok = it.Next() {
-		hp += bo.hp[id]
+	it := bo.Iter(ecs.All(bcHP))
+	for it.Next() {
+		hp += bo.hp[it.ID()]
 	}
 	return hp
 }
 
-func (bo *body) Roots() []int {
-	f := make(map[int]struct{}, len(bo.Entities))
-	for id, t := range bo.Entities {
-		if t != ecs.ComponentNone {
-			f[id] = struct{}{}
-		}
-	}
-	for _, rel := range bo.controls {
-		delete(f, rel.b)
-	}
-	r := make([]int, 0, len(f))
-	for id := range f {
-		r = append(r, id)
-	}
-	return r
+func (bo *body) Roots() []ecs.Entity {
+	return bo.rel.Roots(ecs.All(ecs.RelType(brControl)), nil)
 }
 
-func (bo *body) Descend(id, level int, f func(id, level int) bool) {
+func (bo *body) Descend(ent ecs.Entity, f func(ent ecs.Entity, level int) bool) {
+	id := bo.Deref(ent)
+	tcl := ecs.All(ecs.RelType(brControl))
+	bo.descend(tcl, id, 0, func(id ecs.EntityID, level int) bool {
+		return f(bo.Ref(id), level)
+	})
+}
+
+func (bo *body) descend(
+	tcl ecs.TypeClause, id ecs.EntityID, level int,
+	f func(id ecs.EntityID, level int) bool,
+) {
 	if !f(id, level) {
 		return
 	}
-	for _, rel := range bo.controls {
-		if rel.a == id {
-			bo.Descend(rel.b, level+1, f)
-		}
+	for _, id := range bo.rel.LookupA(tcl, id) {
+		bo.descend(tcl, id, level+1, f)
 	}
 }
 
-func (bo *body) Ascend(id int, f func(id int) bool) {
+func (bo *body) Ascend(ent ecs.Entity, f func(ent ecs.Entity) bool) {
+	id := bo.Deref(ent)
+	tcl := ecs.All(ecs.RelType(brControl))
+	bo.ascend(tcl, id, func(id ecs.EntityID) bool {
+		return f(bo.Ref(id))
+	})
+}
+
+func (bo *body) ascend(
+	tcl ecs.TypeClause, id ecs.EntityID,
+	f func(id ecs.EntityID) bool,
+) {
 	if !f(id) {
 		return
 	}
-	for _, rel := range bo.controls {
-		if rel.b == id {
-			bo.Ascend(rel.a, f)
-		}
+	for _, id := range bo.rel.LookupB(tcl, id) {
+		bo.ascend(tcl, id, f)
 	}
 }
 
-func (bo *body) choosePart(want func(prior, id, level int) bool) ecs.Entity {
-	choice := -1
-	bo.Descend(0, 0, func(id, level int) bool {
-		if !bo.Entities[id].All(bcPart) {
-			return false
+func (bo *body) choosePart(want func(prior, id ecs.EntityID) bool) ecs.Entity {
+	var choice ecs.EntityID
+	it := bo.Iter(ecs.All(bcPart | bcHP))
+	for it.Next() {
+		if want(choice, it.ID()) {
+			choice = it.ID()
 		}
-		if want(choice, id, level) {
-			choice = id
-		}
-		return true
-	})
-	if choice < 0 {
-		return ecs.InvalidEntity
+	}
+	if choice == 0 {
+		return ecs.NilEntity
 	}
 	return bo.Ref(choice)
 }
 
-func (bo *body) chooseRandomPart(rng *rand.Rand, score func(id, level int) int) ecs.Entity {
+func (bo *body) chooseRandomPart(rng *rand.Rand, score func(id ecs.EntityID) int) ecs.Entity {
 	sum := 0
-	return bo.choosePart(func(prior, id, level int) bool {
-		if w := score(id, level); w > 0 {
+	return bo.choosePart(func(prior, id ecs.EntityID) bool {
+		if w := score(id); w > 0 {
 			sum += w
-			return prior < 0 || rng.Intn(sum) < w
+			return prior == 0 || rng.Intn(sum) < w
 		}
 		return false
 	})
 }
 
-func (bo *body) PartName(id int) string {
+func (bo *body) PartName(id ecs.EntityID) string {
 	switch bo.Entities[id] & bcPartMask {
 	case bcHead:
 		return "head"
@@ -235,7 +247,7 @@ func (bo *body) PartName(id int) string {
 	// return ""
 }
 
-func (bo *body) DescribePart(id int) string {
+func (bo *body) DescribePart(id ecs.EntityID) string {
 	s := bo.PartName(id)
 	if s == "" {
 		s = "???"
@@ -259,18 +271,18 @@ func (w *world) attack(rng *rand.Rand, srcID, targID int) {
 	srcName := w.getName(srcID, "!?!")
 	targName := w.getName(targID, "?!?")
 
-	aPart := src.chooseRandomPart(rng, func(id, level int) int {
+	aPart := src.chooseRandomPart(rng, func(id ecs.EntityID) int {
 		if src.dmg[id] <= 0 {
 			return 0
 		}
 		return 4*src.dmg[id] + 2*src.armor[id] + src.hp[id]
 	})
-	if aPart == ecs.InvalidEntity {
+	if aPart == ecs.NilEntity {
 		w.log("%s has nothing to hit %s with.", srcName, targName)
 		return
 	}
 
-	bPart := targ.chooseRandomPart(rng, func(id, level int) int {
+	bPart := targ.chooseRandomPart(rng, func(id ecs.EntityID) int {
 		if targ.hp[id] <= 0 {
 			return 0
 		}
@@ -282,18 +294,18 @@ func (w *world) attack(rng *rand.Rand, srcID, targID int) {
 		}
 		return 0
 	})
-	if bPart == ecs.InvalidEntity {
+	if bPart == ecs.NilEntity {
 		w.log("%s can find nothing worth hitting on %s.", srcName, targName)
 		return
 	}
 
 	aEff, bEff := 1.0, 1.0
-	src.Ascend(aPart.ID(), func(id int) bool {
-		aEff *= float64(src.hp[id]) / float64(src.maxHP[id])
+	src.Ascend(aPart, func(ent ecs.Entity) bool {
+		aEff *= float64(src.hp[ent.ID()]) / float64(src.maxHP[ent.ID()])
 		return true
 	})
-	targ.Ascend(bPart.ID(), func(id int) bool {
-		bEff *= float64(targ.hp[id]) / float64(targ.maxHP[id])
+	targ.Ascend(bPart, func(ent ecs.Entity) bool {
+		bEff *= float64(targ.hp[ent.ID()]) / float64(targ.maxHP[ent.ID()])
 		return true
 	})
 
@@ -337,13 +349,13 @@ func (w *world) attack(rng *rand.Rand, srcID, targID int) {
 	if severed := targ.sever(bPart.ID()); severed != nil {
 		w.newItem(w.Positions[targID], fmt.Sprintf("remains of %s", targName), '%', severed)
 		if roots := severed.Roots(); len(roots) > 0 {
-			for _, id := range roots {
-				w.log("%s's %s has dropped on the floor", targName, severed.DescribePart(id))
+			for _, ent := range roots {
+				w.log("%s's %s has dropped on the floor", targName, severed.DescribePart(ent.ID()))
 			}
 		}
 	}
 
-	if bo := w.bodies[targID]; bo.CountAll(bcPart) > 0 {
+	if bo := w.bodies[targID]; bo.Iter(ecs.All(bcPart)).Count() > 0 {
 		w.log("%s's %s destroyed by %s's %s", targName, bDesc, srcName, aDesc)
 		return
 	}
@@ -361,7 +373,7 @@ func (w *world) attack(rng *rand.Rand, srcID, targID int) {
 	}
 }
 
-func (bo *body) damagePart(id, dmg int) (bodyPart, bool) {
+func (bo *body) damagePart(id ecs.EntityID, dmg int) (bodyPart, bool) {
 	hp := bo.hp[id]
 	hp -= dmg
 	bo.hp[id] = hp
@@ -382,12 +394,20 @@ func (bo *body) damagePart(id, dmg int) (bodyPart, bool) {
 	return part, true
 }
 
-func (bo *body) sever(ids ...int) *body {
+func (bo *body) sever(ids ...ecs.EntityID) *body {
+	type rel struct {
+		ent, a, b ecs.Entity
+		r         ecs.RelationType
+	}
+
 	var (
 		cont  body
-		xlate = make(map[int]int)
-		q     = append([]int(nil), ids...)
+		xlate = make(map[ecs.EntityID]ecs.EntityID)
+		q     = append([]ecs.EntityID(nil), ids...)
+		rels  = make([]rel, 0, len(bo.rel.Entities))
+		relis = make(map[ecs.EntityID]struct{}, len(bo.rel.Entities))
 	)
+
 	for len(q) > 0 {
 		id := q[0]
 		copy(q, q[1:])
@@ -398,9 +418,8 @@ func (bo *body) sever(ids ...int) *body {
 		}
 
 		if bo.hp[id] > 0 {
-			eid := cont.AddEntity().ID()
+			eid := cont.AddEntity(t).ID()
 			xlate[id] = eid
-			cont.Entities[eid] = t
 			cont.fmt[eid] = bo.fmt[id]
 			cont.maxHP[eid] = bo.maxHP[id]
 			cont.hp[eid] = bo.hp[id]
@@ -408,25 +427,24 @@ func (bo *body) sever(ids ...int) *body {
 			cont.armor[eid] = bo.armor[id]
 		}
 
-		// collect affected relations, will translate later
-		for i := 0; i < len(bo.controls)-1; i++ {
-			rel := bo.controls[i]
-			if rel.a == id || rel.b == id {
-				j := len(bo.controls) - 1
-				bo.controls[i] = bo.controls[j]
-				bo.controls = bo.controls[:j]
-				i--
-				cont.controls = append(cont.controls, rel)
+		// collect affected relations for final processing
+		cur := bo.rel.Cursor(ecs.All(ecs.RelType(brControl)), nil)
+		for cur.Scan() {
+			ent := cur.Entity()
+			id := ent.ID()
+			if _, seen := relis[id]; !seen {
+				relis[id] = struct{}{}
+				rels = append(rels, rel{ent, cur.A(), cur.B(), cur.R()})
 			}
 		}
 
-		bo.Entities[id] &= ^bcPart
+		bo.Ref(id).Delete(bcPart)
 
-		if len(q) == 0 && (bo.CountAll(bcPart|bcHead) == 0 || bo.CountAll(bcPart|bcTorso) == 0) {
-			for id, t := range bo.Entities {
-				if t.All(bcPart) {
-					q = append(q, id)
-				}
+		if len(q) == 0 && (bo.Iter(ecs.All(bcPart|bcHead)).Count() == 0 ||
+			bo.Iter(ecs.All(bcPart|bcTorso)).Count() == 0) {
+			it := bo.Iter(ecs.All(bcPart))
+			for it.Next() {
+				q = append(q, it.ID())
 			}
 		}
 	}
@@ -435,19 +453,19 @@ func (bo *body) sever(ids ...int) *body {
 		return nil
 	}
 
-	// now translate any collected relations
-	for i := 0; i < len(cont.controls); i++ {
-		if xa, def := xlate[cont.controls[i].a]; def {
-			if xb, def := xlate[cont.controls[i].b]; def {
-				cont.controls[i] = entRel{a: xa, b: xb}
-				continue
+	// finish relation processing
+	cont.rel.InsertMany(func(insert func(r ecs.RelationType, a ecs.Entity, b ecs.Entity) ecs.Entity) {
+		for _, rel := range rels {
+			if xa, def := xlate[rel.a.ID()]; def {
+				a := cont.Ref(xa)
+				if xb, def := xlate[rel.b.ID()]; def {
+					b := cont.Ref(xb)
+					insert(brControl, a, b)
+				}
 			}
+			defer rel.ent.Destroy()
 		}
-		j := len(cont.controls) - 1
-		cont.controls[i] = cont.controls[j]
-		cont.controls = cont.controls[:j]
-		i--
-	}
+	})
 
 	return &cont
 }
