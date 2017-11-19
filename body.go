@@ -37,14 +37,13 @@ const (
 
 type body struct {
 	ecs.Core
+	rel ecs.Graph
 
 	fmt   []string
 	maxHP []int
 	hp    []int
 	dmg   []int
 	armor []int
-
-	rel ecs.Graph
 }
 
 type bodyStats struct {
@@ -71,8 +70,15 @@ func newBody() *body {
 		dmg:   []int{0},
 		armor: []int{0},
 	}
+	bo.rel.Init(&bo.Core)
 	bo.RegisterAllocator(bcPart, bo.allocPart)
+	bo.RegisterCreator(bcPart, nil, bo.destroyPart)
 	return bo
+}
+
+func (bo *body) Clear() {
+	bo.rel.Clear()
+	bo.Core.Clear()
 }
 
 func (bo *body) allocPart(id ecs.EntityID, t ecs.ComponentType) {
@@ -81,6 +87,10 @@ func (bo *body) allocPart(id ecs.EntityID, t ecs.ComponentType) {
 	bo.hp = append(bo.hp, 0)
 	bo.dmg = append(bo.dmg, 0)
 	bo.armor = append(bo.armor, 0)
+}
+
+func (bo *body) destroyPart(id ecs.EntityID, t ecs.ComponentType) {
+	bo.rel.DestroyReferencesTo(ecs.AllClause, id, id)
 }
 
 func (bo *body) build(rng *rand.Rand) {
