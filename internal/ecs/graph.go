@@ -1,12 +1,22 @@
 package ecs
 
-// Graph is an auto-relation: one where both the A-side and B-side ar
-// the same Core system.
-type Graph Relation
+// Graph is an auto-relation: one where both the A-side and B-side are the
+// same Core system.
+type Graph struct {
+	Relation
+}
 
 // NewGraph creates a new graph relation for the given Core system.
-func NewGraph(core *Core) *Relation {
-	return NewRelation(core, core)
+func NewGraph(core *Core) *Graph {
+	G := &Graph{
+		Relation: Relation{
+			aCore: core,
+			bCore: core,
+		},
+	}
+	G.RegisterAllocator(relType, G.allocRel)
+	G.RegisterCreator(relType, nil, G.destroyRel)
+	return G
 }
 
 // Roots returns a slice of Entities that have no in-relation (i.e. there's no
