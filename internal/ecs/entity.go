@@ -100,12 +100,13 @@ func (ent Entity) Destroy() {
 }
 
 func (co *Core) allocate() EntityID {
-	for i, ot := range co.Entities {
-		if ot == NoType {
+	i := 0
+	for ; i < len(co.Entities); i++ {
+		if co.Entities[i] == NoType {
 			return EntityID(i + 1)
 		}
 	}
-	id := EntityID(len(co.Entities) + 1)
+	id := EntityID(i + 1)
 	co.Entities = append(co.Entities, NoType)
 	for _, ef := range co.allocators {
 		ef.f(id, NoType)
