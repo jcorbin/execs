@@ -149,7 +149,7 @@ func (w *world) destroyItem(id ecs.EntityID, t ecs.ComponentType) {
 	switch v := item.(type) {
 	case *body:
 		for i := range w.bodies {
-			if w.bodies[i] == nil {
+			if i > 0 && w.bodies[i] == nil {
 				v.Clear()
 				w.bodies[i] = v
 				break
