@@ -93,6 +93,24 @@ func (rel *Relation) destroyRel(id EntityID, t ComponentType) {
 	}
 }
 
+// DestroyReferencesTo destroys all relations referencing the given ids.
+func (rel *Relation) DestroyReferencesTo(tcl TypeClause, aid, bid EntityID) {
+	tcl.All |= relType
+	dedup := make(map[int]struct{}, len(rel.Entities))
+	for i, t := range rel.Entities {
+		if tcl.Test(t) {
+			if _, seen := dedup[i]; seen {
+				continue
+			}
+			if (aid > 0 && rel.aids[i] == aid) ||
+				(bid > 0 && rel.bids[i] == bid) {
+				dedup[i] = struct{}{}
+				defer rel.Ref(EntityID(i + 1)).Destroy()
+			}
+		}
+	}
+}
+
 // Insert relations under the given type clause. TODO: constraints, indices,
 // etc.
 func (rel *Relation) Insert(r RelationType, a, b Entity) Entity {
