@@ -62,3 +62,22 @@ func (co *Core) RegisterCreator(t ComponentType, creator, destroyer func(EntityI
 		co.destroyers = append(co.destroyers, entityFunc{t, destroyer})
 	}
 }
+
+// Empty returns true only if there are no active entities.
+func (co *Core) Empty() bool {
+	for _, t := range co.Entities {
+		if t != NoType {
+			return false
+		}
+	}
+	return true
+}
+
+// Clear destroys all active entities.
+func (co *Core) Clear() {
+	for i, t := range co.Entities {
+		if t != NoType {
+			co.Ref(EntityID(i + 1)).Destroy()
+		}
+	}
+}
