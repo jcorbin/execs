@@ -409,7 +409,7 @@ func (w *world) setTimer(id ecs.EntityID, n int, a timerAction) *timer {
 
 func (w *world) addBox(box point.Box, glyph rune) {
 	// TODO: the box should be an entity, rather than each cell
-	last, sz, pos := wallTable.Ref(0), box.Size(), box.TopLeft
+	last, sz, pos := wallTable.Ref(1), box.Size(), box.TopLeft
 	for _, r := range []struct {
 		n int
 		d point.Point

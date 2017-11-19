@@ -114,7 +114,7 @@ func (ct *colorTable) genTile(
 	f func(point.Point, termbox.Attribute),
 ) {
 	// TODO: better 2d generation
-	last := floorTable.Ref(0)
+	last := floorTable.Ref(1)
 	var pos point.Point
 	for pos.Y = box.TopLeft.Y + 1; pos.Y < box.BottomRight.Y+1; pos.Y++ {
 		first := last
