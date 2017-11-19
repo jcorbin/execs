@@ -20,6 +20,9 @@ func (tcl TypeClause) Test(t ComponentType) bool {
 	return true
 }
 
+// AllClause matches any type; always Test()s true.
+var AllClause = TypeClause{}
+
 // Clause is a convenience constructor.
 func Clause(all, any ComponentType) TypeClause { return TypeClause{all, any} }
 
