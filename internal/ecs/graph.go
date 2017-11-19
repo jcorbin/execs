@@ -8,15 +8,14 @@ type Graph struct {
 
 // NewGraph creates a new graph relation for the given Core system.
 func NewGraph(core *Core) *Graph {
-	G := &Graph{
-		Relation: Relation{
-			aCore: core,
-			bCore: core,
-		},
-	}
-	G.RegisterAllocator(relType, G.allocRel)
-	G.RegisterCreator(relType, nil, G.destroyRel)
+	G := &Graph{}
+	G.Init(core)
 	return G
+}
+
+// Init initializes the graph relation; useful for embedding.
+func (G *Graph) Init(core *Core) {
+	G.Relation.Init(core, core)
 }
 
 // Roots returns a slice of Entities that have no in-relation (i.e. there's no
