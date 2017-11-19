@@ -21,23 +21,23 @@ func NewGraph(core *Core) *Graph {
 
 // Roots returns a slice of Entities that have no in-relation (i.e. there's no
 // relation `a R b for all a in the result`).
-func (rel *Graph) Roots(
+func (G *Graph) Roots(
 	tcl TypeClause,
 	where func(ent, a, b Entity, r RelationType) bool,
 ) []Entity {
 	// TODO: leverage index if available
 	tcl.All |= relType
-	it := rel.Iter(tcl)
+	it := G.Iter(tcl)
 	triset := make(map[EntityID]bool, it.Count())
 	n := 0
 	for it.Next() {
 		ent := it.Entity()
 		i := ent.ID() - 1
-		r := RelationType(rel.Entities[i] & ^relType)
-		a := rel.aCore.Ref(rel.aids[i])
-		b := rel.aCore.Ref(rel.bids[i])
+		r := RelationType(G.Entities[i] & ^relType)
+		a := G.aCore.Ref(G.aids[i])
+		b := G.aCore.Ref(G.bids[i])
 		if where == nil || where(ent, a, b, r) {
-			aid, bid := rel.aids[i], rel.bids[i]
+			aid, bid := G.aids[i], G.bids[i]
 			if _, def := triset[aid]; !def {
 				triset[aid] = true
 				n++
@@ -52,7 +52,7 @@ func (rel *Graph) Roots(
 	result := make([]Entity, 0, n)
 	for id, in := range triset {
 		if in {
-			result = append(result, rel.aCore.Ref(id))
+			result = append(result, G.aCore.Ref(id))
 		}
 	}
 	return result
@@ -60,23 +60,23 @@ func (rel *Graph) Roots(
 
 // Leaves returns a slice of Entities that have no out-relation (i.e. there's no
 // relation `a R b for all b in the result`).
-func (rel *Graph) Leaves(
+func (G *Graph) Leaves(
 	tcl TypeClause,
 	where func(ent, a, b Entity, r RelationType) bool,
 ) []Entity {
 	// TODO: leverage index if available
 	tcl.All |= relType
-	it := rel.Iter(tcl)
+	it := G.Iter(tcl)
 	triset := make(map[EntityID]bool, it.Count())
 	n := 0
 	for it.Next() {
 		ent := it.Entity()
 		i := ent.ID() - 1
-		r := RelationType(rel.Entities[i] & ^relType)
-		a := rel.aCore.Ref(rel.aids[i])
-		b := rel.aCore.Ref(rel.bids[i])
+		r := RelationType(G.Entities[i] & ^relType)
+		a := G.aCore.Ref(G.aids[i])
+		b := G.aCore.Ref(G.bids[i])
 		if where == nil || where(ent, a, b, r) {
-			aid, bid := rel.aids[i], rel.bids[i]
+			aid, bid := G.aids[i], G.bids[i]
 			if _, def := triset[bid]; !def {
 				triset[bid] = true
 				n++
@@ -91,7 +91,7 @@ func (rel *Graph) Leaves(
 	result := make([]Entity, 0, n)
 	for id, in := range triset {
 		if in {
-			result = append(result, rel.aCore.Ref(id))
+			result = append(result, G.aCore.Ref(id))
 		}
 	}
 	return result
