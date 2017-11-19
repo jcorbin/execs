@@ -113,6 +113,13 @@ func (co *Core) setType(id EntityID, new ComponentType) {
 		destroyed = old & diff
 	)
 	co.Entities[id-1] = new
+	if old == NoType {
+		for _, ef := range co.creators {
+			if ef.t == NoType {
+				ef.f(id, new)
+			}
+		}
+	}
 	if created != 0 {
 		for _, ef := range co.creators {
 			if new.All(ef.t) && !old.All(ef.t) {

@@ -72,6 +72,10 @@ func (co *Core) RegisterAllocator(t ComponentType, allocator func(EntityID, Comp
 // Creators are called when an Entity has all of its Type bits added to it;
 // they may initialize static data, allocate dynamic data, or do other Type
 // specific things.
+//
+// Any creators registered against NoType trigger simply at entity creation
+// time; they will be called when an entity transitions from NoType to any
+// arbitrary type. NOTE: this may or may not be proximate to allocation time!
 func (co *Core) RegisterCreator(t ComponentType, creator func(EntityID, ComponentType)) {
 	co.creators = append(co.creators, entityFunc{t, creator})
 }
