@@ -73,22 +73,26 @@ func (G *Graph) Leaves(
 	triset := make(map[EntityID]bool, it.Count())
 	n := 0
 	for it.Next() {
-		ent := it.Entity()
-		i := ent.ID() - 1
-		r := RelationType(G.Entities[i] & ^relType)
-		a := G.aCore.Ref(G.aids[i])
-		b := G.aCore.Ref(G.bids[i])
-		if where == nil || where(ent, a, b, r) {
-			aid, bid := G.aids[i], G.bids[i]
-			if _, def := triset[bid]; !def {
-				triset[bid] = true
-				n++
-			}
-			if in := triset[aid]; in {
-				triset[aid] = false
-				n--
-			}
+		i := it.ID() - 1
+
+		if where != nil && !where(
+			it.Entity(),
+			G.aCore.Ref(G.aids[i]),
+			G.aCore.Ref(G.bids[i]),
+			RelationType(G.Entities[i] & ^relType),
+		) {
+			continue
 		}
+
+		aid, bid := G.aids[i], G.bids[i]
+		if _, def := triset[bid]; !def {
+			triset[bid] = true
+			n++
+		}
+		if in := triset[aid]; in {
+			n--
+		}
+		triset[aid] = false
 	}
 
 	result := make([]Entity, 0, n)
