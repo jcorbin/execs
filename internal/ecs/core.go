@@ -3,16 +3,6 @@ package ecs
 // Core is the core of an Entity Component System: it manages the entity IDs
 // and types. IDs are off-by-one indices in the Entities slice (since the 0 ID
 // is invalid, ID 1 maps to Entities[0]). Types are simply the values in the slice
-//
-// There are 3 kinds of lifecycle function:
-// - an allocator is called to allocate static data space when an Entity of
-//   any Type is created.
-// - a creator is called when an Entity has all of its Type bits added to it;
-//   it may initialize static data, allocate dynamic data, or do other Type
-//   specific things.
-// - a destroyer is called when an Entity has any of its Type bits removed fro
-//   it; it may clear static data, de-allocate dynamic data, or do other Type
-//   specific things.
 type Core struct {
 	Entities []ComponentType
 
@@ -63,6 +53,10 @@ func (co *Core) Clear() {
 
 // RegisterAllocator registers an allocator function; it panics if any
 // allocator is registered that overlaps the given type.
+//
+// Allocators are called when the Core grows its entity capacity. An allocator
+// must create space in each of its data collections so that the given id has
+// corresponding element(s).
 func (co *Core) RegisterAllocator(t ComponentType, allocator func(EntityID, ComponentType)) {
 	for _, ef := range co.allocators {
 		if ef.t.Any(t) {
@@ -74,12 +68,20 @@ func (co *Core) RegisterAllocator(t ComponentType, allocator func(EntityID, Comp
 
 // RegisterCreator registers a creator function. The Type may overlap any
 // number of other creator Types, so each should be written cooperatively.
+//
+// Creators are called when an Entity has all of its Type bits added to it;
+// they may initialize static data, allocate dynamic data, or do other Type
+// specific things.
 func (co *Core) RegisterCreator(t ComponentType, creator func(EntityID, ComponentType)) {
 	co.creators = append(co.creators, entityFunc{t, creator})
 }
 
 // RegisterDestroyer registers a destroyer function. The Type may overlap any
 // number of other destroyer Types, so each should be written cooperatively.
+//
+// Destroyers are called when an Entity has any of its Type bits removed from
+// it; they may clear static data, de-allocate dynamic data, or do other Type
+// specific things. NOTE: destroyers must not de-allocate static data.
 func (co *Core) RegisterDestroyer(t ComponentType, destroyer func(EntityID, ComponentType)) {
 	co.destroyers = append(co.destroyers, entityFunc{t, destroyer})
 }
