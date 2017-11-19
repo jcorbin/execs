@@ -5,7 +5,6 @@ import (
 	"log"
 	"math/rand"
 	"os"
-	"sort"
 	"strings"
 	"time"
 
@@ -38,9 +37,15 @@ const (
 )
 
 const (
+	mrCollide ecs.RelationType = 1 << iota
+	mrDamage
+	mrKill
+)
+
+const (
 	renderMask   = wcPosition | wcGlyph
 	playMoveMask = wcPosition | wcInput | wcSoul
-	charMask     = wcPosition | wcCollide | wcName | wcGlyph | wcBody
+	charMask     = wcName | wcGlyph | wcBody
 	aiMoveMask   = wcPosition | wcInput | wcAI
 	collMask     = wcPosition | wcCollide
 	combatMask   = wcCollide | wcBody
@@ -62,9 +67,8 @@ type world struct {
 	bodies    []*body
 	items     []interface{}
 
-	// TODO: consider making this an ecs.Relation
-	coll  []ecs.EntityID
-	colls []collision
+	coll  []ecs.EntityID // TODO: use an index structure for this
+	moves ecs.Relation
 }
 
 type timer struct {
@@ -82,10 +86,6 @@ const (
 	timerCallback
 )
 
-type collision struct {
-	sourceID, targetID ecs.EntityID
-}
-
 func newWorld(v *view.View) (*world, error) {
 	w := &world{
 		rng:  rand.New(rand.NewSource(rand.Int63())),
@@ -101,6 +101,7 @@ func newWorld(v *view.View) (*world, error) {
 		bodies:    []*body{nil},
 		items:     []interface{}{nil},
 	}
+	w.moves.Init(&w.Core, &w.Core)
 
 	f, err := os.Create(fmt.Sprintf("%v.log", time.Now().Format(time.RFC3339)))
 	if err != nil {
@@ -135,7 +136,7 @@ func (w *world) destroyBody(id ecs.EntityID, t ecs.ComponentType) {
 	// TODO: could reset the body ecs for re-use
 	if bo := w.bodies[id]; bo != nil {
 		if !bo.Empty() {
-			name := w.getName(id, "???")
+			name := w.getName(w.Ref(id), "???")
 			name = fmt.Sprintf("remains of %s", name)
 			w.newItem(w.Positions[id], name, '%', bo)
 			w.bodies[id] = nil
@@ -167,6 +168,7 @@ func (w *world) Render(ctx *view.Context) error {
 	hpParts := make([]string, 0, it.Count())
 	for it.Next() {
 		bo := w.bodies[it.ID()]
+
 		parts := make([]string, 0, len(bo.Entities))
 		for _, root := range bo.Roots() {
 			bo.Descend(root, func(ent ecs.Entity, level int) bool {
@@ -193,8 +195,7 @@ func (w *world) Render(ctx *view.Context) error {
 		bbox  point.Box
 		focus point.Point
 	)
-	it = w.Iter(ecs.All(renderMask))
-	for it.Next() {
+	for it = w.Iter(ecs.All(renderMask)); it.Next(); {
 		pos := w.Positions[it.ID()]
 		if it.Type().All(wcSoul) {
 			// TODO: centroid between all souls would be a way to move beyond
@@ -224,8 +225,7 @@ func (w *world) Render(ctx *view.Context) error {
 
 	zVals := make([]uint8, len(ctx.Grid.Data))
 
-	it = w.Iter(ecs.Clause(wcPosition, wcGlyph|wcBG))
-	for it.Next() {
+	for it = w.Iter(ecs.Clause(wcPosition, wcGlyph|wcBG)); it.Next(); {
 		pos := w.Positions[it.ID()].Add(offset)
 		if !pos.Less(point.Zero) && !ctx.Grid.Size.Less(pos) {
 			var (
@@ -307,8 +307,7 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 	v.ClearLog()
 
 	// run timers
-	it := w.Iter(ecs.All(wcTimer))
-	for it.Next() {
+	for it := w.Iter(ecs.All(wcTimer)); it.Next(); {
 		if w.timers[it.ID()].n <= 0 {
 			continue
 		}
@@ -333,6 +332,9 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 		}
 	}
 
+	// reset move table
+	w.moves.Clear()
+
 	// collect collidables
 	w.prepareCollidables()
 
@@ -341,28 +343,21 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 
 	// apply player move
 	if move, ok := key2move(k); ok {
-		it := w.Iter(ecs.All(playMoveMask))
-		for it.Next() {
-			target = w.move(it.ID(), move)
+		for it := w.Iter(ecs.All(playMoveMask)); it.Next(); {
+			target = w.move(it.Entity(), move)
 		}
 	}
 
 	// chase player
-	it = w.Iter(ecs.All(aiMoveMask))
-	for it.Next() {
-		move := target.Sub(w.Positions[it.ID()]).Sign()
-		w.move(it.ID(), move)
+	for it := w.Iter(ecs.All(aiMoveMask)); it.Next(); {
+		w.move(it.Entity(), target.Sub(w.Positions[it.ID()]).Sign())
 	}
 
 	// collisions deal damage
-	for _, coll := range w.colls {
-		if w.Entities[coll.sourceID]&combatMask != combatMask {
-			continue
-		}
-		if w.Entities[coll.targetID]&combatMask != combatMask {
-			continue
-		}
-		w.attack(coll.sourceID, coll.targetID)
+	for cur := w.moves.Cursor(ecs.All(ecs.RelType(mrCollide)), func(ent, a, b ecs.Entity, r ecs.RelationType) bool {
+		return a.Type().All(combatMask) && b.Type().All(combatMask)
+	}); cur.Scan(); {
+		w.attack(cur.A(), cur.B())
 	}
 
 	// count remaining souls
@@ -373,10 +368,9 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 
 	// maybe spawn
 	// TODO: randomize position?
-	if _, occupied := w.collides(0, point.Zero); !occupied {
+	if hit := w.collides(w.Ref(0), point.Zero); hit == ecs.NilEntity {
 		sum := 0
-		it := w.Iter(ecs.All(wcBody))
-		for it.Next() {
+		for it := w.Iter(ecs.All(wcBody)); it.Next(); {
 			sum += w.bodies[it.ID()].HP()
 		}
 
@@ -390,7 +384,7 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 		bo := w.bodies[enemy.ID()]
 		if hp := bo.HP(); w.rng.Intn(sum+hp) < hp {
 			enemy.Delete(wcWaiting)
-			enemy.Add(wcInput | wcAI)
+			enemy.Add(wcPosition | wcCollide | wcInput | wcAI)
 			w.log("%s enters the world @%v stats: %+v",
 				w.Names[enemy.ID()],
 				w.Positions[enemy.ID()],
@@ -401,10 +395,10 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 	return nil
 }
 
-func (w *world) setTimer(id ecs.EntityID, n int, a timerAction) *timer {
-	w.Ref(id).Add(wcTimer)
-	w.timers[id] = timer{n: n, a: a}
-	return &w.timers[id]
+func (w *world) setTimer(ent ecs.Entity, n int, a timerAction) *timer {
+	ent.Add(wcTimer)
+	w.timers[ent.ID()] = timer{n: n, a: a}
+	return &w.timers[ent.ID()]
 }
 
 func (w *world) addBox(box point.Box, glyph rune) {
@@ -470,14 +464,14 @@ func (w *world) log(mess string, args ...interface{}) {
 	w.logger.Printf(s)
 }
 
-func (w *world) getName(id ecs.EntityID, deflt string) string {
-	if w.Entities[id]&wcName == 0 {
+func (w *world) getName(ent ecs.Entity, deflt string) string {
+	if !ent.Type().All(wcName) {
 		return deflt
 	}
-	if w.Names[id] == "" {
+	if w.Names[ent.ID()] == "" {
 		return deflt
 	}
-	return w.Names[id]
+	return w.Names[ent.ID()]
 }
 
 func (w *world) prepareCollidables() {
@@ -491,26 +485,18 @@ func (w *world) prepareCollidables() {
 	for it.Next() {
 		w.coll = append(w.coll, it.ID())
 	}
-
-	if n := len(w.coll) * len(w.coll); cap(w.colls) < n {
-		w.colls = make([]collision, 0, n)
-	} else {
-		w.colls = w.colls[:0]
-	}
-	sort.Slice(w.colls, func(i, j int) bool {
-		return w.Positions[w.coll[i]].Less(w.Positions[w.coll[j]])
-	})
 }
 
-func (w *world) collides(id ecs.EntityID, pos point.Point) (ecs.EntityID, bool) {
+func (w *world) collides(ent ecs.Entity, pos point.Point) ecs.Entity {
+	id := w.Deref(ent)
 	for _, hitID := range w.coll {
 		if hitID != id {
 			if hitPos := w.Positions[hitID]; hitPos.Equal(pos) {
-				return hitID, true
+				return w.Ref(hitID)
 			}
 		}
 	}
-	return 0, false
+	return ecs.NilEntity
 
 	// TODO: binary search
 	// i := sort.Search(len(w.coll), func(i int) bool {
@@ -522,15 +508,14 @@ func (w *world) collides(id ecs.EntityID, pos point.Point) (ecs.EntityID, bool) 
 	// return 0, false
 }
 
-func (w *world) move(id ecs.EntityID, move point.Point) point.Point {
-	pos := w.Positions[id]
+func (w *world) move(ent ecs.Entity, move point.Point) point.Point {
+	pos := w.Positions[ent.ID()]
 	new := pos.Add(move)
-	if hitID, hit := w.collides(id, new); hit {
-		coll := collision{id, hitID}
-		w.colls = append(w.colls, coll)
+	if hit := w.collides(ent, new); hit != ecs.NilEntity {
+		w.moves.Insert(mrCollide, ent, hit)
 	} else {
 		pos = new
-		w.Positions[id] = pos
+		w.Positions[ent.ID()] = pos
 	}
 	return pos
 }
@@ -576,7 +561,7 @@ func main() {
 
 		w.addBox(point.Box{TopLeft: pt.Neg(), BottomRight: pt}, '#')
 		player := w.newChar("you", 'X')
-		player.Add(wcInput | wcSoul)
+		player.Add(wcPosition | wcCollide | wcInput | wcSoul)
 		w.log("%s enter the world @%v stats: %+v", w.Names[player.ID()], w.Positions[player.ID()], w.bodies[player.ID()].Stats())
 
 		return w, nil
