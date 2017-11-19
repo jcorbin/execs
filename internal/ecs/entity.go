@@ -52,12 +52,7 @@ func (co *Core) Ref(id EntityID) Entity { return Entity{co, id} }
 // any creator functions.
 func (co *Core) AddEntity(nt ComponentType) Entity {
 	ent := Entity{co, co.allocate()}
-	co.Entities[ent.id-1] = nt
-	for _, ef := range co.creators {
-		if nt.All(ef.t) {
-			ef.f(ent.id, nt)
-		}
-	}
+	co.setType(ent.id, nt)
 	return ent
 }
 
@@ -65,38 +60,20 @@ func (co *Core) AddEntity(nt ComponentType) Entity {
 // newly satisfied by the new type.
 func (ent Entity) Add(t ComponentType) {
 	old := ent.co.Entities[ent.id-1]
-	new := old | t
-	ent.co.Entities[ent.id-1] = new
-	for _, ef := range ent.co.creators {
-		if new.All(ef.t) && !old.All(ef.t) {
-			ef.f(ent.id, new)
-		}
-	}
+	ent.co.setType(ent.id, old|t)
 }
 
 // Delete clears bits in the entity's type, calling any destroyer functions
 // that are no longer satisfied by the new type.
 func (ent Entity) Delete(t ComponentType) {
 	old := ent.co.Entities[ent.id-1]
-	new := old & ^t
-	ent.co.Entities[ent.id-1] = new
-	for _, ef := range ent.co.destroyers {
-		if old.All(ef.t) && !new.All(ef.t) {
-			ef.f(ent.id, new)
-		}
-	}
+	ent.co.setType(ent.id, old & ^t)
 }
 
 // Destroy sets the entity's type to NoType, invoking any destroyer functions
 // that match the prior type.`
 func (ent Entity) Destroy() {
-	old := ent.co.Entities[ent.id-1]
-	ent.co.Entities[ent.id-1] = NoType
-	for _, ef := range ent.co.destroyers {
-		if old.All(ef.t) {
-			ef.f(ent.id, NoType)
-		}
-	}
+	ent.co.setType(ent.id, NoType)
 }
 
 func (co *Core) allocate() EntityID {
@@ -112,4 +89,28 @@ func (co *Core) allocate() EntityID {
 		ef.f(id, NoType)
 	}
 	return id
+}
+
+func (co *Core) setType(id EntityID, new ComponentType) {
+	var (
+		old       = co.Entities[id-1]
+		diff      = old ^ new
+		created   = new & diff
+		destroyed = old & diff
+	)
+	co.Entities[id-1] = new
+	if created != 0 {
+		for _, ef := range co.creators {
+			if new.All(ef.t) && !old.All(ef.t) {
+				ef.f(id, new)
+			}
+		}
+	}
+	if destroyed != 0 {
+		for _, ef := range co.destroyers {
+			if old.All(ef.t) && !new.All(ef.t) {
+				ef.f(id, new)
+			}
+		}
+	}
 }
