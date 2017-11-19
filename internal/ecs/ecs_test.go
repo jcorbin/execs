@@ -146,5 +146,29 @@ func TestIter_two(t *testing.T) {
 	assert.Equal(t, ecs.NilEntity, it.Entity())
 	assert.Equal(t, ecs.EntityID(0), it.ID())
 	assert.Equal(t, ecs.NoType, it.Type())
+}
 
+func TestGraph_Roots(t *testing.T) {
+	s := newStuff()
+	s1 := s.AddEntity(scData)
+	s2 := s.AddEntity(scData)
+	s3 := s.AddEntity(scData)
+	s4 := s.AddEntity(scData)
+	s5 := s.AddEntity(scData)
+	s6 := s.AddEntity(scData)
+	s7 := s.AddEntity(scData)
+
+	G := ecs.NewGraph(&s.Core)
+	G.InsertMany(func(insert func(r ecs.RelationType, a ecs.Entity, b ecs.Entity) ecs.Entity) {
+		insert(0, s1, s2)
+		insert(0, s1, s3)
+		insert(0, s2, s4)
+		insert(0, s2, s5)
+		insert(0, s3, s6)
+		insert(0, s3, s7)
+	})
+
+	roots := G.Roots(ecs.AllClause, nil)
+	assert.Equal(t, 1, len(roots))
+	assert.Equal(t, s1, roots[0])
 }

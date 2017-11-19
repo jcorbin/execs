@@ -42,9 +42,9 @@ func (G *Graph) Roots(
 				n++
 			}
 			if in := triset[bid]; in {
-				triset[bid] = false
 				n--
 			}
+			triset[bid] = false
 		}
 	}
 
