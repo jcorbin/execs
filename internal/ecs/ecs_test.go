@@ -26,7 +26,8 @@ func newStuff() *stuff {
 		d2: [][]int{nil},
 	}
 	s.RegisterAllocator(scData, s.allocData)
-	s.RegisterCreator(scD2, s.createD2, s.destroyD2)
+	s.RegisterCreator(scD2, s.createD2)
+	s.RegisterDestroyer(scD2, s.destroyD2)
 	return s
 }
 

@@ -72,14 +72,14 @@ func (co *Core) RegisterAllocator(t ComponentType, allocator func(EntityID, Comp
 	co.allocators = append(co.allocators, entityFunc{t, allocator})
 }
 
-// RegisterCreator register a creator or destroyer function (one or both
-// SHOULD be given). The Type may overlap any number of other
-// creator/destroyer Types, so the functions should be written cooperatively.
-func (co *Core) RegisterCreator(t ComponentType, creator, destroyer func(EntityID, ComponentType)) {
-	if creator != nil {
-		co.creators = append(co.creators, entityFunc{t, creator})
-	}
-	if destroyer != nil {
-		co.destroyers = append(co.destroyers, entityFunc{t, destroyer})
-	}
+// RegisterCreator registers a creator function. The Type may overlap any
+// number of other creator Types, so each should be written cooperatively.
+func (co *Core) RegisterCreator(t ComponentType, creator func(EntityID, ComponentType)) {
+	co.creators = append(co.creators, entityFunc{t, creator})
+}
+
+// RegisterDestroyer registers a destroyer function. The Type may overlap any
+// number of other destroyer Types, so each should be written cooperatively.
+func (co *Core) RegisterDestroyer(t ComponentType, destroyer func(EntityID, ComponentType)) {
+	co.destroyers = append(co.destroyers, entityFunc{t, destroyer})
 }

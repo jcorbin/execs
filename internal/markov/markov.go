@@ -37,7 +37,7 @@ func (tab *Table) Init(core *ecs.Core) {
 	tab.weights = [][]int{nil}
 	tab.next = [][]ecs.EntityID{nil}
 	core.RegisterAllocator(componentTransition, tab.allocTransition)
-	core.RegisterCreator(componentTransition, nil, tab.destroyTransition)
+	core.RegisterDestroyer(componentTransition, tab.destroyTransition)
 }
 
 func (tab *Table) allocTransition(id ecs.EntityID, t ecs.ComponentType) {

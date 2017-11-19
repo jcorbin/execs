@@ -27,7 +27,7 @@ func NewCorpus() *Corpus {
 	}
 	c.Table.Init(&c.Core)
 	c.RegisterAllocator(componentWord, c.allocWord)
-	c.RegisterCreator(componentWord, nil, c.destroyWord)
+	c.RegisterDestroyer(componentWord, c.destroyWord)
 	return c
 }
 

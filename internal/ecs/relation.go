@@ -31,7 +31,7 @@ func (rel *Relation) Init(aCore, bCore *Core) {
 	rel.aCore = aCore
 	rel.bCore = bCore
 	rel.RegisterAllocator(relType, rel.allocRel)
-	rel.RegisterCreator(relType, nil, rel.destroyRel)
+	rel.RegisterDestroyer(relType, rel.destroyRel)
 }
 
 // RelationType specified the type of a relation, it's basically a
