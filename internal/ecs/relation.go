@@ -133,32 +133,22 @@ func (rel *Relation) Cursor(
 
 // LookupA returns a slice of B entities that are related to the given A
 // entities under the given type clause.
-func (rel *Relation) LookupA(tcl TypeClause, ids ...EntityID) []Entity {
+func (rel *Relation) LookupA(tcl TypeClause, ids ...EntityID) []EntityID {
 	if rel.aix == nil {
 		// TODO: warn about falling back to Cursor scan?
-		ids = rel.scanLookup(tcl, ids, rel.aids, rel.bids)
+		return rel.scanLookup(tcl, ids, rel.aids, rel.bids)
 	}
-	ids = rel.indexLookup(tcl, ids, rel.aids, rel.bids, rel.aix)
-	ents := make([]Entity, len(ids))
-	for i, id := range ids {
-		ents[i] = rel.bCore.Ref(id)
-	}
-	return ents
+	return rel.indexLookup(tcl, ids, rel.aids, rel.bids, rel.aix)
 }
 
 // LookupB returns a slice of A entities that are related to the given B
 // entities under the given type clause.
-func (rel *Relation) LookupB(tcl TypeClause, ids ...EntityID) []Entity {
+func (rel *Relation) LookupB(tcl TypeClause, ids ...EntityID) []EntityID {
 	if rel.aix == nil {
 		// TODO: warn about falling back to Cursor scan?
-		ids = rel.scanLookup(tcl, ids, rel.bids, rel.aids)
+		return rel.scanLookup(tcl, ids, rel.bids, rel.aids)
 	}
-	ids = rel.indexLookup(tcl, ids, rel.bids, rel.aids, rel.bix)
-	ents := make([]Entity, len(ids))
-	for i, id := range ids {
-		ents[i] = rel.bCore.Ref(id)
-	}
-	return ents
+	return rel.indexLookup(tcl, ids, rel.bids, rel.aids, rel.bix)
 }
 
 func (rel *Relation) scanLookup(
