@@ -86,7 +86,7 @@ func (rel *Relation) DestroyReferencesTo(tcl TypeClause, aid, bid EntityID) {
 	tcl.All |= relType
 	for i, t := range rel.Entities {
 		if tcl.Test(t) && (aid > 0 && rel.aids[i] == aid) || (bid > 0 && rel.bids[i] == bid) {
-			defer rel.setType(EntityID(i+1), NoType)
+			rel.setType(EntityID(i+1), NoType)
 		}
 	}
 }
