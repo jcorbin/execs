@@ -73,3 +73,78 @@ func TestBasics(t *testing.T) {
 	e3 := s.AddEntity(scData | scD2)
 	assert.Equal(t, e1.ID(), e3.ID())
 }
+
+func TestIter_empty(t *testing.T) {
+	s := newStuff()
+	it := s.Iter(ecs.AllClause)
+	assert.Equal(t, 0, it.Count())
+
+	assert.False(t, it.Next())
+	assert.Equal(t, ecs.NilEntity, it.Entity())
+	assert.Equal(t, ecs.EntityID(0), it.ID())
+	assert.Equal(t, ecs.NoType, it.Type())
+}
+
+func TestIter_one(t *testing.T) {
+	s := newStuff()
+
+	s1 := s.AddEntity(scData)
+	s.d1[s1.ID()] = 3
+
+	it := s.Iter(ecs.AllClause)
+	assert.Equal(t, 1, it.Count())
+
+	assert.True(t, it.Next())
+	assert.Equal(t, s1, it.Entity())
+	assert.Equal(t, ecs.EntityID(1), it.ID())
+	assert.Equal(t, scData, it.Type())
+
+	assert.False(t, it.Next())
+	assert.Equal(t, ecs.NilEntity, it.Entity())
+	assert.Equal(t, ecs.EntityID(0), it.ID())
+	assert.Equal(t, ecs.NoType, it.Type())
+}
+
+func TestIter_two(t *testing.T) {
+	s := newStuff()
+
+	e1 := s.AddEntity(scData)
+	s.d1[e1.ID()] = 3
+	e2 := s.AddEntity(scData | scD2)
+	s.d1[e2.ID()] = 4
+	s.d2[e2.ID()] = append(s.d2[e2.ID()], 2, 2, 3, 5, 8)
+
+	it := s.Iter(ecs.AllClause)
+	assert.Equal(t, 2, it.Count())
+
+	// iterate all 3
+	assert.True(t, it.Next())
+	assert.Equal(t, e1, it.Entity())
+	assert.Equal(t, ecs.EntityID(1), it.ID())
+	assert.Equal(t, scData, it.Type())
+
+	assert.True(t, it.Next())
+	assert.Equal(t, e2, it.Entity())
+	assert.Equal(t, ecs.EntityID(2), it.ID())
+	assert.Equal(t, scData|scD2, it.Type())
+
+	assert.False(t, it.Next())
+	assert.Equal(t, ecs.NilEntity, it.Entity())
+	assert.Equal(t, ecs.EntityID(0), it.ID())
+	assert.Equal(t, ecs.NoType, it.Type())
+
+	// filtering
+	it = s.Iter(ecs.All(scD2))
+	assert.Equal(t, 1, it.Count())
+
+	assert.True(t, it.Next())
+	assert.Equal(t, e2, it.Entity())
+	assert.Equal(t, ecs.EntityID(2), it.ID())
+	assert.Equal(t, scData|scD2, it.Type())
+
+	assert.False(t, it.Next())
+	assert.Equal(t, ecs.NilEntity, it.Entity())
+	assert.Equal(t, ecs.EntityID(0), it.ID())
+	assert.Equal(t, ecs.NoType, it.Type())
+
+}

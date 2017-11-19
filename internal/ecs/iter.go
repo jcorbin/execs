@@ -1,8 +1,8 @@
 package ecs
 
-// Iter returns a new iterator over the Core's Entities which satisify the
+// Iter returns a new iterator over the Core's Entities which satisfy the
 // given TypeClause.
-func (co *Core) Iter(tcl TypeClause) Iterator { return Iterator{co, 0, tcl} }
+func (co *Core) Iter(tcl TypeClause) Iterator { return Iterator{co, -1, tcl} }
 
 // Iterator points into a Core's Entities, iterating over them with optional
 // type filter criteria.
@@ -16,7 +16,7 @@ type Iterator struct {
 // returns true if such an entity was found; otherwise iteration is done, and
 // false is returned.
 func (it *Iterator) Next() bool {
-	for ; it.i < len(it.co.Entities); it.i++ {
+	for it.i++; it.i < len(it.co.Entities); it.i++ {
 		t := it.co.Entities[it.i]
 		if it.tcl.Test(t) {
 			return true
