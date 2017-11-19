@@ -143,4 +143,37 @@ Next up I have plans for all those spare body parts... also maybe reclaim
 something from destroyed body parts (e.g. the remaining damage/armor points on
 whatever body part(s) you destroy)...
 
+### [Seven](../../tree/seven)
+
+Seven is an auspicous time to start over; now it's starting to look a lot more
+like a base of data!
+
+So yesterday's adventure got really bogged down in debugging land: all of my
+inline relation and graph management code in the main package turned out to be
+way more brittle than you'd hope.
+
+Today I started out on a new orphan branch writing an ECS again from scratch!
+Some high points:
+- entity ids now have an explicit type, no longer just an `int`
+- lifecycle hooks are now provided for data allocation, creation, and destruction
+- a relational core extension is provided: its also a core, and its entities
+  decribe relations between two other cores (maybe the same ones)
+- the case of an "auto-relation" can further be upgraded to a graph relation;
+  this is just a relational core where both the A and B cores are the same;
+  currently not much exciting other than a `Roots` and `Leaves` method have
+  been implemented.
+
+I was able to get through that initial re-implementation in about 5 hours, I
+then spent the next 5 hours porting Six to the new ECS engine. Needless to say,
+it's working much better:
+- the collision system is now just a relation table...
+- ...so it'd be possible to use it to store a per-round damage / kill data as
+  well
+- I ported the markov table, but there's some consideration to be given to
+  could it be "just" a relational table? Probably, but the current markov table
+  is likely more space efficient than doing it that way.
+
+I'm excited for: Eight: I'll either work further down to deepen the body
+system, or expand out and start adding an agro table... only time will tell!
+
 [es-beta]: http://entity-systems.wikidot.com/rdbms-beta
