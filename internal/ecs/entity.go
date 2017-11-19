@@ -50,25 +50,25 @@ func (co *Core) Ref(id EntityID) Entity { return Entity{co, id} }
 //
 // Invokes all allocators if it allocates a new EntityID in Entities. Invokes
 // any creator functions.
-func (co *Core) AddEntity(t ComponentType) Entity {
+func (co *Core) AddEntity(nt ComponentType) Entity {
 	ent := Entity{co: co}
-	for i, it := range co.Entities {
-		if it != NoType {
+	for i, ot := range co.Entities {
+		if ot == NoType {
 			ent.id = EntityID(i + 1)
-			co.Entities[i] = t
+			co.Entities[i] = nt
 			break
 		}
 	}
 	if ent.id == 0 {
 		ent.id = EntityID(len(co.Entities) + 1)
-		co.Entities = append(co.Entities, t)
+		co.Entities = append(co.Entities, nt)
 		for _, ef := range co.allocators {
-			ef.f(ent.id, t)
+			ef.f(ent.id, nt)
 		}
 	}
 	for _, ef := range co.creators {
-		if t.All(ef.t) {
-			ef.f(ent.id, t)
+		if nt.All(ef.t) {
+			ef.f(ent.id, nt)
 		}
 	}
 	return ent
