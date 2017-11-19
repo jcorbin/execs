@@ -73,6 +73,10 @@ func TestBasics(t *testing.T) {
 
 	e3 := s.AddEntity(scData | scD2)
 	assert.Equal(t, e1.ID(), e3.ID())
+
+	assert.False(t, s.Empty())
+	s.Clear()
+	assert.True(t, s.Empty())
 }
 
 func TestIter_empty(t *testing.T) {
