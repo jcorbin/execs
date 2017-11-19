@@ -93,7 +93,7 @@ func (rel *Relation) DestroyReferencesTo(tcl TypeClause, aid, bid EntityID) {
 			if (aid > 0 && rel.aids[i] == aid) ||
 				(bid > 0 && rel.bids[i] == bid) {
 				dedup[i] = struct{}{}
-				defer rel.Ref(EntityID(i + 1)).Destroy()
+				defer rel.setType(EntityID(i+1), NoType)
 			}
 		}
 	}
@@ -210,7 +210,7 @@ func (rel *Relation) Update(
 		oa, ob, or := cur.A(), cur.B(), cur.R()
 		na, nb := set(ent, oa, ob, or)
 		if na == NilEntity || nb == NilEntity {
-			cur.Entity().Destroy()
+			rel.setType(cur.Entity().ID(), NoType)
 			continue
 		}
 		i := ent.ID() - 1
@@ -235,6 +235,6 @@ func (rel *Relation) Delete(
 	}
 	cur := rel.Cursor(tcl, where)
 	for cur.Scan() {
-		cur.Entity().Destroy()
+		rel.setType(cur.Entity().ID(), NoType)
 	}
 }

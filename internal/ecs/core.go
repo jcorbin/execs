@@ -46,7 +46,7 @@ func (co *Core) Empty() bool {
 func (co *Core) Clear() {
 	for i, t := range co.Entities {
 		if t != NoType {
-			co.Ref(EntityID(i + 1)).Destroy()
+			co.setType(EntityID(i+1), NoType)
 		}
 	}
 }
