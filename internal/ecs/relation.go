@@ -97,8 +97,12 @@ func (rel *Relation) destroyRel(id EntityID, t ComponentType) {
 	}
 }
 
-// DestroyReferencesTo destroys all relations referencing the given ids.
+// DestroyReferencesTo destroys all relations referencing the given ids; either
+// id may be 0, in which case an A (resp. B) match is not done.
 func (rel *Relation) DestroyReferencesTo(tcl TypeClause, aid, bid EntityID) {
+	if aid == 0 && bid == 0 {
+		return
+	}
 	tcl.All |= relType
 	dedup := make(map[int]struct{}, len(rel.Entities))
 	for i, t := range rel.Entities {
