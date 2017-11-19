@@ -87,12 +87,26 @@ func (rel *Relation) destroyRel(id EntityID, t ComponentType) {
 // Insert relations under the given type clause. TODO: constraints, indices,
 // etc.
 func (rel *Relation) Insert(r RelationType, a, b Entity) Entity {
+	if fixIndex := rel.deferIndexing(); fixIndex != nil {
+		// TODO: a bit of over kill for single insertion
+		defer fixIndex()
+	}
+	return rel.insert(r, a, b)
+}
+
+func (rel *Relation) insert(r RelationType, a, b Entity) Entity {
 	aid := rel.aCore.Deref(a)
 	bid := rel.bCore.Deref(b)
 	ent := rel.AddEntity(ComponentType(r) | relType)
-	i := ent.ID() - 1
+	i := int(ent.ID()) - 1
 	rel.aids[i] = aid
 	rel.bids[i] = bid
+	if rel.aix != nil {
+		rel.aix[i] = i
+	}
+	if rel.bix != nil {
+		rel.bix[i] = i
+	}
 	return ent
 }
 
