@@ -82,6 +82,14 @@ func (ent Entity) Destroy() {
 	}
 }
 
+// SetType sets the entity's type; may invoke creators and destroyers as
+// appropriate.
+func (ent Entity) SetType(t ComponentType) {
+	if ent.co != nil && ent.id > 0 {
+		ent.co.setType(ent.id, t)
+	}
+}
+
 func (co *Core) allocate() EntityID {
 	i := 0
 	for ; i < len(co.Entities); i++ {
