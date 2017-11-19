@@ -15,7 +15,7 @@ func (ent Entity) Type() ComponentType {
 	if ent.co == nil || ent.id == 0 {
 		return NoType
 	}
-	return ent.co.Entities[ent.id]
+	return ent.co.Entities[ent.id-1]
 }
 
 // ID returns the ID of the referenced entity; it SHOULD only be called in a
