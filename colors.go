@@ -21,7 +21,7 @@ var (
 )
 
 func init() {
-	wallTable.addLevelTransitions(wallColors, 4, 1, 4, 3, 2)
+	wallTable.addLevelTransitions(wallColors, 12, 2, 2, 12, 2)
 	floorTable.addLevelTransitions(floorColors, 6, 1, 6, 2, 1)
 }
 
