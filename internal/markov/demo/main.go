@@ -14,37 +14,45 @@ const (
 )
 
 type corpus struct {
+	ecs.Core
 	markov.Table
 	word   []string
-	lookup map[string]int
+	lookup map[string]ecs.EntityID
 }
 
-func (c *corpus) AddEntity() ecs.Entity {
-	ent := c.Table.AddEntity()
+func newCorpus() *corpus {
+	c := &corpus{
+		word:   []string{""},
+		lookup: make(map[string]ecs.EntityID),
+	}
+	c.Table.Init(&c.Core)
+	c.RegisterAllocator(componentWord, c.allocWord)
+	c.RegisterCreator(componentWord, nil, c.destroyWord)
+	return c
+}
+
+func (c *corpus) allocWord(id ecs.EntityID, t ecs.ComponentType) {
 	c.word = append(c.word, "")
-	return ent
+}
+
+func (c *corpus) destroyWord(id ecs.EntityID, t ecs.ComponentType) {
+	delete(c.lookup, c.word[id])
+	c.word[id] = ""
 }
 
 func (c *corpus) ToEntity(s string) ecs.Entity {
 	if id, def := c.lookup[s]; def {
 		return c.Ref(id)
 	}
-	if c.lookup == nil {
-		c.lookup = make(map[string]int, 1)
-	}
-	ent := c.AddEntity()
-	ent.AddComponent(componentWord)
-	id := ent.ID()
-	c.word[id] = s
-	c.lookup[s] = id
+	ent := c.AddEntity(componentWord)
+	c.word[ent.ID()] = s
+	c.lookup[s] = ent.ID()
 	return ent
 }
 
 func (c *corpus) ToString(ent ecs.Entity) string {
-	if !c.Owns(ent) {
-		panic("foreign entity")
-	}
-	if id := ent.ID(); c.Entities[id].All(componentWord) {
+	id := c.Deref(ent)
+	if ent.Type().All(componentWord) {
 		return c.word[id]
 	}
 	return ""
@@ -62,7 +70,7 @@ func (c *corpus) Ingest(chain []string) {
 }
 
 func canned() *corpus {
-	var c corpus
+	c := newCorpus()
 	for _, s := range []string{
 		"it was the best of times",
 		"it was the worst of times",
@@ -72,7 +80,7 @@ func canned() *corpus {
 	} {
 		c.Ingest(strings.Fields(s))
 	}
-	return &c
+	return c
 }
 
 func main() {
