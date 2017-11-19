@@ -16,8 +16,8 @@ var (
 	wallColors  = []termbox.Attribute{233, 234, 235, 236, 237, 238, 239}
 	floorColors = []termbox.Attribute{232, 233, 234}
 
-	wallTable  colorTable
-	floorTable colorTable
+	wallTable  = newColorTable()
+	floorTable = newColorTable()
 )
 
 func init() {
