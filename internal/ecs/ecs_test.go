@@ -153,6 +153,82 @@ func TestIter_two(t *testing.T) {
 	assert.Equal(t, ecs.NoType, it.Type())
 }
 
+func setupRelTest() (a, b *stuff, rel *ecs.Relation) {
+	a = newStuff()
+	a1 := a.AddEntity(scData)
+	a2 := a.AddEntity(scData)
+	a3 := a.AddEntity(scData)
+	a4 := a.AddEntity(scData)
+	a5 := a.AddEntity(scData)
+	a6 := a.AddEntity(scData)
+	a7 := a.AddEntity(scData)
+	_ = a.AddEntity(scData) // a8
+
+	b = newStuff()
+	b1 := b.AddEntity(scData)
+	b2 := b.AddEntity(scData)
+	b3 := b.AddEntity(scData)
+	b4 := b.AddEntity(scData)
+	b5 := b.AddEntity(scData)
+	b6 := b.AddEntity(scData)
+	b7 := b.AddEntity(scData)
+	_ = b.AddEntity(scData) // b8
+
+	rel = ecs.NewRelation(&a.Core, &b.Core)
+
+	rel.InsertMany(func(insert func(r ecs.RelationType, a ecs.Entity, b ecs.Entity) ecs.Entity) {
+
+		insert(0, a1, b2)
+		insert(0, a1, b3)
+		insert(0, a2, b4)
+		insert(0, a2, b5)
+		insert(0, a3, b6)
+		insert(0, a3, b7)
+
+		insert(0, a2, b1)
+		insert(0, a3, b1)
+		insert(0, a4, b2)
+		insert(0, a5, b2)
+		insert(0, a6, b3)
+		insert(0, a7, b3)
+
+	})
+
+	return a, b, rel
+}
+
+func TestRelation_destruction(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		f    func(t *testing.T)
+	}{
+		{"clear A", func(t *testing.T) {
+			a, b, r := setupRelTest()
+			assert.False(t, a.Empty())
+			assert.False(t, b.Empty())
+			assert.False(t, r.Empty())
+			a.Clear()
+			assert.True(t, a.Empty())
+			assert.False(t, b.Empty())
+			assert.True(t, r.Empty())
+		}},
+
+		{"clear B", func(t *testing.T) {
+			a, b, r := setupRelTest()
+			assert.False(t, a.Empty())
+			assert.False(t, b.Empty())
+			assert.False(t, r.Empty())
+			b.Clear()
+			assert.False(t, a.Empty())
+			assert.True(t, b.Empty())
+			assert.True(t, r.Empty())
+		}},
+	} {
+		t.Run(tc.name, tc.f)
+	}
+
+}
+
 func TestGraph_Roots(t *testing.T) {
 	s := newStuff()
 	s1 := s.AddEntity(scData)

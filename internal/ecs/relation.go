@@ -32,6 +32,10 @@ func (rel *Relation) Init(aCore, bCore *Core) {
 	rel.bCore = bCore
 	rel.RegisterAllocator(relType, rel.allocRel)
 	rel.RegisterDestroyer(relType, rel.destroyRel)
+	rel.aCore.RegisterDestroyer(NoType, rel.destroyFromA)
+	if rel.aCore != rel.bCore {
+		rel.bCore.RegisterDestroyer(NoType, rel.destroyFromB)
+	}
 }
 
 // RelationType specified the type of a relation, it's basically a
@@ -77,15 +81,17 @@ func (rel *Relation) destroyRel(id EntityID, t ComponentType) {
 	}
 }
 
-// DestroyReferencesTo destroys all relations referencing the given ids; either
-// id may be 0, in which case an A (resp. B) match is not done.
-func (rel *Relation) DestroyReferencesTo(tcl TypeClause, aid, bid EntityID) {
-	if aid == 0 && bid == 0 {
-		return
-	}
-	tcl.All |= relType
+func (rel *Relation) destroyFromA(aid EntityID, t ComponentType) {
 	for i, t := range rel.Entities {
-		if tcl.Test(t) && (aid > 0 && rel.aids[i] == aid) || (bid > 0 && rel.bids[i] == bid) {
+		if t.All(relType) && rel.aids[i] == aid {
+			rel.setType(EntityID(i+1), NoType)
+		}
+	}
+}
+
+func (rel *Relation) destroyFromB(bid EntityID, t ComponentType) {
+	for i, t := range rel.Entities {
+		if t.All(relType) && rel.bids[i] == bid {
 			rel.setType(EntityID(i+1), NoType)
 		}
 	}
