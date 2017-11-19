@@ -86,6 +86,9 @@ func (co *Core) RegisterCreator(t ComponentType, creator func(EntityID, Componen
 // Destroyers are called when an Entity has any of its Type bits removed from
 // it; they may clear static data, de-allocate dynamic data, or do other Type
 // specific things. NOTE: destroyers must not de-allocate static data.
+//
+// Any destroyers registered against NoType trigger at entity deletion time;
+// they will be called when an entity transitions to NoType.
 func (co *Core) RegisterDestroyer(t ComponentType, destroyer func(EntityID, ComponentType)) {
 	co.destroyers = append(co.destroyers, entityFunc{t, destroyer})
 }

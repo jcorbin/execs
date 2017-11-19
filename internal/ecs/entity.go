@@ -134,4 +134,11 @@ func (co *Core) setType(id EntityID, new ComponentType) {
 			}
 		}
 	}
+	if new == NoType {
+		for _, ef := range co.destroyers {
+			if ef.t == NoType {
+				ef.f(id, new)
+			}
+		}
+	}
 }
