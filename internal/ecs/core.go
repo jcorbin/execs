@@ -34,11 +34,13 @@ type ComponentType uint64
 // NoType means that the Entities slot is unused.
 const NoType ComponentType = 0
 
-// All returns true only if all of the masked type bits are set.
-func (t ComponentType) All(mask ComponentType) bool { return t&mask == mask }
+// All returns true only if all of the masked type bits are set. If the mask is
+// NoType, always returns false.
+func (t ComponentType) All(mask ComponentType) bool { return mask != NoType && t&mask == mask }
 
-// Any returns true only if at least one of the masked type bits is set.
-func (t ComponentType) Any(mask ComponentType) bool { return t&mask != 0 }
+// Any returns true only if at least one of the masked type bits is set. If the
+// mask is NoType, always returns true.
+func (t ComponentType) Any(mask ComponentType) bool { return mask == NoType || t&mask != 0 }
 
 // RegisterAllocator registers an allocator function; it panics if any
 // allocator is registered that overlaps the given type.
