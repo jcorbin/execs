@@ -17,6 +17,10 @@ type Relation struct {
 	bix          []int
 }
 
+// TODO: Where interface with WhereFunc convenience (would allow using indices more)
+// TODO: secondary indices, uniqueness, keys, etc
+// TODO: joins
+
 // NewRelation creates a new relation for the given Core systems.
 func NewRelation(aCore, bCore *Core) *Relation {
 	rel := &Relation{}
@@ -295,10 +299,6 @@ func (rel *Relation) Delete(
 		cur.Entity().Destroy()
 	}
 }
-
-// TODO: Where interface with WhereFunc convenience (would allow using indices more)
-// TODO: secondary indices, uniqueness, keys, etc
-// TODO: joins
 
 // Cursor supports iterating over relations; see Relation.Cursor.
 type Cursor struct {
