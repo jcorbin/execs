@@ -19,13 +19,17 @@ type Relation struct {
 
 // NewRelation creates a new relation for the given Core systems.
 func NewRelation(aCore, bCore *Core) *Relation {
-	rel := &Relation{
-		aCore: aCore,
-		bCore: bCore,
-	}
+	rel := &Relation{}
+	rel.Init(aCore, bCore)
+	return rel
+}
+
+// Init initializes the entity relation; useful for embedding.
+func (rel *Relation) Init(aCore, bCore *Core) {
+	rel.aCore = aCore
+	rel.bCore = bCore
 	rel.RegisterAllocator(relType, rel.allocRel)
 	rel.RegisterCreator(relType, nil, rel.destroyRel)
-	return rel
 }
 
 // AddAIndex adds an index for A-side entity IDs.
