@@ -416,6 +416,7 @@ func (w *world) applyMoves() {
 			w.move(it.Entity(), target.Sub(w.Positions[it.ID()]).Sign())
 		} else {
 			// No? give up and just randomly budge then!
+			w.log("%s> Hmm...", w.getName(it.Entity(), "???"))
 			w.move(it.Entity(), point.Point{
 				X: w.rng.Intn(3) - 1,
 				Y: w.rng.Intn(3) - 1,
