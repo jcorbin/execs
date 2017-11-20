@@ -409,71 +409,65 @@ func (w *world) applyMoves() {
 
 	// generate ai moves
 	for it := w.Iter(ecs.All(aiMoveMask)); it.Next(); {
-		myPos := w.Positions[it.ID()]
-		found := false
-		var target point.Point
-
-		// chase the thing we hate the most
-		opp, hate := ecs.NilEntity, 0
-		for cur := w.moves.LookupA(ecs.AllRel(mrAgro), it.ID()); cur.Scan(); {
-			ent := cur.Entity()
-			if ent.Type().All(movN) {
-				// TODO: take other factors like distance into account
-				if n := w.moves.n[ent.ID()]; n > hate {
-					if b := cur.B(); b.Type().All(combatMask) {
-						opp, hate = b, n
-					}
-				}
-			}
+		if target, found := w.aiTarget(it.Entity()); found {
+			// Move towards the target!
+			w.move(it.Entity(), target.Sub(w.Positions[it.ID()]).Sign())
+		} else {
+			// No? give up and just randomly budge then!
+			w.move(it.Entity(), point.Point{
+				X: w.rng.Intn(3) - 1,
+				Y: w.rng.Intn(3) - 1,
+			})
 		}
-		if opp != ecs.NilEntity {
-			w.log("%v hates %v the most", w.getName(it.Entity(), "?!?"), w.getName(opp, "!?!"))
-			target = w.Positions[opp.ID()]
-			found = true
-		}
-
-		// revert to our goal...
-		for cur := w.moves.LookupA(ecs.AllRel(mrGoal), it.ID()); cur.Scan(); {
-			if b := cur.B(); b.Type().All(wcPosition) {
-				target = w.Positions[b.ID()]
-				found = true
-				break
-			}
-			// TODO: bogus goal, should delete it
-		}
-		if !found {
-			// ... no goal, pick one randomly!
-			choice, sum := ecs.EntityID(0), 0
-			for it := w.Iter(ecs.All(collMask)); it.Next(); {
-				if !it.Type().All(combatMask) {
-					pos := w.Positions[it.ID()]
-					diff := pos.Sub(myPos)
-					quad := diff.X*diff.X + diff.Y*diff.Y
-					sum += quad
-					if w.rng.Intn(sum) < quad {
-						choice = it.ID()
-						found = true
-					}
-				}
-			}
-			if found {
-				w.moves.Insert(mrGoal, it.Entity(), w.Ref(choice))
-				target = w.Positions[choice]
-			}
-		}
-
-		// Move towards the target!
-		if found {
-			w.move(it.Entity(), target.Sub(myPos).Sign())
-			continue
-		}
-
-		// No? give up and just randomly budge then!
-		w.move(it.Entity(), point.Point{
-			X: w.rng.Intn(3) - 1,
-			Y: w.rng.Intn(3) - 1,
-		})
 	}
+}
+
+func (w *world) aiTarget(ai ecs.Entity) (point.Point, bool) {
+	// chase the thing we hate the most
+	opp, hate := ecs.NilEntity, 0
+	for cur := w.moves.LookupA(ecs.AllRel(mrAgro), ai.ID()); cur.Scan(); {
+		if ent := cur.Entity(); ent.Type().All(movN) {
+			// TODO: take other factors like distance into account
+			if n := w.moves.n[ent.ID()]; n > hate {
+				if b := cur.B(); b.Type().All(combatMask) {
+					opp, hate = b, n
+				}
+			}
+		}
+	}
+	if opp != ecs.NilEntity {
+		w.log("%v hates %v the most", w.getName(ai, "?!?"), w.getName(opp, "!?!"))
+		return w.Positions[opp.ID()], true
+	}
+
+	// revert to our goal...
+	for cur := w.moves.LookupA(ecs.AllRel(mrGoal), ai.ID()); cur.Scan(); {
+		if b := cur.B(); b.Type().All(wcPosition) {
+			return w.Positions[b.ID()], true
+		}
+		// TODO: bogus goal, should delete it
+	}
+
+	// ... no goal, pick one randomly!
+	myPos := w.Positions[ai.ID()]
+	goal, sum := ecs.NilEntity, 0
+	for it := w.Iter(ecs.All(collMask)); it.Next(); {
+		if !it.Type().All(combatMask) {
+			pos := w.Positions[it.ID()]
+			diff := pos.Sub(myPos)
+			quad := diff.X*diff.X + diff.Y*diff.Y
+			sum += quad
+			if w.rng.Intn(sum) < quad {
+				goal = it.Entity()
+			}
+		}
+	}
+	if goal != ecs.NilEntity {
+		w.moves.Insert(mrGoal, ai, goal)
+		return w.Positions[goal.ID()], true
+	}
+
+	return point.Zero, false
 }
 
 func (w *world) processCollisions() {
