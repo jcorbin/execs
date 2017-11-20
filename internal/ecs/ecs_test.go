@@ -229,10 +229,116 @@ func TestRelation_destruction(t *testing.T) {
 			assert.False(t, a.Empty())
 			assert.False(t, b.Empty())
 			assert.False(t, r.Empty())
-			b.Clear()
+			r.Clear()
 			assert.False(t, a.Empty())
 			assert.False(t, b.Empty())
 			assert.True(t, r.Empty())
+		}},
+
+		{"A cascades", func(t *testing.T) {
+			a, b, r := setupRelTest(ecs.RelationCascadeDestroy, 0)
+			assert.False(t, a.Empty())
+			assert.False(t, b.Empty())
+			assert.False(t, r.Empty())
+			assert.Equal(t, 8, a.Len())
+			assert.Equal(t, 8, b.Len())
+
+			b.Ref(1).Destroy()
+			assert.Equal(t, 6, a.Len())
+			assert.Equal(t, ecs.NoType, a.Ref(2).Type())
+			assert.Equal(t, ecs.NoType, a.Ref(3).Type())
+
+			assert.False(t, a.Empty())
+			assert.False(t, b.Empty())
+			assert.False(t, r.Empty())
+
+			b.Clear()
+			assert.False(t, a.Empty())
+			assert.True(t, b.Empty())
+			assert.True(t, r.Empty())
+			assert.Equal(t, 1, a.Len())
+			assert.Equal(t, 0, b.Len())
+
+			a, b, r = setupRelTest(ecs.RelationCascadeDestroy, 0)
+			r.Clear()
+			assert.False(t, a.Empty())
+			assert.False(t, b.Empty())
+			assert.True(t, r.Empty())
+			assert.Equal(t, 1, a.Len())
+			assert.Equal(t, 8, b.Len())
+		}},
+
+		{"B cascades", func(t *testing.T) {
+			a, b, r := setupRelTest(0, ecs.RelationCascadeDestroy)
+			assert.False(t, a.Empty())
+			assert.False(t, b.Empty())
+			assert.False(t, r.Empty())
+			assert.Equal(t, 8, a.Len())
+			assert.Equal(t, 8, b.Len())
+
+			a.Ref(1).Destroy()
+			assert.Equal(t, 6, b.Len())
+			assert.Equal(t, ecs.NoType, b.Ref(2).Type())
+			assert.Equal(t, ecs.NoType, b.Ref(3).Type())
+
+			assert.False(t, a.Empty())
+			assert.False(t, b.Empty())
+			assert.False(t, r.Empty())
+
+			a.Clear()
+			assert.True(t, a.Empty())
+			assert.False(t, b.Empty())
+			assert.True(t, r.Empty())
+			assert.Equal(t, 0, a.Len())
+			assert.Equal(t, 1, b.Len())
+
+			a, b, r = setupRelTest(0, ecs.RelationCascadeDestroy)
+			r.Clear()
+			assert.False(t, a.Empty())
+			assert.False(t, b.Empty())
+			assert.True(t, r.Empty())
+			assert.Equal(t, 8, a.Len())
+			assert.Equal(t, 1, b.Len())
+		}},
+
+		{"A & B cascade", func(t *testing.T) {
+			a, b, r := setupRelTest(ecs.RelationCascadeDestroy, ecs.RelationCascadeDestroy)
+			assert.False(t, a.Empty())
+			assert.False(t, b.Empty())
+			assert.False(t, r.Empty())
+			assert.Equal(t, 8, a.Len())
+			assert.Equal(t, 8, b.Len())
+
+			a.Ref(1).Destroy()
+			assert.Equal(t, 3, a.Len())
+			assert.Equal(t, 6, b.Len())
+			assert.Equal(t, ecs.NoType, b.Ref(2).Type())
+			assert.Equal(t, ecs.NoType, b.Ref(3).Type())
+
+			b.Ref(1).Destroy()
+			assert.Equal(t, 1, a.Len())
+			assert.Equal(t, 1, b.Len())
+			assert.Equal(t, ecs.NoType, a.Ref(2).Type())
+			assert.Equal(t, ecs.NoType, a.Ref(3).Type())
+
+			assert.False(t, a.Empty())
+			assert.False(t, b.Empty())
+			assert.True(t, r.Empty())
+
+			a.Clear()
+			assert.True(t, a.Empty())
+			assert.False(t, b.Empty())
+			assert.True(t, r.Empty())
+			assert.Equal(t, 0, a.Len())
+			assert.Equal(t, 1, b.Len())
+
+			a, b, r = setupRelTest(ecs.RelationCascadeDestroy, ecs.RelationCascadeDestroy)
+			r.Clear()
+			assert.False(t, a.Empty())
+			assert.False(t, b.Empty())
+			assert.True(t, r.Empty())
+			assert.Equal(t, 1, a.Len())
+			assert.Equal(t, 1, b.Len())
 		}},
 	} {
 		t.Run(tc.name, tc.f)

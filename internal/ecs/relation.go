@@ -3,6 +3,14 @@ package ecs
 // RelationFlags specifies options for the A or B dimension in a Relation.
 type RelationFlags uint32
 
+const (
+	// RelationCascadeDestroy causes destruction of an entity relation to
+	// destroy related entities within the flagged dimension.
+	RelationCascadeDestroy RelationFlags = 1 << iota
+
+	// RelationRestrictDeletes TODO: cannot abort a destroy at present
+)
+
 // Relation contains entities that represent relations between entities in two
 // (maybe different) Cores. Users may attach arbitrary data to these relations
 // the same way you would with Core.
@@ -79,8 +87,18 @@ func (rel *Relation) allocRel(id EntityID, t ComponentType) {
 
 func (rel *Relation) destroyRel(id EntityID, t ComponentType) {
 	i := int(id) - 1
-	rel.aids[i] = 0
-	rel.bids[i] = 0
+	if aid := rel.aids[i]; aid != 0 {
+		if rel.aFlag&RelationCascadeDestroy != 0 {
+			rel.aCore.setType(aid, NoType)
+		}
+		rel.aids[i] = 0
+	}
+	if bid := rel.bids[i]; bid != 0 {
+		if rel.bFlag&RelationCascadeDestroy != 0 {
+			rel.bCore.setType(bid, NoType)
+		}
+		rel.bids[i] = 0
+	}
 	if !rel.fix {
 		if rel.aix != nil {
 			fix(len(rel.aix), i, rel.aixLess, rel.aixSwap)
