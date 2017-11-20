@@ -126,6 +126,22 @@ func (rel *Relation) destroyFromB(bid EntityID, t ComponentType) {
 	}
 }
 
+// A returns a reference to the A-side entity for the given relation entity.
+func (rel *Relation) A(ent Entity) Entity {
+	if ent.Type().All(relType) {
+		return rel.aCore.Ref(rel.aids[rel.Deref(ent)-1])
+	}
+	return NilEntity
+}
+
+// B returns a reference to the B-side entity for the given relation entity.
+func (rel *Relation) B(ent Entity) Entity {
+	if ent.Type().All(relType) {
+		return rel.bCore.Ref(rel.bids[rel.Deref(ent)-1])
+	}
+	return NilEntity
+}
+
 // Insert relations under the given type clause. TODO: constraints, indices,
 // etc.
 func (rel *Relation) Insert(r RelationType, a, b Entity) Entity {
