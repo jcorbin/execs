@@ -216,13 +216,15 @@ func (rel *Relation) Update(
 	tcl TypeClause,
 	where func(ent, a, b Entity, r RelationType) bool,
 	set func(ent, a, b Entity, r RelationType) (Entity, Entity),
-) {
+) int {
+	n := 0
 	if fixIndex := rel.deferIndexing(); fixIndex != nil {
 		defer fixIndex()
 	}
 	for cur := rel.Cursor(tcl, where); cur.Scan(); {
 		ent := cur.Entity()
 		oa, ob, or := cur.A(), cur.B(), cur.R()
+		n++ // TODO: differetiate updated vs destroyed?
 		na, nb := set(ent, oa, ob, or)
 		if na == NilEntity || nb == NilEntity {
 			rel.setType(cur.Entity().ID(), NoType)
@@ -236,6 +238,7 @@ func (rel *Relation) Update(
 			rel.bids[i] = nb.ID()
 		}
 	}
+	return n
 }
 
 // Delete all relations matching the given type clause and optional where
