@@ -176,4 +176,27 @@ it's working much better:
 I'm excited for: Eight: I'll either work further down to deepen the body
 system, or expand out and start adding an agro table... only time will tell!
 
+### [Eight](../../tree/eight)
+
+Refactoring my way towards anger management:
+- so progress on the ECS core:
+  - Relation has now been much more tested and works well
+  - Graph learned how to do DFS and CoDFS traversal
+  - Cursor grew up, now supports indices
+  - Cores now support generic create/destroy hooks
+  - Relation uses those hooks to destroy orphaned relations...
+  - ...and to provide optional cascading destroy
+  - Core now plays it close to the chest
+  - there's test coverage.
+
+And for all that refactoring, the main game now:
+- has an "agro" relation, which will cause the ai to chase the thing it hates most
+- a "goal" relation which the ai will chase if it's got nothing to hate
+- if ai doesn't have a goal, it picks a random non-combatant collidable
+- since there's not yet any source of agro (i.e. damage should, maybe kills
+  too), that's it
+
+So in net: the AIs now mill around and kill each other, while the player can
+play it safe from the edge; Whew!
+
 [es-beta]: http://entity-systems.wikidot.com/rdbms-beta
