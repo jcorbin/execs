@@ -52,6 +52,7 @@ type world struct {
 	View    *view.View
 	ecs.Core
 
+	playerMove   point.Point
 	enemyCounter int
 
 	Names     []string
@@ -328,87 +329,25 @@ func (w *world) extent() point.Box {
 func (w *world) Close() error { return nil }
 
 func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
-	if k.Key == termbox.KeyEsc {
+	// parse player move
+	switch k.Key {
+	case termbox.KeyEsc:
 		return view.ErrStop
+	case termbox.KeyArrowDown:
+		w.playerMove = point.Point{X: 0, Y: 1}
+	case termbox.KeyArrowUp:
+		w.playerMove = point.Point{X: 0, Y: -1}
+	case termbox.KeyArrowLeft:
+		w.playerMove = point.Point{X: -1, Y: 0}
+	case termbox.KeyArrowRight:
+		w.playerMove = point.Point{X: 1, Y: 0}
+	default:
+		w.playerMove = point.Zero
 	}
 
-	w.reset() // reset state from last time
-	w.tick()  // run timers
-
-	// apply player move
-	if move, ok := key2move(k); ok {
-		for it := w.Iter(ecs.All(playMoveMask)); it.Next(); {
-			w.move(it.Entity(), move)
-		}
-	}
-
-	// generate ai moves
-	for it := w.Iter(ecs.All(aiMoveMask)); it.Next(); {
-		myPos := w.Positions[it.ID()]
-		found := false
-		var target point.Point
-
-		// chase the thing we hate the most
-		opp, hate := ecs.NilEntity, 0
-		for cur := w.moves.LookupA(ecs.AllRel(mrAgro), it.ID()); cur.Scan(); {
-			ent := cur.Entity()
-			if ent.Type().All(movN) {
-				// TODO: take other factors like distance into account
-				if n := w.moves.n[ent.ID()]; n > hate {
-					if b := cur.B(); b.Type().All(combatMask) {
-						opp, hate = b, n
-					}
-				}
-			}
-		}
-		if opp != ecs.NilEntity {
-			w.log("%v hates %v the most", w.getName(it.Entity(), "?!?"), w.getName(opp, "!?!"))
-			target = w.Positions[opp.ID()]
-			found = true
-		}
-
-		// revert to our goal...
-		for cur := w.moves.LookupA(ecs.AllRel(mrGoal), it.ID()); cur.Scan(); {
-			if b := cur.B(); b.Type().All(wcPosition) {
-				target = w.Positions[b.ID()]
-				found = true
-				break
-			}
-			// TODO: bogus goal, should delete it
-		}
-		if !found {
-			// ... no goal, pick one randomly!
-			choice, sum := ecs.EntityID(0), 0
-			for it := w.Iter(ecs.All(collMask)); it.Next(); {
-				if !it.Type().All(combatMask) {
-					pos := w.Positions[it.ID()]
-					diff := pos.Sub(myPos)
-					quad := diff.X*diff.X + diff.Y*diff.Y
-					sum += quad
-					if w.rng.Intn(sum) < quad {
-						choice = it.ID()
-						found = true
-					}
-				}
-			}
-			if found {
-				w.moves.Insert(mrGoal, it.Entity(), w.Ref(choice))
-				target = w.Positions[choice]
-			}
-		}
-
-		// Move towards the target!
-		if found {
-			w.move(it.Entity(), target.Sub(myPos).Sign())
-			continue
-		}
-
-		// No? give up and just randomly budge then!
-		w.move(it.Entity(), point.Point{
-			X: w.rng.Intn(3) - 1,
-			Y: w.rng.Intn(3) - 1,
-		})
-	}
+	w.reset()      // reset state from last time
+	w.tick()       // run timers
+	w.applyMoves() // player and ai
 
 	// collisions deal damage
 	for cur := w.moves.Cursor(ecs.AllRel(mrCollide), func(ent, a, b ecs.Entity, r ecs.RelationType) bool {
@@ -489,6 +428,81 @@ func (w *world) tick() {
 				f(ent)
 			}
 		}
+	}
+}
+
+func (w *world) applyMoves() {
+	// apply player move
+	for it := w.Iter(ecs.All(playMoveMask)); it.Next(); {
+		w.move(it.Entity(), w.playerMove)
+	}
+
+	// generate ai moves
+	for it := w.Iter(ecs.All(aiMoveMask)); it.Next(); {
+		myPos := w.Positions[it.ID()]
+		found := false
+		var target point.Point
+
+		// chase the thing we hate the most
+		opp, hate := ecs.NilEntity, 0
+		for cur := w.moves.LookupA(ecs.AllRel(mrAgro), it.ID()); cur.Scan(); {
+			ent := cur.Entity()
+			if ent.Type().All(movN) {
+				// TODO: take other factors like distance into account
+				if n := w.moves.n[ent.ID()]; n > hate {
+					if b := cur.B(); b.Type().All(combatMask) {
+						opp, hate = b, n
+					}
+				}
+			}
+		}
+		if opp != ecs.NilEntity {
+			w.log("%v hates %v the most", w.getName(it.Entity(), "?!?"), w.getName(opp, "!?!"))
+			target = w.Positions[opp.ID()]
+			found = true
+		}
+
+		// revert to our goal...
+		for cur := w.moves.LookupA(ecs.AllRel(mrGoal), it.ID()); cur.Scan(); {
+			if b := cur.B(); b.Type().All(wcPosition) {
+				target = w.Positions[b.ID()]
+				found = true
+				break
+			}
+			// TODO: bogus goal, should delete it
+		}
+		if !found {
+			// ... no goal, pick one randomly!
+			choice, sum := ecs.EntityID(0), 0
+			for it := w.Iter(ecs.All(collMask)); it.Next(); {
+				if !it.Type().All(combatMask) {
+					pos := w.Positions[it.ID()]
+					diff := pos.Sub(myPos)
+					quad := diff.X*diff.X + diff.Y*diff.Y
+					sum += quad
+					if w.rng.Intn(sum) < quad {
+						choice = it.ID()
+						found = true
+					}
+				}
+			}
+			if found {
+				w.moves.Insert(mrGoal, it.Entity(), w.Ref(choice))
+				target = w.Positions[choice]
+			}
+		}
+
+		// Move towards the target!
+		if found {
+			w.move(it.Entity(), target.Sub(myPos).Sign())
+			continue
+		}
+
+		// No? give up and just randomly budge then!
+		w.move(it.Entity(), point.Point{
+			X: w.rng.Intn(3) - 1,
+			Y: w.rng.Intn(3) - 1,
+		})
 	}
 }
 
@@ -732,20 +746,6 @@ func (w *world) move(ent ecs.Entity, move point.Point) point.Point {
 		w.Positions[ent.ID()] = pos
 	}
 	return pos
-}
-
-func key2move(k view.KeyEvent) (point.Point, bool) {
-	switch k.Key {
-	case termbox.KeyArrowDown:
-		return point.Point{X: 0, Y: 1}, true
-	case termbox.KeyArrowUp:
-		return point.Point{X: 0, Y: -1}, true
-	case termbox.KeyArrowLeft:
-		return point.Point{X: -1, Y: 0}, true
-	case termbox.KeyArrowRight:
-		return point.Point{X: 1, Y: 0}, true
-	}
-	return point.Zero, true
 }
 
 func main() {
