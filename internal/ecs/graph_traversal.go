@@ -99,34 +99,38 @@ func (gt *dfsTraverser) setState(cur Cursor) {
 	}
 }
 
-func (gt *dfsTraverser) init() {
+func (gt *dfsTraverser) init(seed []EntityID) {
 	gt.seen = nil
 	gt.edge = 0
 	gt.node = 0
 	gt.q = gt.q[:0]
 
-	var (
-		triset map[EntityID]bool
-		n      int
-	)
-	switch gt.mode {
-	case TraverseDFS:
-		triset, n = gt.g.roots(gt.tcl, nil)
-	case TraverseCoDFS:
-		triset, n = gt.g.leaves(gt.tcl, nil)
-	default:
-		panic("invalid graphTraverser mode")
-	}
-	if n <= 0 {
-		return
-	}
+	if len(seed) > 0 {
+		gt.q = append(gt.q, seed...)
+	} else {
+		var (
+			triset map[EntityID]bool
+			n      int
+		)
+		switch gt.mode {
+		case TraverseDFS:
+			triset, n = gt.g.roots(gt.tcl, nil)
+		case TraverseCoDFS:
+			triset, n = gt.g.leaves(gt.tcl, nil)
+		default:
+			panic("invalid graphTraverser mode")
+		}
+		if n <= 0 {
+			return
+		}
 
-	if cap(gt.q) < n {
-		gt.q = make([]EntityID, 0, n)
-	}
-	for id, in := range triset {
-		if in {
-			gt.q = append(gt.q, id)
+		if cap(gt.q) < n {
+			gt.q = make([]EntityID, 0, n)
+		}
+		for id, in := range triset {
+			if in {
+				gt.q = append(gt.q, id)
+			}
 		}
 	}
 
