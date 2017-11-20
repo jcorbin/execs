@@ -43,7 +43,12 @@ func (co *Core) Deref(e Entity) EntityID {
 // Ref returns an Entity reference to the given ID; it is valid to return a
 // reference to the zero entity, to represent "no entity, in this Core" (e.g.
 // will Deref() to 0 EntityID).
-func (co *Core) Ref(id EntityID) Entity { return Entity{co, id} }
+func (co *Core) Ref(id EntityID) Entity {
+	if id == 0 {
+		return NilEntity
+	}
+	return Entity{co, id}
+}
 
 // AddEntity adds an entity to a core, returning an Entity reference; it MAY
 // re-use a previously-used but since-destroyed entity (one whose type is still
