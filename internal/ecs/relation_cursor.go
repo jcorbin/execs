@@ -10,6 +10,31 @@ type Cursor interface {
 	B() Entity
 }
 
+func (rel *Relation) scanLookup(
+	tcl TypeClause,
+	qids, aids, bids []EntityID,
+) []EntityID {
+	// TODO: if qids is big enough, build a set first
+	tcl.All |= relType
+	it := rel.Iter(tcl)
+	rset := make(map[EntityID]struct{}, len(rel.types))
+	for it.Next() {
+		i := it.ID() - 1
+		aid := aids[i]
+		for _, id := range qids {
+			if id == aid {
+				rset[bids[i]] = struct{}{}
+				break
+			}
+		}
+	}
+	result := make([]EntityID, 0, len(rset))
+	for id := range rset {
+		result = append(result, id)
+	}
+	return result
+}
+
 // iterCursor supports iterating over relations; see Relation.iterCursor.
 type iterCursor struct {
 	rel *Relation
