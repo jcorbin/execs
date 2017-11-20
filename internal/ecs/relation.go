@@ -68,16 +68,11 @@ func (t RelationType) Any(mask RelationType) bool { return t&mask != 0 }
 
 const relType ComponentType = 1 << (63 - iota)
 
-// RelType converts a RelationType into a ComponentType.
-func RelType(t RelationType) ComponentType {
-	return ComponentType(t) | relType
-}
+// AnyRel is a convenience for Any(ComponentType(t)).
+func AnyRel(t RelationType) TypeClause { return Any(ComponentType(t)) }
 
-// AnyRel is a convenience for Any(RelType(t)).
-func AnyRel(t RelationType) TypeClause { return Any(RelType(t)) }
-
-// AllRel is a convenience for All(RelType(t)).
-func AllRel(t RelationType) TypeClause { return All(RelType(t)) }
+// AllRel is a convenience for All(ComponentType(t)).
+func AllRel(t RelationType) TypeClause { return All(ComponentType(t)) }
 
 func (rel *Relation) allocRel(id EntityID, t ComponentType) {
 	i := len(rel.aids)
