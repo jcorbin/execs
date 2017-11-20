@@ -67,7 +67,13 @@ func (gt *dfsTraverser) Traverse() bool {
 
 func (gt *dfsTraverser) traverse() bool {
 	if gt.node != 0 {
-		if cur := gt.g.LookupA(gt.tcl, gt.node); cur.Scan() {
+		var cur Cursor
+		if gt.mode&traverseCo == 0 {
+			cur = gt.g.LookupA(gt.tcl, gt.node)
+		} else {
+			cur = gt.g.LookupB(gt.tcl, gt.node)
+		}
+		if cur.Scan() {
 			gt.curs = append(gt.curs, cur)
 			gt.setState(cur)
 			return true
