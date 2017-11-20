@@ -345,17 +345,10 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 		w.playerMove = point.Zero
 	}
 
-	w.reset()      // reset state from last time
-	w.tick()       // run timers
-	w.applyMoves() // player and ai
-
-	// collisions deal damage
-	for cur := w.moves.Cursor(ecs.AllRel(mrCollide), func(ent, a, b ecs.Entity, r ecs.RelationType) bool {
-		return a.Type().All(combatMask) && b.Type().All(combatMask)
-	}); cur.Scan(); {
-		w.attack(cur.A(), cur.B())
-		// TODO: store damage and kill relations, update agro relations
-	}
+	w.reset()             // reset state from last time
+	w.tick()              // run timers
+	w.applyMoves()        // player and ai
+	w.processCollisions() // e.g. deal damage
 
 	// count remaining souls
 	if w.Iter(ecs.All(wcSoul)).Count() == 0 {
@@ -503,6 +496,16 @@ func (w *world) applyMoves() {
 			X: w.rng.Intn(3) - 1,
 			Y: w.rng.Intn(3) - 1,
 		})
+	}
+}
+
+func (w *world) processCollisions() {
+	// collisions deal damage
+	for cur := w.moves.Cursor(ecs.AllRel(mrCollide), func(ent, a, b ecs.Entity, r ecs.RelationType) bool {
+		return a.Type().All(combatMask) && b.Type().All(combatMask)
+	}); cur.Scan(); {
+		w.attack(cur.A(), cur.B()) // TODO: subsume
+		// TODO: store damage and kill relations, update agro relations
 	}
 }
 
