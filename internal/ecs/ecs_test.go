@@ -223,6 +223,17 @@ func TestRelation_destruction(t *testing.T) {
 			assert.True(t, b.Empty())
 			assert.True(t, r.Empty())
 		}},
+
+		{"clear rels", func(t *testing.T) {
+			a, b, r := setupRelTest()
+			assert.False(t, a.Empty())
+			assert.False(t, b.Empty())
+			assert.False(t, r.Empty())
+			b.Clear()
+			assert.False(t, a.Empty())
+			assert.False(t, b.Empty())
+			assert.True(t, r.Empty())
+		}},
 	} {
 		t.Run(tc.name, tc.f)
 	}
