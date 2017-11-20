@@ -112,13 +112,10 @@ func (gt *dfsTraverser) init(seed []EntityID) {
 			triset map[EntityID]bool
 			n      int
 		)
-		switch gt.mode {
-		case TraverseDFS:
+		if gt.mode&traverseCo == 0 {
 			triset, n = gt.g.roots(gt.tcl, nil)
-		case TraverseCoDFS:
+		} else {
 			triset, n = gt.g.leaves(gt.tcl, nil)
-		default:
-			panic("invalid graphTraverser mode")
 		}
 		if n <= 0 {
 			return
