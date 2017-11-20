@@ -17,7 +17,7 @@ const (
 )
 
 // Traverse returns a new graph travers for the given type clause and mode.
-func (G *Graph) Traverse(tcl TypeClause, mode TraversalMode) GraphTraverser {
+func (G *Graph) Traverse(tcl TypeClause, mode TraversalMode, seed ...EntityID) GraphTraverser {
 	switch mode {
 	case TraverseDFS, TraverseCoDFS:
 		dfs := &dfsTraverser{
@@ -25,7 +25,7 @@ func (G *Graph) Traverse(tcl TypeClause, mode TraversalMode) GraphTraverser {
 			tcl:  tcl,
 			mode: mode,
 		}
-		dfs.init()
+		dfs.init(seed)
 		return dfs
 
 	default:
