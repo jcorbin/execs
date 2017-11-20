@@ -26,7 +26,6 @@ func (rel *Relation) scanLookup(
 	})
 }
 
-// iterCursor supports iterating over relations; see Relation.iterCursor.
 type iterCursor struct {
 	rel *Relation
 
@@ -39,7 +38,6 @@ type iterCursor struct {
 	b   Entity
 }
 
-// Count scans ahead and returns a count of how many records are to come.
 func (cur iterCursor) Count() int {
 	if cur.where == nil {
 		return cur.it.Count()
@@ -60,7 +58,6 @@ func (cur iterCursor) Count() int {
 	return n
 }
 
-// Scan advances the cursor return false if the scan is done, true otherwise.
 func (cur *iterCursor) Scan() bool {
 	for cur.it.Next() {
 		cur.ent = cur.it.Entity()
@@ -79,14 +76,7 @@ func (cur *iterCursor) Scan() bool {
 	return false
 }
 
-// Entity returns the current relation entity.
-func (cur iterCursor) Entity() Entity { return cur.ent }
-
-// R returns the current relation type.
+func (cur iterCursor) Entity() Entity  { return cur.ent }
 func (cur iterCursor) R() RelationType { return cur.r }
-
-// A returns the current a-side entity.
-func (cur iterCursor) A() Entity { return cur.a }
-
-// B returns the current b-side entity.
-func (cur iterCursor) B() Entity { return cur.b }
+func (cur iterCursor) A() Entity       { return cur.a }
+func (cur iterCursor) B() Entity       { return cur.b }
