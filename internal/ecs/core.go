@@ -1,5 +1,7 @@
 package ecs
 
+import "fmt"
+
 // Core is the core of an Entity Component System: it manages the entity IDs
 // and types.
 type Core struct {
@@ -23,6 +25,8 @@ type ComponentType uint64
 // NoType represents an unused entity; one that has been allocated, but not yet
 // handed out by AddEntity.
 const NoType ComponentType = 0
+
+func (t ComponentType) String() string { return fmt.Sprintf("<%016x>", uint64(t)) }
 
 // All returns true only if all of the masked type bits are set. If the mask is
 // NoType, always returns false.
