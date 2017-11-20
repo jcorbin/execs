@@ -52,6 +52,7 @@ type world struct {
 	View    *view.View
 	ecs.Core
 
+	over bool
 	playerMove   point.Point
 	enemyCounter int
 
@@ -349,12 +350,7 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 	w.tick()              // run timers
 	w.applyMoves()        // player and ai
 	w.processCollisions() // e.g. deal damage
-
-	// count remaining souls
-	if w.Iter(ecs.All(wcSoul)).Count() == 0 {
-		w.log("game over")
-		return view.ErrStop
-	}
+	w.checkOver()         // no souls => done
 
 	// maybe spawn
 	// TODO: randomize position?
@@ -383,6 +379,9 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 		}
 	}
 
+	if w.over {
+		return view.ErrStop
+	}
 	return nil
 }
 
@@ -506,6 +505,14 @@ func (w *world) processCollisions() {
 	}); cur.Scan(); {
 		w.attack(cur.A(), cur.B()) // TODO: subsume
 		// TODO: store damage and kill relations, update agro relations
+	}
+}
+
+func (w *world) checkOver() {
+	// count remaining souls
+	if w.Iter(ecs.All(wcSoul)).Count() == 0 {
+		w.log("game over")
+		w.over = true
 	}
 }
 
