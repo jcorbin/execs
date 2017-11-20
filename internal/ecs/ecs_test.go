@@ -382,36 +382,36 @@ func TestGraph_Roots(t *testing.T) {
 	assert.Equal(t, s.Ref(1), roots[0])
 }
 
+func gtids(gt ecs.GraphTraverser) []ecs.EntityID {
+	var ids []ecs.EntityID
+	for gt.Traverse() {
+		ids = append(ids, gt.Node().ID())
+	}
+	return ids
+}
+
 func TestGraph_Traverse(t *testing.T) {
 	testCases{
 
 		{"DFS", func(t *testing.T) {
 			_, G := setupGraphTest(0)
-			gt := G.Traverse(ecs.AllClause, ecs.TraverseDFS)
-			var ids []ecs.EntityID
-			for gt.Traverse() {
-				ids = append(ids, gt.Node().ID())
-			}
-			assert.Equal(t, []ecs.EntityID{1, 2, 4, 5, 3, 6, 7}, ids)
+			assert.Equal(t,
+				[]ecs.EntityID{1, 2, 4, 5, 3, 6, 7},
+				gtids(G.Traverse(ecs.AllClause, ecs.TraverseDFS)))
 		}},
 
-		// {"CoDFS", func(t *testing.T) {
-		// 	_, G := setupGraphTest(0)
-		// 	gt := G.Traverse(ecs.AllClause, ecs.TraverseCoDFS)
-		// 	var ids []ecs.EntityID
-		// 	for gt.Traverse() {
-		// 		ids = append(ids, gt.Node().ID())
-		// 	}
-		// 	assert.Equal(t, []ecs.EntityID{
-		// 		4, 2, 1, 5, 6, 3, 1, 7,
-		// 		// TODO difficult to test due to randomized leaves order
-		// 		// 4 2
-		// 		// 5 2
-		// 		// 6 3
-		// 		// 7 3
-		// 		// 2 1
-		// 		// 3 1
-		// 	}, ids)
-		// }},
+		{"CoDFS", func(t *testing.T) {
+			_, G := setupGraphTest(0)
+			for _, ids := range [][]ecs.EntityID{
+				{4, 2, 1},
+				{5, 2, 1},
+				{6, 3, 1},
+				{7, 3, 1},
+			} {
+				assert.Equal(t,
+					ids,
+					gtids(G.Traverse(ecs.AllClause, ecs.TraverseCoDFS, ids[0])))
+			}
+		}},
 	}.run(t)
 }
