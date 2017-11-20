@@ -101,7 +101,7 @@ func newWorld(v *view.View) (*world, error) {
 		bodies:    []*body{nil},
 		items:     []interface{}{nil},
 	}
-	w.moves.Init(&w.Core, &w.Core)
+	w.moves.Init(&w.Core, 0, &w.Core, 0)
 
 	f, err := os.Create(fmt.Sprintf("%v.log", time.Now().Format(time.RFC3339)))
 	if err != nil {
@@ -111,8 +111,9 @@ func newWorld(v *view.View) (*world, error) {
 	w.log("logging to %q", f.Name())
 
 	w.RegisterAllocator(wcName|wcPosition|wcGlyph|wcBG|wcFG|wcBody|wcItem|wcTimer, w.allocWorld)
-	w.RegisterCreator(wcBody, w.createBody, w.destroyBody)
-	w.RegisterCreator(wcItem, nil, w.destroyItem)
+	w.RegisterCreator(wcBody, w.createBody)
+	w.RegisterDestroyer(wcBody, w.destroyBody)
+	w.RegisterDestroyer(wcItem, w.destroyItem)
 
 	return w, nil
 }
@@ -169,14 +170,11 @@ func (w *world) Render(ctx *view.Context) error {
 	for it.Next() {
 		bo := w.bodies[it.ID()]
 
-		parts := make([]string, 0, len(bo.Entities))
-		for _, root := range bo.Roots() {
-			bo.Descend(root, func(ent ecs.Entity, level int) bool {
-				parts = append(parts, fmt.Sprintf("%s:%v", bo.DescribePart(ent), bo.hp[ent.ID()]))
-				return true
-			})
+		parts := make([]string, 0, bo.Len())
+		for gt := bo.rel.Traverse(ecs.All(ecs.RelType(brControl)), ecs.TraverseDFS); gt.Traverse(); {
+			ent := gt.Node()
+			parts = append(parts, fmt.Sprintf("%s:%v", bo.DescribePart(ent), bo.hp[ent.ID()]))
 		}
-		hp, maxHP := bo.HPRange()
 
 		// TODO: render a doll like
 		//    _O_
@@ -185,6 +183,7 @@ func (w *world) Render(ctx *view.Context) error {
 		//    / \
 		//  _/   \_
 
+		hp, maxHP := bo.HPRange()
 		hpParts = append(hpParts, fmt.Sprintf("HP(%v/%v):<%s>", hp, maxHP, strings.Join(parts, " ")))
 		// hpParts = append(hpParts, fmt.Sprintf("HP(%v/%v)", hp, maxHP))
 	}
@@ -322,7 +321,7 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 			ent.Destroy()
 		// FIXME
 		// case timerSetType:
-		// 	w.Entities[it.ID()] = w.timers[it.ID()].t
+		// 	w.Ref(it.ID()).SetType(w.timers[it.ID()].t)
 		case timerCallback:
 			f := w.timers[it.ID()].f
 			if f != nil {
@@ -488,7 +487,10 @@ func (w *world) prepareCollidables() {
 }
 
 func (w *world) collides(ent ecs.Entity, pos point.Point) ecs.Entity {
-	id := w.Deref(ent)
+	var id ecs.EntityID
+	if ent != ecs.NilEntity {
+		id = w.Deref(ent)
+	}
 	for _, hitID := range w.coll {
 		if hitID != id {
 			if hitPos := w.Positions[hitID]; hitPos.Equal(pos) {

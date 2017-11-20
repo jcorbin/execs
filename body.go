@@ -35,6 +35,8 @@ const (
 	brControl ecs.RelationType = 1 << iota
 )
 
+var brRelClause = ecs.All(ecs.RelType(brControl))
+
 type body struct {
 	ecs.Core
 	rel ecs.Graph
@@ -70,9 +72,8 @@ func newBody() *body {
 		dmg:   []int{0},
 		armor: []int{0},
 	}
-	bo.rel.Init(&bo.Core)
+	bo.rel.Init(&bo.Core, 0)
 	bo.RegisterAllocator(bcPart, bo.allocPart)
-	bo.RegisterCreator(bcPart, nil, bo.destroyPart)
 	return bo
 }
 
@@ -87,10 +88,6 @@ func (bo *body) allocPart(id ecs.EntityID, t ecs.ComponentType) {
 	bo.hp = append(bo.hp, 0)
 	bo.dmg = append(bo.dmg, 0)
 	bo.armor = append(bo.armor, 0)
-}
-
-func (bo *body) destroyPart(id ecs.EntityID, t ecs.ComponentType) {
-	bo.rel.DestroyReferencesTo(ecs.AllClause, id, id)
 }
 
 func (bo *body) build(rng *rand.Rand) {
@@ -157,50 +154,6 @@ func (bo *body) HP() int {
 		hp += bo.hp[it.ID()]
 	}
 	return hp
-}
-
-func (bo *body) Roots() []ecs.Entity {
-	return bo.rel.Roots(ecs.All(ecs.RelType(brControl)), nil)
-}
-
-func (bo *body) Descend(ent ecs.Entity, f func(ent ecs.Entity, level int) bool) {
-	id := bo.Deref(ent)
-	tcl := ecs.All(ecs.RelType(brControl))
-	bo.descend(tcl, id, 0, func(id ecs.EntityID, level int) bool {
-		return f(bo.Ref(id), level)
-	})
-}
-
-func (bo *body) descend(
-	tcl ecs.TypeClause, id ecs.EntityID, level int,
-	f func(id ecs.EntityID, level int) bool,
-) {
-	if !f(id, level) {
-		return
-	}
-	for _, id := range bo.rel.LookupA(tcl, id) {
-		bo.descend(tcl, id, level+1, f)
-	}
-}
-
-func (bo *body) Ascend(ent ecs.Entity, f func(ent ecs.Entity) bool) {
-	id := bo.Deref(ent)
-	tcl := ecs.All(ecs.RelType(brControl))
-	bo.ascend(tcl, id, func(id ecs.EntityID) bool {
-		return f(bo.Ref(id))
-	})
-}
-
-func (bo *body) ascend(
-	tcl ecs.TypeClause, id ecs.EntityID,
-	f func(id ecs.EntityID) bool,
-) {
-	if !f(id) {
-		return
-	}
-	for _, id := range bo.rel.LookupB(tcl, id) {
-		bo.ascend(tcl, id, f)
-	}
 }
 
 func (bo *body) choosePart(want func(prior, ent ecs.Entity) bool) ecs.Entity {
@@ -298,14 +251,16 @@ func (w *world) attack(src, targ ecs.Entity) {
 	}
 
 	aEff, bEff := 1.0, 1.0
-	srcBo.Ascend(aPart, func(ent ecs.Entity) bool {
-		aEff *= float64(srcBo.hp[ent.ID()]) / float64(srcBo.maxHP[ent.ID()])
-		return true
-	})
-	targBo.Ascend(bPart, func(ent ecs.Entity) bool {
-		bEff *= float64(targBo.hp[ent.ID()]) / float64(targBo.maxHP[ent.ID()])
-		return true
-	})
+
+	for gt := srcBo.rel.Traverse(brRelClause, ecs.TraverseCoDFS, aPart.ID()); gt.Traverse(); {
+		id := gt.Node().ID()
+		aEff *= float64(srcBo.hp[id]) / float64(srcBo.maxHP[id])
+	}
+
+	for gt := targBo.rel.Traverse(brRelClause, ecs.TraverseCoDFS, bPart.ID()); gt.Traverse(); {
+		id := gt.Node().ID()
+		bEff *= float64(targBo.hp[id]) / float64(targBo.maxHP[id])
+	}
 
 	aDesc := srcBo.DescribePart(aPart)
 	bDesc := targBo.DescribePart(bPart)
@@ -349,7 +304,7 @@ func (w *world) attack(src, targ ecs.Entity) {
 
 	if severed := targBo.sever(bPart.ID()); severed != nil {
 		w.newItem(w.Positions[targID], fmt.Sprintf("remains of %s", targName), '%', severed)
-		if roots := severed.Roots(); len(roots) > 0 {
+		if roots := severed.rel.Roots(brRelClause, nil); len(roots) > 0 {
 			for _, ent := range roots {
 				w.log("%s's %s has dropped on the floor", targName, severed.DescribePart(ent))
 			}
@@ -404,8 +359,9 @@ func (bo *body) sever(ids ...ecs.EntityID) *body {
 		cont  = newBody()
 		xlate = make(map[ecs.EntityID]ecs.EntityID)
 		q     = append([]ecs.EntityID(nil), ids...)
-		rels  = make([]rel, 0, len(bo.rel.Entities))
-		relis = make(map[ecs.EntityID]struct{}, len(bo.rel.Entities))
+		n     = bo.rel.Len()
+		rels  = make([]rel, 0, n)
+		relis = make(map[ecs.EntityID]struct{}, n)
 	)
 
 	for len(q) > 0 {
@@ -450,7 +406,7 @@ func (bo *body) sever(ids ...ecs.EntityID) *body {
 		}
 	}
 
-	if len(cont.Entities) == 0 {
+	if cont.Len() == 0 {
 		return nil
 	}
 

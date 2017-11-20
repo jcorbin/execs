@@ -44,7 +44,7 @@ func newColorTable() *colorTable {
 	}
 	ct.Table = markov.NewTable(&ct.Core)
 	ct.RegisterAllocator(componentTableColor, ct.allocTableColor)
-	ct.RegisterCreator(componentTableColor, nil, ct.destroyTableColor)
+	ct.RegisterDestroyer(componentTableColor, ct.destroyTableColor)
 	return ct
 }
 
