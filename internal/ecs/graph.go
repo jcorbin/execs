@@ -24,6 +24,20 @@ func (G *Graph) Roots(
 	tcl TypeClause,
 	where func(ent, a, b Entity, r RelationType) bool,
 ) []Entity {
+	triset, n := G.roots(tcl, where)
+	result := make([]Entity, 0, n)
+	for id, in := range triset {
+		if in {
+			result = append(result, G.aCore.Ref(id))
+		}
+	}
+	return result
+}
+
+func (G *Graph) roots(
+	tcl TypeClause,
+	where func(ent, a, b Entity, r RelationType) bool,
+) (map[EntityID]bool, int) {
 	// TODO: leverage index if available
 	tcl.All |= relType
 	it := G.Iter(tcl)
@@ -51,7 +65,16 @@ func (G *Graph) Roots(
 		}
 		triset[bid] = false
 	}
+	return triset, n
+}
 
+// Leaves returns a slice of Entities that have no out-relation (i.e. there's no
+// relation `a R b for all b in the result`).
+func (G *Graph) Leaves(
+	tcl TypeClause,
+	where func(ent, a, b Entity, r RelationType) bool,
+) []Entity {
+	triset, n := G.leaves(tcl, where)
 	result := make([]Entity, 0, n)
 	for id, in := range triset {
 		if in {
@@ -61,12 +84,10 @@ func (G *Graph) Roots(
 	return result
 }
 
-// Leaves returns a slice of Entities that have no out-relation (i.e. there's no
-// relation `a R b for all b in the result`).
-func (G *Graph) Leaves(
+func (G *Graph) leaves(
 	tcl TypeClause,
 	where func(ent, a, b Entity, r RelationType) bool,
-) []Entity {
+) (map[EntityID]bool, int) {
 	// TODO: leverage index if available
 	tcl.All |= relType
 	it := G.Iter(tcl)
@@ -94,14 +115,7 @@ func (G *Graph) Leaves(
 		}
 		triset[aid] = false
 	}
-
-	result := make([]Entity, 0, n)
-	for id, in := range triset {
-		if in {
-			result = append(result, G.aCore.Ref(id))
-		}
-	}
-	return result
+	return triset, n
 }
 
 // TODO: graph traversal like DFS, CoDFS, BFS, CoBFS
