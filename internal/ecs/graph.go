@@ -117,5 +117,3 @@ func (G *Graph) leaves(
 	}
 	return triset, n
 }
-
-// TODO: graph traversal like DFS, CoDFS, BFS, CoBFS

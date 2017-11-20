@@ -197,11 +197,20 @@ func setupRelTest(aFlags, bFlags ecs.RelationFlags) (a, b *stuff, rel *ecs.Relat
 	return a, b, rel
 }
 
+type testCases []testCase
+type testCase struct {
+	name string
+	run  func(t *testing.T)
+}
+
+func (tcs testCases) run(t *testing.T) {
+	for _, tc := range tcs {
+		t.Run(tc.name, tc.run)
+	}
+}
+
 func TestRelation_destruction(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		f    func(t *testing.T)
-	}{
+	testCases{
 		{"clear A", func(t *testing.T) {
 			a, b, r := setupRelTest(0, 0)
 			assert.False(t, a.Empty())
@@ -340,13 +349,10 @@ func TestRelation_destruction(t *testing.T) {
 			assert.Equal(t, 1, a.Len())
 			assert.Equal(t, 1, b.Len())
 		}},
-	} {
-		t.Run(tc.name, tc.f)
-	}
-
+	}.run(t)
 }
 
-func TestGraph_Roots(t *testing.T) {
+func setupGraphTest(flag ecs.RelationFlags) (*stuff, *ecs.Graph) {
 	s := newStuff()
 	s1 := s.AddEntity(scData)
 	s2 := s.AddEntity(scData)
@@ -366,7 +372,46 @@ func TestGraph_Roots(t *testing.T) {
 		insert(0, s3, s7)
 	})
 
+	return s, G
+}
+
+func TestGraph_Roots(t *testing.T) {
+	s, G := setupGraphTest(0)
 	roots := G.Roots(ecs.AllClause, nil)
 	assert.Equal(t, 1, len(roots))
-	assert.Equal(t, s1, roots[0])
+	assert.Equal(t, s.Ref(1), roots[0])
+}
+
+func TestGraph_Traverse(t *testing.T) {
+	testCases{
+
+		{"DFS", func(t *testing.T) {
+			_, G := setupGraphTest(0)
+			gt := G.Traverse(ecs.AllClause, ecs.TraverseDFS)
+			var ids []ecs.EntityID
+			for gt.Traverse() {
+				ids = append(ids, gt.Node().ID())
+			}
+			assert.Equal(t, []ecs.EntityID{1, 2, 4, 5, 3, 6, 7}, ids)
+		}},
+
+		// {"CoDFS", func(t *testing.T) {
+		// 	_, G := setupGraphTest(0)
+		// 	gt := G.Traverse(ecs.AllClause, ecs.TraverseCoDFS)
+		// 	var ids []ecs.EntityID
+		// 	for gt.Traverse() {
+		// 		ids = append(ids, gt.Node().ID())
+		// 	}
+		// 	assert.Equal(t, []ecs.EntityID{
+		// 		4, 2, 1, 5, 6, 3, 1, 7,
+		// 		// TODO difficult to test due to randomized leaves order
+		// 		// 4 2
+		// 		// 5 2
+		// 		// 6 3
+		// 		// 7 3
+		// 		// 2 1
+		// 		// 3 1
+		// 	}, ids)
+		// }},
+	}.run(t)
 }
