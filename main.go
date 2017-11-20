@@ -506,8 +506,10 @@ func (w *world) maybeSpawn() {
 	bo := w.bodies[enemy.ID()]
 
 	sum := 0
-	for it := w.Iter(ecs.All(wcBody)); it.Next(); {
-		sum += w.bodies[it.ID()].HP()
+	for it := w.Iter(ecs.All(combatMask)); it.Next(); {
+		if !it.Type().All(wcWaiting) {
+			sum += w.bodies[it.ID()].HP()
+		}
 	}
 	if hp := bo.HP(); w.rng.Intn(sum+hp) < hp {
 		enemy.Delete(wcWaiting)
