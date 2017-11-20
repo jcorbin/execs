@@ -1,5 +1,7 @@
 package ecs
 
+import "fmt"
+
 // Entity is a reference to an entity in a Core
 type Entity struct {
 	co *Core
@@ -8,6 +10,20 @@ type Entity struct {
 
 // NilEntity is the zero of Entity, representing "no entity, in no Core".
 var NilEntity = Entity{}
+
+func (ent Entity) String() string {
+	if ent.co == nil {
+		return fmt.Sprintf("Nil<>[%v]", ent.id)
+	}
+	if ent.co == nil {
+		return fmt.Sprintf("%p<>[%v]", ent.co, ent.id)
+	}
+	return fmt.Sprintf("%p%v[%v]",
+		ent.co,
+		ent.co.types[ent.id-1],
+		ent.id,
+	)
+}
 
 // Type returns the type of the referenced entity, or NoType if the reference
 // is empty.
