@@ -334,31 +334,7 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 
 	v.ClearLog()
 
-	// run timers
-	for it := w.Iter(ecs.All(wcTimer)); it.Next(); {
-		if w.timers[it.ID()].n <= 0 {
-			continue
-		}
-		w.timers[it.ID()].n--
-		if w.timers[it.ID()].n > 0 {
-			continue
-		}
-		ent := it.Entity()
-		ent.Delete(wcTimer)
-		switch w.timers[it.ID()].a {
-		case timerDestroy:
-			ent.Destroy()
-		// FIXME
-		// case timerSetType:
-		// 	w.Ref(it.ID()).SetType(w.timers[it.ID()].t)
-		case timerCallback:
-			f := w.timers[it.ID()].f
-			if f != nil {
-				w.timers[it.ID()].f = nil
-				f(ent)
-			}
-		}
-	}
+	w.tick() // run timers
 
 	// reset collisions, damage, and kills
 	w.moves.Delete(ecs.AnyRel(mrCollide|mrDamage|mrKill), nil)
@@ -483,6 +459,34 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 	}
 
 	return nil
+}
+
+func (w *world) tick() {
+	// run timers
+	for it := w.Iter(ecs.All(wcTimer)); it.Next(); {
+		if w.timers[it.ID()].n <= 0 {
+			continue
+		}
+		w.timers[it.ID()].n--
+		if w.timers[it.ID()].n > 0 {
+			continue
+		}
+		ent := it.Entity()
+		ent.Delete(wcTimer)
+		switch w.timers[it.ID()].a {
+		case timerDestroy:
+			ent.Destroy()
+			// FIXME
+			// case timerSetType:
+			//	 w.Ref(it.ID()).SetType(w.timers[it.ID()].t)
+		case timerCallback:
+			f := w.timers[it.ID()].f
+			if f != nil {
+				w.timers[it.ID()].f = nil
+				f(ent)
+			}
+		}
+	}
 }
 
 func (w *world) attack(src, targ ecs.Entity) {
