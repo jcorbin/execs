@@ -15,7 +15,6 @@ import (
 )
 
 // TODO: spirit possession
-// TODO: agro system
 // TODO: movement based on body status
 // TODO: more body parts: thigh/calf, forearm/upper, neck, fingers, toes, organs, joints, items
 // TODO: factor out something like ecs.Relation
@@ -489,8 +488,7 @@ func (w *world) processCollisions() {
 
 		if a.Type().All(combatMask) && b.Type().All(combatMask) {
 			// combat collisions deal damage
-			w.attack(cur.A(), cur.B()) // TODO: subsume
-			// TODO: store damage and kill relations, update agro relations
+			w.attack(a, b)
 		}
 
 		// am ai?
@@ -640,10 +638,27 @@ func (w *world) attack(src, targ ecs.Entity) {
 
 	targID := targ.ID()
 
+	// TODO: store damage and kill relations
+
 	// dmg > 0
 	part, destroyed := targBo.damagePart(bPart, dmg)
 	w.log("%s's %s dealt %v damage to %s's %s", srcName, aDesc, dmg, targName, bDesc)
 	if !destroyed {
+		// TODO: Relation.Upsert would be nice
+		if w.moves.Update(
+			ecs.AllRel(mrAgro),
+			func(ent ecs.Entity, a ecs.Entity, b ecs.Entity, r ecs.RelationType) bool {
+				return a == targ && b == src
+			},
+			func(ent ecs.Entity, a ecs.Entity, b ecs.Entity, r ecs.RelationType) (ecs.Entity, ecs.Entity) {
+				w.moves.n[ent.ID()] += dmg
+				return a, b
+			},
+		) == 0 {
+			ent := w.moves.Insert(mrAgro, targ, src)
+			ent.Add(movN)
+			w.moves.n[ent.ID()] = dmg
+		}
 		return
 	}
 
