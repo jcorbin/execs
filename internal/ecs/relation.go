@@ -204,8 +204,7 @@ func (rel *Relation) Update(
 	if fixIndex := rel.deferIndexing(); fixIndex != nil {
 		defer fixIndex()
 	}
-	cur := rel.Cursor(tcl, where)
-	for cur.Scan() {
+	for cur := rel.Cursor(tcl, where); cur.Scan(); {
 		ent := cur.Entity()
 		oa, ob, or := cur.A(), cur.B(), cur.R()
 		na, nb := set(ent, oa, ob, or)
@@ -233,8 +232,7 @@ func (rel *Relation) Delete(
 	if fixIndex := rel.deferIndexing(); fixIndex != nil {
 		defer fixIndex()
 	}
-	cur := rel.Cursor(tcl, where)
-	for cur.Scan() {
+	for cur := rel.Cursor(tcl, where); cur.Scan(); {
 		rel.setType(cur.Entity().ID(), NoType)
 	}
 }
