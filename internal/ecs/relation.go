@@ -172,24 +172,22 @@ func (rel *Relation) Cursor(
 	return &iterCursor{rel: rel, it: it, where: where}
 }
 
-// LookupA returns a slice of B entities that are related to the given A
-// entities under the given type clause.
-func (rel *Relation) LookupA(tcl TypeClause, ids ...EntityID) []EntityID {
+// LookupA returns a Cursor that will iterate over relations involving one or
+// more given A entities.
+func (rel *Relation) LookupA(tcl TypeClause, ids ...EntityID) Cursor {
 	if rel.aix == nil {
-		// TODO: warn about falling back to Cursor scan?
 		return rel.scanLookup(tcl, ids, rel.aids, rel.bids)
 	}
-	return rel.indexLookup(tcl, ids, rel.aids, rel.bids, rel.aix)
+	return rel.indexLookup(tcl, ids, rel.aids, rel.aix)
 }
 
-// LookupB returns a slice of A entities that are related to the given B
-// entities under the given type clause.
-func (rel *Relation) LookupB(tcl TypeClause, ids ...EntityID) []EntityID {
-	if rel.aix == nil {
-		// TODO: warn about falling back to Cursor scan?
+// LookupB returns a Cursor that will iterate over relations involving one or
+// more given B entities.
+func (rel *Relation) LookupB(tcl TypeClause, ids ...EntityID) Cursor {
+	if rel.bix == nil {
 		return rel.scanLookup(tcl, ids, rel.bids, rel.aids)
 	}
-	return rel.indexLookup(tcl, ids, rel.bids, rel.aids, rel.bix)
+	return rel.indexLookup(tcl, ids, rel.bids, rel.bix)
 }
 
 // Update relations specified by an optional where function and type

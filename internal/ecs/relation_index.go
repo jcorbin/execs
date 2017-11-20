@@ -22,25 +22,16 @@ func (rel *Relation) AddBIndex() {
 
 func (rel *Relation) indexLookup(
 	tcl TypeClause,
-	qids, aids, bids []EntityID,
+	qids, aids []EntityID,
 	aix []int,
-) []EntityID {
-	// TODO: tighter cardinality estimation
-	rset := make(map[EntityID]struct{}, len(rel.types))
-	for _, id := range qids {
-		for i := sort.Search(len(aix), func(i int) bool {
-			return aids[aix[i]] >= id
-		}); i < len(aix) && aids[aix[i]] == id; i++ {
-			if j := aix[i]; tcl.Test(rel.types[j]) {
-				rset[bids[j]] = struct{}{}
-			}
-		}
+) Cursor {
+	return &indexCursor{
+		rel:  rel,
+		tcl:  tcl,
+		qids: qids,
+		ids:  aids,
+		ix:   aix,
 	}
-	result := make([]EntityID, 0, len(rset))
-	for id := range rset {
-		result = append(result, id)
-	}
-	return result
 }
 
 func (rel Relation) aixLess(i, j int) bool { return rel.aids[rel.aix[i]] < rel.aids[rel.aix[j]] }
@@ -91,3 +82,52 @@ func sortit(
 ) {
 	sort.Sort(tmpSort{n, less, swap})
 }
+
+type indexCursor struct {
+	rel       *Relation
+	tcl       TypeClause
+	qidi      int
+	qids, ids []EntityID
+	ix        []int
+
+	r             RelationType
+	ent, aid, bid EntityID
+}
+
+func (ixc *indexCursor) scan() bool {
+	for ixc.qidi < len(ixc.qids) {
+		ixc.ent = ixc.qids[ixc.qidi]
+		ixc.qidi++
+		for i := sort.Search(len(ixc.ix), ixc.search); i < len(ixc.ix) && ixc.ids[ixc.ix[i]] == ixc.ent; i++ {
+			if j := ixc.ix[i]; ixc.tcl.Test(ixc.rel.types[j]) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (ixc indexCursor) search(i int) bool {
+	return ixc.ids[ixc.ix[i]] >= ixc.ent
+}
+
+func (ixc *indexCursor) Scan() bool {
+	if ixc.scan() {
+		ixc.r = RelationType(ixc.rel.types[ixc.ent-1] & ^relType)
+		return true
+	}
+	return false
+}
+
+func (ixc indexCursor) Count() int {
+	n := 0
+	for ixc.scan() {
+		n++
+	}
+	return n
+}
+
+func (ixc indexCursor) Entity() Entity  { return ixc.rel.Ref(ixc.ent) }
+func (ixc indexCursor) R() RelationType { return ixc.r }
+func (ixc indexCursor) A() Entity       { return ixc.rel.aCore.Ref(ixc.aid) }
+func (ixc indexCursor) B() Entity       { return ixc.rel.bCore.Ref(ixc.bid) }
