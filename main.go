@@ -346,17 +346,21 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 		w.playerMove = point.Zero
 	}
 
+	w.Process()
+
+	if w.over {
+		return view.ErrStop
+	}
+	return nil
+}
+
+func (w *world) Process() {
 	w.reset()             // reset state from last time
 	w.tick()              // run timers
 	w.applyMoves()        // player and ai
 	w.processCollisions() // e.g. deal damage
 	w.checkOver()         // no souls => done
 	w.maybeSpawn()        // spawn more demons
-
-	if w.over {
-		return view.ErrStop
-	}
-	return nil
 }
 
 func (w *world) reset() {
