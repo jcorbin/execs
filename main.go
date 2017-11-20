@@ -110,35 +110,37 @@ const (
 )
 
 func newWorld(v *view.View) (*world, error) {
-	w := &world{
-		rng:  rand.New(rand.NewSource(rand.Int63())),
-		View: v,
-
-		// TODO: consider eliminating the padding for EntityID(0)
-		Names:     []string{""},
-		Positions: []point.Point{point.Point{}},
-		Glyphs:    []rune{0},
-		BG:        []termbox.Attribute{0},
-		FG:        []termbox.Attribute{0},
-		timers:    []timer{timer{}},
-		bodies:    []*body{nil},
-		items:     []interface{}{nil},
-	}
-	w.moves.init(&w.Core)
-
 	f, err := os.Create(fmt.Sprintf("%v.log", time.Now().Format(time.RFC3339)))
 	if err != nil {
 		return nil, err
 	}
-	w.logger = log.New(f, "", 0)
+	w := &world{
+		rng:    rand.New(rand.NewSource(rand.Int63())),
+		View:   v,
+		logger: log.New(f, "", 0),
+	}
+	w.init()
 	w.log("logging to %q", f.Name())
+	return w, nil
+}
+
+func (w *world) init() {
+	// TODO: consider eliminating the padding for EntityID(0)
+	w.Names = []string{""}
+	w.Positions = []point.Point{point.Point{}}
+	w.Glyphs = []rune{0}
+	w.BG = []termbox.Attribute{0}
+	w.FG = []termbox.Attribute{0}
+	w.timers = []timer{timer{}}
+	w.bodies = []*body{nil}
+	w.items = []interface{}{nil}
+
+	w.moves.init(&w.Core)
 
 	w.RegisterAllocator(wcName|wcPosition|wcGlyph|wcBG|wcFG|wcBody|wcItem|wcTimer, w.allocWorld)
 	w.RegisterCreator(wcBody, w.createBody)
 	w.RegisterDestroyer(wcBody, w.destroyBody)
 	w.RegisterDestroyer(wcItem, w.destroyItem)
-
-	return w, nil
 }
 
 func (w *world) allocWorld(id ecs.EntityID, t ecs.ComponentType) {
