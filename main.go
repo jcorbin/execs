@@ -71,10 +71,12 @@ type world struct {
 type moves struct {
 	ecs.Relation
 	n []int
+	p []point.Point
 }
 
 const (
 	movN ecs.ComponentType = 1 << iota
+	movP
 
 	mrCollide ecs.RelationType = 1 << iota
 	mrGoal
@@ -86,12 +88,19 @@ const (
 func (mov *moves) init(core *ecs.Core) {
 	mov.Relation.Init(core, 0, core, 0)
 	mov.n = []int{0}
-	mov.RegisterAllocator(movN, mov.allocN)
+	mov.p = []point.Point{point.Zero}
+	mov.RegisterAllocator(movN|movP, mov.allocData)
+	mov.RegisterDestroyer(movN, mov.deleteN)
+	mov.RegisterDestroyer(movP, mov.deleteP)
 }
 
-func (mov *moves) allocN(id ecs.EntityID, t ecs.ComponentType) {
+func (mov *moves) allocData(id ecs.EntityID, t ecs.ComponentType) {
 	mov.n = append(mov.n, 0)
+	mov.p = append(mov.p, point.Zero)
 }
+
+func (mov *moves) deleteN(id ecs.EntityID, t ecs.ComponentType) { mov.n[id] = 0 }
+func (mov *moves) deleteP(id ecs.EntityID, t ecs.ComponentType) { mov.p[id] = point.Zero }
 
 type timer struct {
 	n int
@@ -444,10 +453,34 @@ func (w *world) aiTarget(ai ecs.Entity) (point.Point, bool) {
 
 	// revert to our goal...
 	for cur := w.moves.LookupA(ecs.AllRel(mrGoal), ai.ID()); cur.Scan(); {
-		if b := cur.B(); b.Type().All(wcPosition) {
-			return w.Positions[b.ID()], true
+		rel, goal := cur.Entity(), cur.B()
+		if goal.Type().All(wcPosition) {
+			myPos := w.Positions[ai.ID()]
+			goalPos := w.Positions[goal.ID()]
+			id := rel.ID()
+			if !rel.Type().All(movN | movP) {
+				rel.Add(movN | movP)
+				w.moves.p[id] = myPos
+				return goalPos, true
+			}
+			if lastPos := w.moves.p[id]; lastPos != myPos {
+				w.moves.n[id] = 0
+				w.moves.p[id] = myPos
+				return goalPos, true
+			}
+			w.moves.n[id]++
+			if w.moves.n[id] < 3 {
+				return goalPos, true
+			}
 		}
-		// TODO: bogus goal, should delete it
+
+		w.log("%s> giving up on %v @%v",
+			w.getName(ai, "anon"),
+			w.getName(goal, "???"),
+			w.Positions[goal.ID()],
+		)
+
+		rel.Destroy() // bogus or stuck goal
 	}
 
 	// ... no goal, pick one!
