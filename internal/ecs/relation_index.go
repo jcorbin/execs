@@ -26,12 +26,12 @@ func (rel *Relation) indexLookup(
 	aix []int,
 ) []EntityID {
 	// TODO: tighter cardinality estimation
-	rset := make(map[EntityID]struct{}, len(rel.Entities))
+	rset := make(map[EntityID]struct{}, len(rel.types))
 	for _, id := range qids {
 		for i := sort.Search(len(aix), func(i int) bool {
 			return aids[aix[i]] >= id
 		}); i < len(aix) && aids[aix[i]] == id; i++ {
-			if j := aix[i]; tcl.Test(rel.Entities[j]) {
+			if j := aix[i]; tcl.Test(rel.types[j]) {
 				rset[bids[j]] = struct{}{}
 			}
 		}

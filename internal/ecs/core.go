@@ -1,10 +1,9 @@
 package ecs
 
 // Core is the core of an Entity Component System: it manages the entity IDs
-// and types. IDs are off-by-one indices in the Entities slice (since the 0 ID
-// is invalid, ID 1 maps to Entities[0]). Types are simply the values in the slice
+// and types.
 type Core struct {
-	Entities []ComponentType
+	types []ComponentType
 
 	allocators, creators, destroyers []entityFunc
 }
@@ -21,7 +20,8 @@ type EntityID int
 // ComponentType represents the type of an Entity in a Core.
 type ComponentType uint64
 
-// NoType means that the Entities slot is unused.
+// NoType represents an unused entity; one that has been allocated, but not yet
+// handed out by AddEntity.
 const NoType ComponentType = 0
 
 // All returns true only if all of the masked type bits are set. If the mask is
@@ -35,7 +35,7 @@ func (t ComponentType) Any(mask ComponentType) bool { return mask == NoType || t
 // Len counts how many active entities exist.
 func (co *Core) Len() int {
 	n := 0
-	for _, t := range co.Entities {
+	for _, t := range co.types {
 		if t != NoType {
 			n++
 		}
@@ -46,12 +46,12 @@ func (co *Core) Len() int {
 // Cap returns how many entities have been statically allocated within the
 // Core. If Len() < Cap() then calls to AddEntity will re-use a prior id.
 func (co *Core) Cap() int {
-	return len(co.Entities)
+	return len(co.types)
 }
 
 // Empty returns true only if there are no active entities.
 func (co *Core) Empty() bool {
-	for _, t := range co.Entities {
+	for _, t := range co.types {
 		if t != NoType {
 			return false
 		}
@@ -61,7 +61,7 @@ func (co *Core) Empty() bool {
 
 // Clear destroys all active entities.
 func (co *Core) Clear() {
-	for i, t := range co.Entities {
+	for i, t := range co.types {
 		if t != NoType {
 			co.setType(EntityID(i+1), NoType)
 		}

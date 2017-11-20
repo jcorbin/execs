@@ -1,10 +1,10 @@
 package ecs
 
-// Iter returns a new iterator over the Core's Entities which satisfy the
+// Iter returns a new iterator over the Core's entities which satisfy the
 // given TypeClause.
 func (co *Core) Iter(tcl TypeClause) Iterator { return Iterator{co, -1, tcl} }
 
-// Iterator points into a Core's Entities, iterating over them with optional
+// Iterator points into a Core's entities, iterating over them with optional
 // type filter criteria.
 type Iterator struct {
 	co  *Core
@@ -16,8 +16,8 @@ type Iterator struct {
 // returns true if such an entity was found; otherwise iteration is done, and
 // false is returned.
 func (it *Iterator) Next() bool {
-	for it.i++; it.i < len(it.co.Entities); it.i++ {
-		t := it.co.Entities[it.i]
+	for it.i++; it.i < len(it.co.types); it.i++ {
+		t := it.co.types[it.i]
 		if it.tcl.Test(t) {
 			return true
 		}
@@ -41,15 +41,15 @@ func (it Iterator) Count() int {
 // Type returns the type of the current entity, or NoType if iteration is
 // done.
 func (it Iterator) Type() ComponentType {
-	if it.i < len(it.co.Entities) {
-		return it.co.Entities[it.i]
+	if it.i < len(it.co.types) {
+		return it.co.types[it.i]
 	}
 	return NoType
 }
 
 // ID returns the type of the current entity, or 0 if iteration is done.
 func (it Iterator) ID() EntityID {
-	if it.i < len(it.co.Entities) {
+	if it.i < len(it.co.types) {
 		return EntityID(it.i + 1)
 	}
 	return 0
@@ -58,7 +58,7 @@ func (it Iterator) ID() EntityID {
 // Entity returns a reference to the current entity, or NilEntity if
 // iteration is done.
 func (it Iterator) Entity() Entity {
-	if it.i < len(it.co.Entities) {
+	if it.i < len(it.co.types) {
 		return Entity{it.co, EntityID(it.i + 1)}
 	}
 	return NilEntity

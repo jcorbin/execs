@@ -24,7 +24,7 @@ func (cur Cursor) Count() int {
 	for it.Next() {
 		ent := it.Entity()
 		i := ent.ID() - 1
-		r := RelationType(cur.rel.Entities[i] & ^relType)
+		r := RelationType(cur.rel.types[i] & ^relType)
 		a := cur.rel.aCore.Ref(cur.rel.aids[i])
 		b := cur.rel.aCore.Ref(cur.rel.bids[i])
 		if cur.where(ent, a, b, r) {
@@ -39,7 +39,7 @@ func (cur *Cursor) Scan() bool {
 	for cur.it.Next() {
 		cur.ent = cur.it.Entity()
 		i := cur.ent.ID() - 1
-		cur.r = RelationType(cur.rel.Entities[i] & ^relType)
+		cur.r = RelationType(cur.rel.types[i] & ^relType)
 		cur.a = cur.rel.aCore.Ref(cur.rel.aids[i])
 		cur.b = cur.rel.aCore.Ref(cur.rel.bids[i])
 		if cur.where == nil || cur.where(cur.ent, cur.a, cur.b, cur.r) {

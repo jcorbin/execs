@@ -110,7 +110,7 @@ func (rel *Relation) destroyRel(id EntityID, t ComponentType) {
 }
 
 func (rel *Relation) destroyFromA(aid EntityID, t ComponentType) {
-	for i, t := range rel.Entities {
+	for i, t := range rel.types {
 		if t.All(relType) && rel.aids[i] == aid {
 			rel.setType(EntityID(i+1), NoType)
 		}
@@ -118,7 +118,7 @@ func (rel *Relation) destroyFromA(aid EntityID, t ComponentType) {
 }
 
 func (rel *Relation) destroyFromB(bid EntityID, t ComponentType) {
-	for i, t := range rel.Entities {
+	for i, t := range rel.types {
 		if t.All(relType) && rel.bids[i] == bid {
 			rel.setType(EntityID(i+1), NoType)
 		}
@@ -199,7 +199,7 @@ func (rel *Relation) scanLookup(
 	// TODO: if qids is big enough, build a set first
 	tcl.All |= relType
 	it := rel.Iter(tcl)
-	rset := make(map[EntityID]struct{}, len(rel.Entities))
+	rset := make(map[EntityID]struct{}, len(rel.types))
 	for it.Next() {
 		i := it.ID() - 1
 		aid := aids[i]

@@ -79,7 +79,7 @@ func (G *Graph) Leaves(
 			it.Entity(),
 			G.aCore.Ref(G.aids[i]),
 			G.aCore.Ref(G.bids[i]),
-			RelationType(G.Entities[i] & ^relType),
+			RelationType(G.types[i] & ^relType),
 		) {
 			continue
 		}
