@@ -10,15 +10,17 @@ type Cursor interface {
 	B() Entity
 }
 
-func (rel *Relation) scanLookup(
-	tcl TypeClause,
-	qids, aids, bids []EntityID,
-) Cursor {
+func (rel *Relation) scanLookup(tcl TypeClause, co bool, qids []EntityID) Cursor {
 	// TODO: if qids is big enough, build a set first
 	return rel.Cursor(tcl, func(ent, a, b Entity, r RelationType) bool {
-		aid := a.ID()
-		for _, id := range qids {
-			if id == aid {
+		var id EntityID
+		if co {
+			id = b.ID()
+		} else {
+			id = a.ID()
+		}
+		for _, qid := range qids {
+			if qid == id {
 				return true
 			}
 		}

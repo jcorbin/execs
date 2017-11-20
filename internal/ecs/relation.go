@@ -176,7 +176,7 @@ func (rel *Relation) Cursor(
 // more given A entities.
 func (rel *Relation) LookupA(tcl TypeClause, ids ...EntityID) Cursor {
 	if rel.aix == nil {
-		return rel.scanLookup(tcl, ids, rel.aids, rel.bids)
+		return rel.scanLookup(tcl, false, ids)
 	}
 	return rel.indexLookup(tcl, ids, rel.aids, rel.aix)
 }
@@ -185,7 +185,7 @@ func (rel *Relation) LookupA(tcl TypeClause, ids ...EntityID) Cursor {
 // more given B entities.
 func (rel *Relation) LookupB(tcl TypeClause, ids ...EntityID) Cursor {
 	if rel.bix == nil {
-		return rel.scanLookup(tcl, ids, rel.bids, rel.aids)
+		return rel.scanLookup(tcl, true, ids)
 	}
 	return rel.indexLookup(tcl, ids, rel.bids, rel.bix)
 }
