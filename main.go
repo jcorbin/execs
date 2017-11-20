@@ -731,22 +731,6 @@ func (w *world) move(ent ecs.Entity, move point.Point) point.Point {
 	return pos
 }
 
-func d6() int { return rand.Intn(5) + 1 }
-
-func rollStat() int {
-	a, b, c, d := d6(), d6(), d6(), d6()
-	if d < c {
-		c, d = d, c
-	}
-	if c < b {
-		b, c = c, b
-	}
-	if b < a {
-		a, b = b, a
-	}
-	return c + c + b
-}
-
 func key2move(k view.KeyEvent) (point.Point, bool) {
 	switch k.Key {
 	case termbox.KeyArrowDown:
