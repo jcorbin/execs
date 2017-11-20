@@ -73,6 +73,12 @@ func RelType(t RelationType) ComponentType {
 	return ComponentType(t) | relType
 }
 
+// AnyRel is a convenience for Any(RelType(t)).
+func AnyRel(t RelationType) TypeClause { return Any(RelType(t)) }
+
+// AllRel is a convenience for All(RelType(t)).
+func AllRel(t RelationType) TypeClause { return All(RelType(t)) }
+
 func (rel *Relation) allocRel(id EntityID, t ComponentType) {
 	i := len(rel.aids)
 	rel.aids = append(rel.aids, 0)
