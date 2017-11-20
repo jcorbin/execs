@@ -52,7 +52,7 @@ type world struct {
 	View    *view.View
 	ecs.Core
 
-	over bool
+	over         bool
 	playerMove   point.Point
 	enemyCounter int
 
@@ -351,33 +351,7 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 	w.applyMoves()        // player and ai
 	w.processCollisions() // e.g. deal damage
 	w.checkOver()         // no souls => done
-
-	// maybe spawn
-	// TODO: randomize position?
-	if hit := w.collides(w.Ref(0), point.Zero); hit == ecs.NilEntity {
-		sum := 0
-		for it := w.Iter(ecs.All(wcBody)); it.Next(); {
-			sum += w.bodies[it.ID()].HP()
-		}
-
-		var enemy ecs.Entity
-		if it := w.Iter(ecs.All(charMask | wcWaiting)); it.Next() {
-			enemy = it.Entity()
-		} else {
-			w.enemyCounter++
-			enemy = w.newChar(fmt.Sprintf("enemy%d", w.enemyCounter), 'X')
-			enemy.Add(wcWaiting)
-		}
-		bo := w.bodies[enemy.ID()]
-		if hp := bo.HP(); w.rng.Intn(sum+hp) < hp {
-			enemy.Delete(wcWaiting)
-			enemy.Add(wcPosition | wcCollide | wcInput | wcAI)
-			w.log("%s enters the world @%v stats: %+v",
-				w.Names[enemy.ID()],
-				w.Positions[enemy.ID()],
-				bo.Stats())
-		}
-	}
+	w.maybeSpawn()        // spawn more demons
 
 	if w.over {
 		return view.ErrStop
@@ -513,6 +487,37 @@ func (w *world) checkOver() {
 	if w.Iter(ecs.All(wcSoul)).Count() == 0 {
 		w.log("game over")
 		w.over = true
+	}
+}
+
+func (w *world) maybeSpawn() {
+	// TODO: randomize position?
+	hit := w.collides(w.Ref(0), point.Zero)
+	if hit != ecs.NilEntity {
+		return
+	}
+
+	var enemy ecs.Entity
+	if it := w.Iter(ecs.All(charMask | wcWaiting)); it.Next() {
+		enemy = it.Entity()
+	} else {
+		w.enemyCounter++
+		enemy = w.newChar(fmt.Sprintf("enemy%d", w.enemyCounter), 'X')
+		enemy.Add(wcWaiting)
+	}
+	bo := w.bodies[enemy.ID()]
+
+	sum := 0
+	for it := w.Iter(ecs.All(wcBody)); it.Next(); {
+		sum += w.bodies[it.ID()].HP()
+	}
+	if hp := bo.HP(); w.rng.Intn(sum+hp) < hp {
+		enemy.Delete(wcWaiting)
+		enemy.Add(wcPosition | wcCollide | wcInput | wcAI)
+		w.log("%s enters the world @%v stats: %+v",
+			w.Names[enemy.ID()],
+			w.Positions[enemy.ID()],
+			bo.Stats())
 	}
 }
 
