@@ -169,7 +169,7 @@ func (rel *Relation) Cursor(
 ) Cursor {
 	tcl.All |= relType
 	it := rel.Iter(tcl)
-	return Cursor{rel: rel, it: it, where: where}
+	return &iterCursor{rel: rel, it: it, where: where}
 }
 
 // LookupA returns a slice of B entities that are related to the given A

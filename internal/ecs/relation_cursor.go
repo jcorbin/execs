@@ -1,7 +1,17 @@
 package ecs
 
-// Cursor supports iterating over relations; see Relation.Cursor.
-type Cursor struct {
+// Cursor iterates through a Relation.
+type Cursor interface {
+	Scan() bool
+	Count() int
+	Entity() Entity
+	R() RelationType
+	A() Entity
+	B() Entity
+}
+
+// iterCursor supports iterating over relations; see Relation.iterCursor.
+type iterCursor struct {
 	rel *Relation
 
 	it    Iterator
@@ -14,7 +24,7 @@ type Cursor struct {
 }
 
 // Count scans ahead and returns a count of how many records are to come.
-func (cur Cursor) Count() int {
+func (cur iterCursor) Count() int {
 	if cur.where == nil {
 		return cur.it.Count()
 	}
@@ -35,7 +45,7 @@ func (cur Cursor) Count() int {
 }
 
 // Scan advances the cursor return false if the scan is done, true otherwise.
-func (cur *Cursor) Scan() bool {
+func (cur *iterCursor) Scan() bool {
 	for cur.it.Next() {
 		cur.ent = cur.it.Entity()
 		i := cur.ent.ID() - 1
@@ -54,13 +64,13 @@ func (cur *Cursor) Scan() bool {
 }
 
 // Entity returns the current relation entity.
-func (cur Cursor) Entity() Entity { return cur.ent }
+func (cur iterCursor) Entity() Entity { return cur.ent }
 
 // R returns the current relation type.
-func (cur Cursor) R() RelationType { return cur.r }
+func (cur iterCursor) R() RelationType { return cur.r }
 
 // A returns the current a-side entity.
-func (cur Cursor) A() Entity { return cur.a }
+func (cur iterCursor) A() Entity { return cur.a }
 
 // B returns the current b-side entity.
-func (cur Cursor) B() Entity { return cur.b }
+func (cur iterCursor) B() Entity { return cur.b }
