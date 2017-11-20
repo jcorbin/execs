@@ -451,7 +451,22 @@ func (w *world) aiTarget(ai ecs.Entity) (point.Point, bool) {
 		// TODO: bogus goal, should delete it
 	}
 
-	// ... no goal, pick one randomly!
+	// ... no goal, pick one!
+	if goal := w.chooseAIGoal(ai); goal != ecs.NilEntity {
+		w.moves.Insert(mrGoal, ai, goal)
+		w.log("%s> going to boop %v @%v",
+			w.getName(ai, "anon"),
+			w.getName(goal, "???"),
+			w.Positions[goal.ID()],
+		)
+		return w.Positions[goal.ID()], true
+	}
+
+	return point.Zero, false
+}
+
+func (w *world) chooseAIGoal(ai ecs.Entity) ecs.Entity {
+	// TODO: doesn't always cause progress, get stuck on the edge sometimes
 	myPos := w.Positions[ai.ID()]
 	goal, sum := ecs.NilEntity, 0
 	for it := w.Iter(ecs.All(collMask)); it.Next(); {
@@ -465,21 +480,34 @@ func (w *world) aiTarget(ai ecs.Entity) (point.Point, bool) {
 			}
 		}
 	}
-	if goal != ecs.NilEntity {
-		w.moves.Insert(mrGoal, ai, goal)
-		return w.Positions[goal.ID()], true
-	}
-
-	return point.Zero, false
+	return goal
 }
 
 func (w *world) processCollisions() {
-	// collisions deal damage
-	for cur := w.moves.Cursor(ecs.AllRel(mrCollide), func(ent, a, b ecs.Entity, r ecs.RelationType) bool {
-		return a.Type().All(combatMask) && b.Type().All(combatMask)
-	}); cur.Scan(); {
-		w.attack(cur.A(), cur.B()) // TODO: subsume
-		// TODO: store damage and kill relations, update agro relations
+	for cur := w.moves.Cursor(ecs.AllRel(mrCollide), nil); cur.Scan(); {
+		a, b := cur.A(), cur.B()
+
+		if a.Type().All(combatMask) && b.Type().All(combatMask) {
+			// combat collisions deal damage
+			w.attack(cur.A(), cur.B()) // TODO: subsume
+			// TODO: store damage and kill relations, update agro relations
+		}
+
+		// am ai?
+		if a.Type().All(aiMoveMask) {
+			// have booped?
+			for gc := w.moves.LookupA(ecs.AllRel(mrGoal), a.ID()); gc.Scan(); {
+				if gc.B() == b {
+					w.log("%s> booped %v @%v",
+						w.getName(a, "anon"),
+						w.getName(b, "???"),
+						w.Positions[b.ID()],
+					)
+					gc.Entity().Destroy()
+					break
+				}
+			}
+		}
 	}
 }
 
