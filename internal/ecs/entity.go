@@ -15,7 +15,7 @@ func (ent Entity) Type() ComponentType {
 	if ent.co == nil || ent.id == 0 {
 		return NoType
 	}
-	return ent.co.Entities[ent.id-1]
+	return ent.co.types[ent.id-1]
 }
 
 // ID returns the ID of the referenced entity; it SHOULD only be called in a
@@ -43,71 +43,106 @@ func (co *Core) Deref(e Entity) EntityID {
 // Ref returns an Entity reference to the given ID; it is valid to return a
 // reference to the zero entity, to represent "no entity, in this Core" (e.g.
 // will Deref() to 0 EntityID).
-func (co *Core) Ref(id EntityID) Entity { return Entity{co, id} }
+func (co *Core) Ref(id EntityID) Entity {
+	if id == 0 {
+		return NilEntity
+	}
+	return Entity{co, id}
+}
 
 // AddEntity adds an entity to a core, returning an Entity reference; it MAY
-// re-use an unused Entities entry (one whose type is still NoType).
-//
-// Invokes all allocators if it allocates a new EntityID in Entities. Invokes
-// any creator functions.
+// re-use a previously-used but since-destroyed entity (one whose type is still
+// NoType). MAY invokes all allocators to make space for more entities (will do
+// so if Cap() == Len()).
 func (co *Core) AddEntity(nt ComponentType) Entity {
-	ent := Entity{co: co}
-	for i, ot := range co.Entities {
-		if ot == NoType {
-			ent.id = EntityID(i + 1)
-			co.Entities[i] = nt
-			break
-		}
-	}
-	if ent.id == 0 {
-		ent.id = EntityID(len(co.Entities) + 1)
-		co.Entities = append(co.Entities, nt)
-		for _, ef := range co.allocators {
-			ef.f(ent.id, nt)
-		}
-	}
-	for _, ef := range co.creators {
-		if nt.All(ef.t) {
-			ef.f(ent.id, nt)
-		}
-	}
+	ent := Entity{co, co.allocate()}
+	co.setType(ent.id, nt)
 	return ent
 }
 
-// Add sets bits in the entity's type, calling any creator functions that are
-// newly satisfied by the new type.
+// Add sets bits in the entity's type, calling any creators that are newly
+// satisfied by the new type.
 func (ent Entity) Add(t ComponentType) {
-	old := ent.co.Entities[ent.id-1]
-	new := old | t
-	ent.co.Entities[ent.id-1] = new
-	for _, ef := range ent.co.creators {
-		if new.All(ef.t) && !old.All(ef.t) {
-			ef.f(ent.id, new)
-		}
+	if ent.co != nil && ent.id > 0 {
+		old := ent.co.types[ent.id-1]
+		ent.co.setType(ent.id, old|t)
 	}
 }
 
-// Delete clears bits in the entity's type, calling any destroyer functions
-// that are no longer satisfied by the new type.
+// Delete clears bits in the entity's type, calling any destroyers that are no
+// longer satisfied by the new type (which may be NoType).
 func (ent Entity) Delete(t ComponentType) {
-	old := ent.co.Entities[ent.id-1]
-	new := old & ^t
-	ent.co.Entities[ent.id-1] = new
-	for _, ef := range ent.co.destroyers {
-		if old.All(ef.t) && !new.All(ef.t) {
-			ef.f(ent.id, new)
-		}
+	if ent.co != nil && ent.id > 0 {
+		old := ent.co.types[ent.id-1]
+		ent.co.setType(ent.id, old & ^t)
 	}
 }
 
-// Destroy sets the entity's type to NoType, invoking any destroyer functions
-// that match the prior type.`
+// Destroy sets the entity's type to NoType, invoking any destroyers that match
+// the prior type.`
 func (ent Entity) Destroy() {
-	old := ent.co.Entities[ent.id-1]
-	ent.co.Entities[ent.id-1] = NoType
-	for _, ef := range ent.co.destroyers {
-		if old.All(ef.t) {
-			ef.f(ent.id, NoType)
+	if ent.co != nil && ent.id > 0 {
+		ent.co.setType(ent.id, NoType)
+	}
+}
+
+// SetType sets the entity's type; may invoke creators and destroyers as
+// appropriate.
+func (ent Entity) SetType(t ComponentType) {
+	if ent.co != nil && ent.id > 0 {
+		ent.co.setType(ent.id, t)
+	}
+}
+
+func (co *Core) allocate() EntityID {
+	i := 0
+	for ; i < len(co.types); i++ {
+		if co.types[i] == NoType {
+			return EntityID(i + 1)
+		}
+	}
+	id := EntityID(i + 1)
+	co.types = append(co.types, NoType)
+	for _, ef := range co.allocators {
+		ef.f(id, NoType)
+	}
+	return id
+}
+
+func (co *Core) setType(id EntityID, new ComponentType) {
+	var (
+		old       = co.types[id-1]
+		diff      = old ^ new
+		created   = new & diff
+		destroyed = old & diff
+	)
+	co.types[id-1] = new
+	if old == NoType {
+		for _, ef := range co.creators {
+			if ef.t == NoType {
+				ef.f(id, new)
+			}
+		}
+	}
+	if created != 0 {
+		for _, ef := range co.creators {
+			if new.All(ef.t) && !old.All(ef.t) {
+				ef.f(id, new)
+			}
+		}
+	}
+	if destroyed != 0 {
+		for _, ef := range co.destroyers {
+			if old.All(ef.t) && !new.All(ef.t) {
+				ef.f(id, new)
+			}
+		}
+	}
+	if new == NoType {
+		for _, ef := range co.destroyers {
+			if ef.t == NoType {
+				ef.f(id, new)
+			}
 		}
 	}
 }

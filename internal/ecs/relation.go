@@ -1,6 +1,15 @@
 package ecs
 
-import "sort"
+// RelationFlags specifies options for the A or B dimension in a Relation.
+type RelationFlags uint32
+
+const (
+	// RelationCascadeDestroy causes destruction of an entity relation to
+	// destroy related entities within the flagged dimension.
+	RelationCascadeDestroy RelationFlags = 1 << iota
+
+	// RelationRestrictDeletes TODO: cannot abort a destroy at present
+)
 
 // Relation contains entities that represent relations between entities in two
 // (maybe different) Cores. Users may attach arbitrary data to these relations
@@ -10,6 +19,7 @@ import "sort"
 type Relation struct {
 	Core
 	aCore, bCore *Core
+	aFlag, bFlag RelationFlags
 	aids         []EntityID
 	bids         []EntityID
 	fix          bool
@@ -17,37 +27,33 @@ type Relation struct {
 	bix          []int
 }
 
+// TODO: Where interface with WhereFunc convenience (would allow using indices more)
+// TODO: secondary indices, uniqueness, keys, etc
+// TODO: joins
+
 // NewRelation creates a new relation for the given Core systems.
-func NewRelation(aCore, bCore *Core) *Relation {
+func NewRelation(
+	aCore *Core, aFlags RelationFlags,
+	bCore *Core, bFlags RelationFlags,
+) *Relation {
 	rel := &Relation{}
-	rel.Init(aCore, bCore)
+	rel.Init(aCore, aFlags, bCore, bFlags)
 	return rel
 }
 
 // Init initializes the entity relation; useful for embedding.
-func (rel *Relation) Init(aCore, bCore *Core) {
-	rel.aCore = aCore
-	rel.bCore = bCore
+func (rel *Relation) Init(
+	aCore *Core, aFlags RelationFlags,
+	bCore *Core, bFlags RelationFlags,
+) {
+	rel.aCore, rel.aFlag = aCore, aFlags
+	rel.bCore, rel.bFlag = bCore, bFlags
 	rel.RegisterAllocator(relType, rel.allocRel)
-	rel.RegisterCreator(relType, nil, rel.destroyRel)
-}
-
-// AddAIndex adds an index for A-side entity IDs.
-func (rel *Relation) AddAIndex() {
-	rel.aix = make([]int, len(rel.aids))
-	for i := range rel.aids {
-		rel.aix[i] = i
+	rel.RegisterDestroyer(relType, rel.destroyRel)
+	rel.aCore.RegisterDestroyer(NoType, rel.destroyFromA)
+	if rel.aCore != rel.bCore {
+		rel.bCore.RegisterDestroyer(NoType, rel.destroyFromB)
 	}
-	sortit(len(rel.aix), rel.aixLess, rel.aixSwap)
-}
-
-// AddBIndex adds an index for B-side entity IDs.
-func (rel *Relation) AddBIndex() {
-	rel.bix = make([]int, len(rel.bids))
-	for i := range rel.bids {
-		rel.bix[i] = i
-	}
-	sortit(len(rel.bix), rel.bixLess, rel.bixSwap)
 }
 
 // RelationType specified the type of a relation, it's basically a
@@ -81,8 +87,18 @@ func (rel *Relation) allocRel(id EntityID, t ComponentType) {
 
 func (rel *Relation) destroyRel(id EntityID, t ComponentType) {
 	i := int(id) - 1
-	rel.aids[i] = 0
-	rel.bids[i] = 0
+	if aid := rel.aids[i]; aid != 0 {
+		if rel.aFlag&RelationCascadeDestroy != 0 {
+			rel.aCore.setType(aid, NoType)
+		}
+		rel.aids[i] = 0
+	}
+	if bid := rel.bids[i]; bid != 0 {
+		if rel.bFlag&RelationCascadeDestroy != 0 {
+			rel.bCore.setType(bid, NoType)
+		}
+		rel.bids[i] = 0
+	}
 	if !rel.fix {
 		if rel.aix != nil {
 			fix(len(rel.aix), i, rel.aixLess, rel.aixSwap)
@@ -93,20 +109,18 @@ func (rel *Relation) destroyRel(id EntityID, t ComponentType) {
 	}
 }
 
-// DestroyReferencesTo destroys all relations referencing the given ids.
-func (rel *Relation) DestroyReferencesTo(tcl TypeClause, aid, bid EntityID) {
-	tcl.All |= relType
-	dedup := make(map[int]struct{}, len(rel.Entities))
-	for i, t := range rel.Entities {
-		if tcl.Test(t) {
-			if _, seen := dedup[i]; seen {
-				continue
-			}
-			if (aid > 0 && rel.aids[i] == aid) ||
-				(bid > 0 && rel.bids[i] == bid) {
-				dedup[i] = struct{}{}
-				defer rel.Ref(EntityID(i + 1)).Destroy()
-			}
+func (rel *Relation) destroyFromA(aid EntityID, t ComponentType) {
+	for i, t := range rel.types {
+		if t.All(relType) && rel.aids[i] == aid {
+			rel.setType(EntityID(i+1), NoType)
+		}
+	}
+}
+
+func (rel *Relation) destroyFromB(bid EntityID, t ComponentType) {
+	for i, t := range rel.types {
+		if t.All(relType) && rel.bids[i] == bid {
+			rel.setType(EntityID(i+1), NoType)
 		}
 	}
 }
@@ -155,97 +169,25 @@ func (rel *Relation) Cursor(
 ) Cursor {
 	tcl.All |= relType
 	it := rel.Iter(tcl)
-	return Cursor{rel: rel, it: it, where: where}
+	return &iterCursor{rel: rel, it: it, where: where}
 }
 
-// LookupA returns a slice of B entities that are related to the given A
-// entities under the given type clause.
-func (rel *Relation) LookupA(tcl TypeClause, ids ...EntityID) []EntityID {
+// LookupA returns a Cursor that will iterate over relations involving one or
+// more given A entities.
+func (rel *Relation) LookupA(tcl TypeClause, ids ...EntityID) Cursor {
 	if rel.aix == nil {
-		// TODO: warn about falling back to Cursor scan?
 		return rel.scanLookup(tcl, ids, rel.aids, rel.bids)
 	}
-	return rel.indexLookup(tcl, ids, rel.aids, rel.bids, rel.aix)
+	return rel.indexLookup(tcl, ids, rel.aids, rel.aix)
 }
 
-// LookupB returns a slice of A entities that are related to the given B
-// entities under the given type clause.
-func (rel *Relation) LookupB(tcl TypeClause, ids ...EntityID) []EntityID {
-	if rel.aix == nil {
-		// TODO: warn about falling back to Cursor scan?
+// LookupB returns a Cursor that will iterate over relations involving one or
+// more given B entities.
+func (rel *Relation) LookupB(tcl TypeClause, ids ...EntityID) Cursor {
+	if rel.bix == nil {
 		return rel.scanLookup(tcl, ids, rel.bids, rel.aids)
 	}
-	return rel.indexLookup(tcl, ids, rel.bids, rel.aids, rel.bix)
-}
-
-func (rel *Relation) scanLookup(
-	tcl TypeClause,
-	qids, aids, bids []EntityID,
-) []EntityID {
-	// TODO: if qids is big enough, build a set first
-	tcl.All |= relType
-	it := rel.Iter(tcl)
-	rset := make(map[EntityID]struct{}, len(rel.Entities))
-	for it.Next() {
-		i := it.ID() - 1
-		aid := aids[i]
-		for _, id := range qids {
-			if id == aid {
-				rset[bids[i]] = struct{}{}
-				break
-			}
-		}
-	}
-	result := make([]EntityID, 0, len(rset))
-	for id := range rset {
-		result = append(result, id)
-	}
-	return result
-}
-
-func (rel *Relation) indexLookup(
-	tcl TypeClause,
-	qids, aids, bids []EntityID,
-	aix []int,
-) []EntityID {
-	// TODO: tighter cardinality estimation
-	rset := make(map[EntityID]struct{}, len(rel.Entities))
-	for _, id := range qids {
-		for i := sort.Search(len(aix), func(i int) bool {
-			return aids[aix[i]] >= id
-		}); i < len(aix) && aids[aix[i]] == id; i++ {
-			if j := aix[i]; tcl.Test(rel.Entities[j]) {
-				rset[bids[j]] = struct{}{}
-			}
-		}
-	}
-	result := make([]EntityID, 0, len(rset))
-	for id := range rset {
-		result = append(result, id)
-	}
-	return result
-}
-
-func (rel Relation) aixLess(i, j int) bool { return rel.aids[rel.aix[i]] < rel.aids[rel.aix[j]] }
-func (rel Relation) bixLess(i, j int) bool { return rel.bids[rel.bix[i]] < rel.bids[rel.bix[j]] }
-
-func (rel Relation) aixSwap(i, j int) { rel.aix[i], rel.aix[j] = rel.aix[j], rel.aix[i] }
-func (rel Relation) bixSwap(i, j int) { rel.bix[i], rel.bix[j] = rel.bix[j], rel.bix[i] }
-
-func (rel *Relation) deferIndexing() func() {
-	if rel.aix == nil && rel.bix == nil {
-		return nil
-	}
-	rel.fix = true
-	return func() {
-		if rel.aix != nil {
-			sortit(len(rel.aix), rel.aixLess, rel.aixSwap)
-		}
-		if rel.bix != nil {
-			sortit(len(rel.aix), rel.aixLess, rel.aixSwap)
-		}
-		rel.fix = false
-	}
+	return rel.indexLookup(tcl, ids, rel.bids, rel.bix)
 }
 
 // Update relations specified by an optional where function and type
@@ -267,7 +209,7 @@ func (rel *Relation) Update(
 		oa, ob, or := cur.A(), cur.B(), cur.R()
 		na, nb := set(ent, oa, ob, or)
 		if na == NilEntity || nb == NilEntity {
-			cur.Entity().Destroy()
+			rel.setType(cur.Entity().ID(), NoType)
 			continue
 		}
 		i := ent.ID() - 1
@@ -292,102 +234,6 @@ func (rel *Relation) Delete(
 	}
 	cur := rel.Cursor(tcl, where)
 	for cur.Scan() {
-		cur.Entity().Destroy()
+		rel.setType(cur.Entity().ID(), NoType)
 	}
-}
-
-// TODO: Where interface with WhereFunc convenience (would allow using indices more)
-// TODO: secondary indices, uniqueness, keys, etc
-// TODO: joins
-
-// Cursor supports iterating over relations; see Relation.Cursor.
-type Cursor struct {
-	rel *Relation
-
-	it    Iterator
-	where func(ent, a, b Entity, r RelationType) bool
-
-	ent Entity
-	a   Entity
-	r   RelationType
-	b   Entity
-}
-
-// Count scans ahead and returns a count of how many records are to come.
-func (cur Cursor) Count() int {
-	if cur.where == nil {
-		return cur.it.Count()
-	}
-
-	n := 0
-	it := cur.it
-	for it.Next() {
-		ent := it.Entity()
-		i := ent.ID() - 1
-		r := RelationType(cur.rel.Entities[i] & ^relType)
-		a := cur.rel.aCore.Ref(cur.rel.aids[i])
-		b := cur.rel.aCore.Ref(cur.rel.bids[i])
-		if cur.where(ent, a, b, r) {
-			n++
-		}
-	}
-	return n
-}
-
-// Scan advances the cursor return false if the scan is done, true otherwise.
-func (cur *Cursor) Scan() bool {
-	for cur.it.Next() {
-		cur.ent = cur.it.Entity()
-		i := cur.ent.ID() - 1
-		cur.r = RelationType(cur.rel.Entities[i] & ^relType)
-		cur.a = cur.rel.aCore.Ref(cur.rel.aids[i])
-		cur.b = cur.rel.aCore.Ref(cur.rel.bids[i])
-		if cur.where == nil || cur.where(cur.ent, cur.a, cur.b, cur.r) {
-			return true
-		}
-	}
-	cur.ent = NilEntity
-	cur.r = 0
-	cur.a = NilEntity
-	cur.b = NilEntity
-	return false
-}
-
-// Entity returns the current relation entity.
-func (cur Cursor) Entity() Entity { return cur.ent }
-
-// R returns the current relation type.
-func (cur Cursor) R() RelationType { return cur.r }
-
-// A returns the current a-side entity.
-func (cur Cursor) A() Entity { return cur.a }
-
-// B returns the current b-side entity.
-func (cur Cursor) B() Entity { return cur.b }
-
-type tmpSort struct {
-	n    int
-	less func(i, j int) bool
-	swap func(i, j int)
-}
-
-func (ts tmpSort) Len() int           { return ts.n }
-func (ts tmpSort) Less(i, j int) bool { return ts.less(i, j) }
-func (ts tmpSort) Swap(i, j int)      { ts.swap(i, j) }
-
-func fix(
-	i, n int,
-	less func(i, j int) bool,
-	swap func(i, j int),
-) {
-	// TODO: something more minimal, since we assume sorted order but for [i]
-	sortit(n, less, swap)
-}
-
-func sortit(
-	n int,
-	less func(i, j int) bool,
-	swap func(i, j int),
-) {
-	sort.Sort(tmpSort{n, less, swap})
 }
