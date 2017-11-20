@@ -37,12 +37,6 @@ const (
 )
 
 const (
-	mrCollide ecs.RelationType = 1 << iota
-	mrDamage
-	mrKill
-)
-
-const (
 	renderMask   = wcPosition | wcGlyph
 	playMoveMask = wcPosition | wcInput | wcSoul
 	charMask     = wcName | wcGlyph | wcBody
@@ -58,6 +52,8 @@ type world struct {
 	View    *view.View
 	ecs.Core
 
+	enemyCounter int
+
 	Names     []string
 	Positions []point.Point
 	Glyphs    []rune
@@ -68,7 +64,32 @@ type world struct {
 	items     []interface{}
 
 	coll  []ecs.EntityID // TODO: use an index structure for this
-	moves ecs.Relation
+	moves moves
+}
+
+type moves struct {
+	ecs.Relation
+	n []int
+}
+
+const (
+	movN ecs.ComponentType = 1 << iota
+
+	mrCollide ecs.RelationType = 1 << iota
+	mrGoal
+	mrAgro
+	mrDamage
+	mrKill
+)
+
+func (mov *moves) init(core *ecs.Core) {
+	mov.Relation.Init(core, 0, core, 0)
+	mov.n = []int{0}
+	mov.RegisterAllocator(movN, mov.allocN)
+}
+
+func (mov *moves) allocN(id ecs.EntityID, t ecs.ComponentType) {
+	mov.n = append(mov.n, 0)
 }
 
 type timer struct {
@@ -101,7 +122,7 @@ func newWorld(v *view.View) (*world, error) {
 		bodies:    []*body{nil},
 		items:     []interface{}{nil},
 	}
-	w.moves.Init(&w.Core, 0, &w.Core, 0)
+	w.moves.init(&w.Core)
 
 	f, err := os.Create(fmt.Sprintf("%v.log", time.Now().Format(time.RFC3339)))
 	if err != nil {
@@ -171,7 +192,7 @@ func (w *world) Render(ctx *view.Context) error {
 		bo := w.bodies[it.ID()]
 
 		parts := make([]string, 0, bo.Len())
-		for gt := bo.rel.Traverse(ecs.All(ecs.RelType(brControl)), ecs.TraverseDFS); gt.Traverse(); {
+		for gt := bo.rel.Traverse(ecs.AllRel(brControl), ecs.TraverseDFS); gt.Traverse(); {
 			ent := gt.Node()
 			parts = append(parts, fmt.Sprintf("%s:%v", bo.DescribePart(ent), bo.hp[ent.ID()]))
 		}
@@ -194,7 +215,7 @@ func (w *world) Render(ctx *view.Context) error {
 		bbox  point.Box
 		focus point.Point
 	)
-	for it = w.Iter(ecs.All(renderMask)); it.Next(); {
+	for it := w.Iter(ecs.All(renderMask)); it.Next(); {
 		pos := w.Positions[it.ID()]
 		if it.Type().All(wcSoul) {
 			// TODO: centroid between all souls would be a way to move beyond
@@ -224,7 +245,7 @@ func (w *world) Render(ctx *view.Context) error {
 
 	zVals := make([]uint8, len(ctx.Grid.Data))
 
-	for it = w.Iter(ecs.Clause(wcPosition, wcGlyph|wcBG)); it.Next(); {
+	for it := w.Iter(ecs.Clause(wcPosition, wcGlyph|wcBG)); it.Next(); {
 		pos := w.Positions[it.ID()].Add(offset)
 		if !pos.Less(point.Zero) && !ctx.Grid.Size.Less(pos) {
 			var (
@@ -296,6 +317,14 @@ func (w *world) Render(ctx *view.Context) error {
 	return nil
 }
 
+func (w *world) extent() point.Box {
+	var bbox point.Box
+	for it := w.Iter(ecs.All(renderMask)); it.Next(); {
+		bbox = bbox.ExpandTo(w.Positions[it.ID()])
+	}
+	return bbox
+}
+
 func (w *world) Close() error { return nil }
 
 func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
@@ -331,32 +360,93 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 		}
 	}
 
-	// reset move table
-	w.moves.Clear()
+	// reset collisions, damage, and kills
+	w.moves.Delete(ecs.AnyRel(mrCollide|mrDamage|mrKill), nil)
 
 	// collect collidables
 	w.prepareCollidables()
 
-	// ai chase target; last one wins for now TODO
-	var target point.Point
-
 	// apply player move
 	if move, ok := key2move(k); ok {
 		for it := w.Iter(ecs.All(playMoveMask)); it.Next(); {
-			target = w.move(it.Entity(), move)
+			w.move(it.Entity(), move)
 		}
 	}
 
-	// chase player
+	// generate ai moves
 	for it := w.Iter(ecs.All(aiMoveMask)); it.Next(); {
-		w.move(it.Entity(), target.Sub(w.Positions[it.ID()]).Sign())
+		myPos := w.Positions[it.ID()]
+		found := false
+		var target point.Point
+
+		// chase the thing we hate the most
+		opp, hate := ecs.NilEntity, 0
+		for cur := w.moves.LookupA(ecs.AllRel(mrAgro), it.ID()); cur.Scan(); {
+			ent := cur.Entity()
+			if ent.Type().All(movN) {
+				// TODO: take other factors like distance into account
+				if n := w.moves.n[ent.ID()]; n > hate {
+					if b := cur.B(); b.Type().All(combatMask) {
+						opp, hate = b, n
+					}
+				}
+			}
+		}
+		if opp != ecs.NilEntity {
+			w.log("%v hates %v the most", w.getName(it.Entity(), "?!?"), w.getName(opp, "!?!"))
+			target = w.Positions[opp.ID()]
+			found = true
+		}
+
+		// revert to our goal...
+		for cur := w.moves.LookupA(ecs.AllRel(mrGoal), it.ID()); cur.Scan(); {
+			if b := cur.B(); b.Type().All(wcPosition) {
+				target = w.Positions[b.ID()]
+				found = true
+				break
+			}
+			// TODO: bogus goal, should delete it
+		}
+		if !found {
+			// ... no goal, pick one randomly!
+			choice, sum := ecs.EntityID(0), 0
+			for it := w.Iter(ecs.All(collMask)); it.Next(); {
+				if !it.Type().All(combatMask) {
+					pos := w.Positions[it.ID()]
+					diff := pos.Sub(myPos)
+					quad := diff.X*diff.X + diff.Y*diff.Y
+					sum += quad
+					if w.rng.Intn(sum) < quad {
+						choice = it.ID()
+						found = true
+					}
+				}
+			}
+			if found {
+				w.moves.Insert(mrGoal, it.Entity(), w.Ref(choice))
+				target = w.Positions[choice]
+			}
+		}
+
+		// Move towards the target!
+		if found {
+			w.move(it.Entity(), target.Sub(myPos).Sign())
+			continue
+		}
+
+		// No? give up and just randomly budge then!
+		w.move(it.Entity(), point.Point{
+			X: w.rng.Intn(3) - 1,
+			Y: w.rng.Intn(3) - 1,
+		})
 	}
 
 	// collisions deal damage
-	for cur := w.moves.Cursor(ecs.All(ecs.RelType(mrCollide)), func(ent, a, b ecs.Entity, r ecs.RelationType) bool {
+	for cur := w.moves.Cursor(ecs.AllRel(mrCollide), func(ent, a, b ecs.Entity, r ecs.RelationType) bool {
 		return a.Type().All(combatMask) && b.Type().All(combatMask)
 	}); cur.Scan(); {
 		w.attack(cur.A(), cur.B())
+		// TODO: store damage and kill relations, update agro relations
 	}
 
 	// count remaining souls
@@ -377,7 +467,8 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 		if it := w.Iter(ecs.All(charMask | wcWaiting)); it.Next() {
 			enemy = it.Entity()
 		} else {
-			enemy = w.newChar("enemy", 'X')
+			w.enemyCounter++
+			enemy = w.newChar(fmt.Sprintf("enemy%d", w.enemyCounter), 'X')
 			enemy.Add(wcWaiting)
 		}
 		bo := w.bodies[enemy.ID()]

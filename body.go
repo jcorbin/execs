@@ -35,8 +35,6 @@ const (
 	brControl ecs.RelationType = 1 << iota
 )
 
-var brRelClause = ecs.All(ecs.RelType(brControl))
-
 type body struct {
 	ecs.Core
 	rel ecs.Graph
@@ -252,12 +250,12 @@ func (w *world) attack(src, targ ecs.Entity) {
 
 	aEff, bEff := 1.0, 1.0
 
-	for gt := srcBo.rel.Traverse(brRelClause, ecs.TraverseCoDFS, aPart.ID()); gt.Traverse(); {
+	for gt := srcBo.rel.Traverse(ecs.AllRel(brControl), ecs.TraverseCoDFS, aPart.ID()); gt.Traverse(); {
 		id := gt.Node().ID()
 		aEff *= float64(srcBo.hp[id]) / float64(srcBo.maxHP[id])
 	}
 
-	for gt := targBo.rel.Traverse(brRelClause, ecs.TraverseCoDFS, bPart.ID()); gt.Traverse(); {
+	for gt := targBo.rel.Traverse(ecs.AllRel(brControl), ecs.TraverseCoDFS, bPart.ID()); gt.Traverse(); {
 		id := gt.Node().ID()
 		bEff *= float64(targBo.hp[id]) / float64(targBo.maxHP[id])
 	}
@@ -304,7 +302,7 @@ func (w *world) attack(src, targ ecs.Entity) {
 
 	if severed := targBo.sever(bPart.ID()); severed != nil {
 		w.newItem(w.Positions[targID], fmt.Sprintf("remains of %s", targName), '%', severed)
-		if roots := severed.rel.Roots(brRelClause, nil); len(roots) > 0 {
+		if roots := severed.rel.Roots(ecs.AllRel(brControl), nil); len(roots) > 0 {
 			for _, ent := range roots {
 				w.log("%s's %s has dropped on the floor", targName, severed.DescribePart(ent))
 			}
@@ -385,7 +383,7 @@ func (bo *body) sever(ids ...ecs.EntityID) *body {
 		}
 
 		// collect affected relations for final processing
-		cur := bo.rel.Cursor(ecs.All(ecs.RelType(brControl)), nil)
+		cur := bo.rel.Cursor(ecs.AllRel(brControl), nil)
 		for cur.Scan() {
 			ent := cur.Entity()
 			id := ent.ID()
