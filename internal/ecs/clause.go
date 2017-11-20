@@ -1,5 +1,7 @@
 package ecs
 
+import "fmt"
+
 // TypeClause is a logical filter for ComponentTypes.  If All is non-0, then
 // Test()s true only for types that have all of those type bits set.
 // Similarly if Any non-0, then Test()s true only for types that have at least
@@ -7,6 +9,16 @@ package ecs
 type TypeClause struct {
 	All ComponentType
 	Any ComponentType
+}
+
+func (tcl TypeClause) String() string {
+	if tcl.All == 0 {
+		return fmt.Sprintf("Any(%v)", tcl.Any)
+	}
+	if tcl.Any == 0 {
+		return fmt.Sprintf("All(%v)", tcl.All)
+	}
+	return fmt.Sprintf("Clause(%v, %v)", tcl.All, tcl.Any)
 }
 
 // Test returns true/or false based on above logic description.
