@@ -332,15 +332,8 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 		return view.ErrStop
 	}
 
-	v.ClearLog()
-
-	w.tick() // run timers
-
-	// reset collisions, damage, and kills
-	w.moves.Delete(ecs.AnyRel(mrCollide|mrDamage|mrKill), nil)
-
-	// collect collidables
-	w.prepareCollidables()
+	w.reset() // reset state from last time
+	w.tick()  // run timers
 
 	// apply player move
 	if move, ok := key2move(k); ok {
@@ -459,6 +452,16 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 	}
 
 	return nil
+}
+
+func (w *world) reset() {
+	w.View.ClearLog()
+
+	// reset collisions, damage, and kills
+	w.moves.Delete(ecs.AnyRel(mrCollide|mrDamage|mrKill), nil)
+
+	// collect collidables
+	w.prepareCollidables()
 }
 
 func (w *world) tick() {
