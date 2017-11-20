@@ -508,7 +508,14 @@ func (w *world) maybeSpawn() {
 	sum := 0
 	for it := w.Iter(ecs.All(combatMask)); it.Next(); {
 		if !it.Type().All(wcWaiting) {
-			sum += w.bodies[it.ID()].HP()
+			bo := w.bodies[it.ID()]
+			if it.Type().All(wcSoul) {
+				hp, maxHP := bo.HPRange()
+				dmg := maxHP - hp
+				sum += 10*maxHP + 100*dmg
+			} else {
+				sum += bo.HP()
+			}
 		}
 	}
 	if hp := bo.HP(); w.rng.Intn(sum+hp) < hp {
