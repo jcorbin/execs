@@ -1,4 +1,4 @@
-package main
+package markov_test
 
 import (
 	"fmt"
@@ -13,15 +13,15 @@ const (
 	componentWord ecs.ComponentType = 1 << iota
 )
 
-type corpus struct {
+type Corpus struct {
 	ecs.Core
 	markov.Table
 	word   []string
 	lookup map[string]ecs.EntityID
 }
 
-func newCorpus() *corpus {
-	c := &corpus{
+func NewCorpus() *Corpus {
+	c := &Corpus{
 		word:   []string{""},
 		lookup: make(map[string]ecs.EntityID),
 	}
@@ -31,16 +31,16 @@ func newCorpus() *corpus {
 	return c
 }
 
-func (c *corpus) allocWord(id ecs.EntityID, t ecs.ComponentType) {
+func (c *Corpus) allocWord(id ecs.EntityID, t ecs.ComponentType) {
 	c.word = append(c.word, "")
 }
 
-func (c *corpus) destroyWord(id ecs.EntityID, t ecs.ComponentType) {
+func (c *Corpus) destroyWord(id ecs.EntityID, t ecs.ComponentType) {
 	delete(c.lookup, c.word[id])
 	c.word[id] = ""
 }
 
-func (c *corpus) ToEntity(s string) ecs.Entity {
+func (c *Corpus) ToEntity(s string) ecs.Entity {
 	if id, def := c.lookup[s]; def {
 		return c.Ref(id)
 	}
@@ -50,7 +50,7 @@ func (c *corpus) ToEntity(s string) ecs.Entity {
 	return ent
 }
 
-func (c *corpus) ToString(ent ecs.Entity) string {
+func (c *Corpus) ToString(ent ecs.Entity) string {
 	id := c.Deref(ent)
 	if ent.Type().All(componentWord) {
 		return c.word[id]
@@ -58,7 +58,7 @@ func (c *corpus) ToString(ent ecs.Entity) string {
 	return ""
 }
 
-func (c *corpus) Ingest(chain []string) {
+func (c *Corpus) Ingest(chain []string) {
 	term := c.ToEntity("")
 	last := term
 	for _, s := range chain {
@@ -69,8 +69,8 @@ func (c *corpus) Ingest(chain []string) {
 	c.AddTransition(last, term, 1)
 }
 
-func canned() *corpus {
-	c := newCorpus()
+func ExampleMarkovChain() {
+	c := NewCorpus()
 	for _, s := range []string{
 		"it was the best of times",
 		"it was the worst of times",
@@ -80,12 +80,9 @@ func canned() *corpus {
 	} {
 		c.Ingest(strings.Fields(s))
 	}
-	return c
-}
 
-func main() {
-	rng := rand.New(rand.NewSource(rand.Int63()))
-	c := canned()
+	rng := rand.New(rand.NewSource(0))
+
 	var parts []string
 	for i := 0; i < 10; i++ {
 		ent := c.ToEntity("")
@@ -100,4 +97,16 @@ func main() {
 		fmt.Printf("%s\n", strings.Join(parts, " "))
 		parts = parts[:0]
 	}
+	// Output:
+	// I always try to be my best of times
+	// it was the worst in men
+	// power brings out the worst in men
+	// the best hoorah
+	// power brings out the best hoorah
+	// I always try to be my best hoorah
+	// the worst in men
+	// power brings out the best hoorah
+	// I always try to be my best of times
+	// power brings out the best hoorah
+
 }
