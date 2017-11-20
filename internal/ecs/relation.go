@@ -1,5 +1,8 @@
 package ecs
 
+// RelationFlags specifies options for the A or B dimension in a Relation.
+type RelationFlags uint32
+
 // Relation contains entities that represent relations between entities in two
 // (maybe different) Cores. Users may attach arbitrary data to these relations
 // the same way you would with Core.
@@ -8,6 +11,7 @@ package ecs
 type Relation struct {
 	Core
 	aCore, bCore *Core
+	aFlag, bFlag RelationFlags
 	aids         []EntityID
 	bids         []EntityID
 	fix          bool
@@ -20,16 +24,22 @@ type Relation struct {
 // TODO: joins
 
 // NewRelation creates a new relation for the given Core systems.
-func NewRelation(aCore, bCore *Core) *Relation {
+func NewRelation(
+	aCore *Core, aFlags RelationFlags,
+	bCore *Core, bFlags RelationFlags,
+) *Relation {
 	rel := &Relation{}
-	rel.Init(aCore, bCore)
+	rel.Init(aCore, aFlags, bCore, bFlags)
 	return rel
 }
 
 // Init initializes the entity relation; useful for embedding.
-func (rel *Relation) Init(aCore, bCore *Core) {
-	rel.aCore = aCore
-	rel.bCore = bCore
+func (rel *Relation) Init(
+	aCore *Core, aFlags RelationFlags,
+	bCore *Core, bFlags RelationFlags,
+) {
+	rel.aCore, rel.aFlag = aCore, aFlags
+	rel.bCore, rel.bFlag = bCore, bFlags
 	rel.RegisterAllocator(relType, rel.allocRel)
 	rel.RegisterDestroyer(relType, rel.destroyRel)
 	rel.aCore.RegisterDestroyer(NoType, rel.destroyFromA)

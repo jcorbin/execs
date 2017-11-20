@@ -153,7 +153,7 @@ func TestIter_two(t *testing.T) {
 	assert.Equal(t, ecs.NoType, it.Type())
 }
 
-func setupRelTest() (a, b *stuff, rel *ecs.Relation) {
+func setupRelTest(aFlags, bFlags ecs.RelationFlags) (a, b *stuff, rel *ecs.Relation) {
 	a = newStuff()
 	a1 := a.AddEntity(scData)
 	a2 := a.AddEntity(scData)
@@ -174,7 +174,7 @@ func setupRelTest() (a, b *stuff, rel *ecs.Relation) {
 	b7 := b.AddEntity(scData)
 	_ = b.AddEntity(scData) // b8
 
-	rel = ecs.NewRelation(&a.Core, &b.Core)
+	rel = ecs.NewRelation(&a.Core, aFlags, &b.Core, bFlags)
 
 	rel.InsertMany(func(insert func(r ecs.RelationType, a ecs.Entity, b ecs.Entity) ecs.Entity) {
 
@@ -203,7 +203,7 @@ func TestRelation_destruction(t *testing.T) {
 		f    func(t *testing.T)
 	}{
 		{"clear A", func(t *testing.T) {
-			a, b, r := setupRelTest()
+			a, b, r := setupRelTest(0, 0)
 			assert.False(t, a.Empty())
 			assert.False(t, b.Empty())
 			assert.False(t, r.Empty())
@@ -214,7 +214,7 @@ func TestRelation_destruction(t *testing.T) {
 		}},
 
 		{"clear B", func(t *testing.T) {
-			a, b, r := setupRelTest()
+			a, b, r := setupRelTest(0, 0)
 			assert.False(t, a.Empty())
 			assert.False(t, b.Empty())
 			assert.False(t, r.Empty())
@@ -225,7 +225,7 @@ func TestRelation_destruction(t *testing.T) {
 		}},
 
 		{"clear rels", func(t *testing.T) {
-			a, b, r := setupRelTest()
+			a, b, r := setupRelTest(0, 0)
 			assert.False(t, a.Empty())
 			assert.False(t, b.Empty())
 			assert.False(t, r.Empty())
@@ -250,7 +250,7 @@ func TestGraph_Roots(t *testing.T) {
 	s6 := s.AddEntity(scData)
 	s7 := s.AddEntity(scData)
 
-	G := ecs.NewGraph(&s.Core)
+	G := ecs.NewGraph(&s.Core, 0)
 	G.InsertMany(func(insert func(r ecs.RelationType, a ecs.Entity, b ecs.Entity) ecs.Entity) {
 		insert(0, s1, s2)
 		insert(0, s1, s3)

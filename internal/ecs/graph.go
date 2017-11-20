@@ -7,15 +7,15 @@ type Graph struct {
 }
 
 // NewGraph creates a new graph relation for the given Core system.
-func NewGraph(core *Core) *Graph {
+func NewGraph(core *Core, flags RelationFlags) *Graph {
 	G := &Graph{}
-	G.Init(core)
+	G.Init(core, flags)
 	return G
 }
 
 // Init initializes the graph relation; useful for embedding.
-func (G *Graph) Init(core *Core) {
-	G.Relation.Init(core, core)
+func (G *Graph) Init(core *Core, flags RelationFlags) {
+	G.Relation.Init(core, flags, core, flags)
 }
 
 // Roots returns a slice of Entities that have no in-relation (i.e. there's no
