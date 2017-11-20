@@ -126,7 +126,7 @@ func (tab *Table) MarhsalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshal's markov transition data into this table; table must
 // be empty.
 func (tab *Table) UnmarshalJSON(d []byte) error {
-	if len(tab.Entities) > 0 {
+	if tab.Len() > 0 {
 		return errors.New("markov table already has data")
 	}
 	var data []serd

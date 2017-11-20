@@ -32,6 +32,23 @@ func (t ComponentType) All(mask ComponentType) bool { return mask != NoType && t
 // mask is NoType, always returns true.
 func (t ComponentType) Any(mask ComponentType) bool { return mask == NoType || t&mask != 0 }
 
+// Len counts how many active entities exist.
+func (co *Core) Len() int {
+	n := 0
+	for _, t := range co.Entities {
+		if t != NoType {
+			n++
+		}
+	}
+	return n
+}
+
+// Cap returns how many entities have been statically allocated within the
+// Core. If Len() < Cap() then calls to AddEntity will re-use a prior id.
+func (co *Core) Cap() int {
+	return len(co.Entities)
+}
+
 // Empty returns true only if there are no active entities.
 func (co *Core) Empty() bool {
 	for _, t := range co.Entities {
