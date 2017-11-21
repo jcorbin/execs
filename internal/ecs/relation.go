@@ -60,6 +60,9 @@ func (rel *Relation) Init(
 // ComponentType where the highest bit is reserved.
 type RelationType uint64
 
+// NoRelType is the RelationType equivalent of NoType.
+const NoRelType RelationType = 0
+
 // All returns true only if all of the masked type bits are set.
 func (t RelationType) All(mask RelationType) bool { return t&mask == mask }
 
