@@ -360,10 +360,7 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 	}
 
 	for it := w.Iter(ecs.All(playMoveMask)); it.Next(); {
-		player := it.Entity()
-		rel := w.moves.Insert(mrPending, player, player)
-		rel.Add(movP)
-		w.moves.p[rel.ID()] = move
+		w.addPendingMove(it.Entity(), move)
 	}
 
 	w.Process()
@@ -377,7 +374,8 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 func (w *world) Process() {
 	w.reset()             // reset state from last time
 	w.tick()              // run timers
-	w.applyMoves()        // player and ai
+	w.generateAIMoves()   // give AI a chance!
+	w.applyMoves()        // resolve moves
 	w.processCollisions() // e.g. deal damage
 	w.checkOver()         // no souls => done
 	w.maybeSpawn()        // spawn more demons
@@ -421,27 +419,35 @@ func (w *world) tick() {
 	}
 }
 
-func (w *world) applyMoves() {
-	// apply pending moves
-	for cur := w.moves.Cursor(ecs.All(movPending), nil); cur.Scan(); {
-		ent, move := cur.A(), cur.Entity()
-		w.move(ent, w.moves.p[move.ID()])
-		move.Destroy()
-	}
+func (w *world) addPendingMove(ent ecs.Entity, move point.Point) ecs.Entity {
+	rel := w.moves.Insert(mrPending, ent, ent)
+	rel.Add(movP)
+	w.moves.p[rel.ID()] = move
+	return rel
+}
 
-	// generate ai moves
+func (w *world) generateAIMoves() {
 	for it := w.Iter(ecs.All(aiMoveMask)); it.Next(); {
 		if target, found := w.aiTarget(it.Entity()); found {
 			// Move towards the target!
-			w.move(it.Entity(), target.Sub(w.Positions[it.ID()]).Sign())
+			w.addPendingMove(it.Entity(), target.Sub(w.Positions[it.ID()]).Sign())
 		} else {
 			// No? give up and just randomly budge then!
 			w.log("%s> Hmm...", w.getName(it.Entity(), "???"))
-			w.move(it.Entity(), point.Point{
+			w.addPendingMove(it.Entity(), point.Point{
 				X: w.rng.Intn(3) - 1,
 				Y: w.rng.Intn(3) - 1,
 			})
 		}
+	}
+}
+
+func (w *world) applyMoves() {
+	// TODO: better resolution strategy based on connected components
+	for cur := w.moves.Cursor(ecs.All(movPending), nil); cur.Scan(); {
+		ent, move := cur.A(), cur.Entity()
+		w.move(ent, w.moves.p[move.ID()])
+		move.Destroy()
 	}
 }
 
