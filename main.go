@@ -445,9 +445,14 @@ func (w *world) generateAIMoves() {
 func (w *world) applyMoves() {
 	// TODO: better resolution strategy based on connected components
 	for cur := w.moves.Cursor(ecs.All(movPending), nil); cur.Scan(); {
-		ent, move := cur.A(), cur.Entity()
-		w.move(ent, w.moves.p[move.ID()])
-		move.Destroy()
+		a, ent := cur.A(), cur.Entity()
+		new := w.Positions[a.ID()].Add(w.moves.p[ent.ID()])
+		if hit := w.collides(a, new); hit != ecs.NilEntity {
+			w.moves.Insert(mrCollide, a, hit)
+		} else {
+			w.Positions[a.ID()] = new
+		}
+		ent.Destroy()
 	}
 }
 
@@ -853,18 +858,6 @@ func (w *world) collides(ent ecs.Entity, pos point.Point) ecs.Entity {
 	// 	return w.coll[i], w.coll[i] != id && w.Positions[w.coll[i]].Equal(pos)
 	// }
 	// return 0, false
-}
-
-func (w *world) move(ent ecs.Entity, move point.Point) point.Point {
-	pos := w.Positions[ent.ID()]
-	new := pos.Add(move)
-	if hit := w.collides(ent, new); hit != ecs.NilEntity {
-		w.moves.Insert(mrCollide, ent, hit)
-	} else {
-		pos = new
-		w.Positions[ent.ID()] = pos
-	}
-	return pos
 }
 
 func main() {
