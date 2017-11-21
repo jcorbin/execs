@@ -45,6 +45,15 @@ const (
 	combatMask   = wcCollide | wcBody
 )
 
+type worldItem interface {
+	interact(pr prompt, w *world, item, ent ecs.Entity) (prompt, bool)
+}
+
+type destroyableItem interface {
+	worldItem
+	destroy(w *world)
+}
+
 type world struct {
 	logFile *os.File
 	logger  *log.Logger
@@ -64,7 +73,7 @@ type world struct {
 	FG        []termbox.Attribute
 	timers    []timer
 	bodies    []*body
-	items     []interface{}
+	items     []worldItem
 
 	coll  []ecs.EntityID // TODO: use an index structure for this
 	moves moves
@@ -78,7 +87,53 @@ type prompt struct {
 
 type promptAction struct {
 	mess string
-	f    func()
+	run  func(prompt) (prompt, bool)
+}
+
+func (pr *prompt) addAction(
+	run func(prompt) (prompt, bool),
+	mess string, args ...interface{},
+) bool {
+	if len(pr.action) < cap(pr.action) {
+		pr.action = append(pr.action, promptAction{mess, run})
+		return true
+	}
+	return false
+}
+
+func (pr prompt) run(ch rune) (prompt, bool) {
+	n := int(ch - '0')
+	if n < 0 || n > 9 {
+		return pr, false
+	}
+	if i := n - 1; i < 0 {
+		return pr.pop(), true
+	} else if i < len(pr.action) {
+		return pr.action[i].run(pr)
+	}
+	return pr, true
+}
+
+func (pr prompt) pop() prompt {
+	if pr.prior != nil {
+		return *pr.prior
+	}
+	return pr
+}
+
+func (pr prompt) unwind() prompt {
+	for pr.prior != nil {
+		pr = *pr.prior
+	}
+	return pr
+}
+
+func (pr prompt) makeSub(mess string, args ...interface{}) prompt {
+	return prompt{
+		prior:  &pr,
+		mess:   fmt.Sprintf(mess, args...),
+		action: make([]promptAction, 0, 10),
+	}
 }
 
 type moves struct {
@@ -157,7 +212,7 @@ func (w *world) init() {
 	w.FG = []termbox.Attribute{0}
 	w.timers = []timer{timer{}}
 	w.bodies = []*body{nil}
-	w.items = []interface{}{nil}
+	w.items = []worldItem{nil}
 
 	w.prompt.action = make([]promptAction, 0, 10)
 
@@ -199,14 +254,17 @@ func (w *world) destroyBody(id ecs.EntityID, t ecs.ComponentType) {
 func (w *world) destroyItem(id ecs.EntityID, t ecs.ComponentType) {
 	item := w.items[id]
 	w.items[id] = nil
-	switch v := item.(type) {
-	case *body:
-		for i := range w.bodies {
-			if i > 0 && w.bodies[i] == nil {
-				v.Clear()
-				w.bodies[i] = v
-				break
-			}
+	if des, ok := item.(destroyableItem); ok {
+		des.destroy(w)
+	}
+}
+
+func (bo *body) destroy(w *world) {
+	for i := range w.bodies {
+		if i > 0 && w.bodies[i] == nil {
+			bo.Clear()
+			w.bodies[i] = bo
+			break
 		}
 	}
 }
@@ -391,19 +449,11 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 
 	// maybe run prompt
 	if w.prompt.mess != "" {
-		if n := int(k.Ch - '0'); 0 <= n && n <= 9 {
-			if n == 0 {
-				if w.prompt.prior != nil {
-					w.prompt = *w.prompt.prior
-				} else {
-					w.prompt.mess = ""
-					w.prompt.action = w.prompt.action[:0]
-				}
-			} else if i := n - 1; i < len(w.prompt.action) {
-				w.prompt.action[i].f()
-			}
+		if pr, ok := w.prompt.run(k.Ch); ok {
+			w.prompt = pr
 			return nil
 		}
+		w.resetPrompt()
 	}
 
 	// parse player move
@@ -438,6 +488,7 @@ func (w *world) Process() {
 	w.tick()              // run timers
 	w.generateAIMoves()   // give AI a chance!
 	w.applyMoves()        // resolve moves
+	w.buildItemMenu()     // what items are here
 	w.processCollisions() // e.g. deal damage
 	w.checkOver()         // no souls => done
 	w.maybeSpawn()        // spawn more demons
@@ -617,43 +668,9 @@ func (w *world) chooseAIGoal(ai ecs.Entity) ecs.Entity {
 	return goal
 }
 
-func (w *world) buildItemMenu() {
-	prompting := false
-	for cur := w.moves.Cursor(ecs.RelClause(mrCollide, mrItem), nil); cur.Scan(); {
-		if !prompting && w.prompt.mess != "" {
-			continue
-		}
-		prompting = true
-		if w.prompt.mess == "" {
-			w.prompt.mess = "Items Here"
-		}
-		b := cur.B()
-		w.prompt.action = append(w.prompt.action, promptAction{
-			mess: w.getName(b, "unknown item"),
-			f:    func() { w.inspectItem(b) },
-		})
-	}
-}
-
 func (w *world) processCollisions() {
-	prompting := false
-	for cur := w.moves.Cursor(ecs.RelClause(mrCollide, mrHit|mrItem), nil); cur.Scan(); {
+	for cur := w.moves.Cursor(ecs.RelClause(mrCollide, mrHit), nil); cur.Scan(); {
 		a, b := cur.A(), cur.B()
-
-		if cur.R().All(mrItem) {
-			if !prompting && w.prompt.mess != "" {
-				continue
-			}
-			prompting = true
-			if w.prompt.mess == "" {
-				w.prompt.mess = "Items Here"
-			}
-			w.prompt.action = append(w.prompt.action, promptAction{
-				mess: w.getName(b, "unknown item"),
-				f:    func() { w.inspectItem(b) },
-			})
-			continue
-		}
 
 		if a.Type().All(combatMask) && b.Type().All(combatMask) {
 			// combat collisions deal damage
@@ -678,147 +695,162 @@ func (w *world) processCollisions() {
 	}
 }
 
-func (w *world) inspectItem(ent ecs.Entity) {
-	if !ent.Type().All(wcItem) {
-		w.log("not an item?!?")
-		return
-	}
-	item := w.items[ent.ID()]
-	switch val := item.(type) {
-	case *body:
-		prior := w.prompt
-		w.prompt = prompt{
-			prior:  &prior,
-			mess:   w.getName(ent, "unknown item"),
-			action: make([]promptAction, 0, 10),
-		}
-		for it := val.Iter(ecs.All(bcPart)); len(w.prompt.action) < cap(w.prompt.action) && it.Next(); {
-			part := it.Entity()
-			w.prompt.action = append(w.prompt.action, promptAction{
-				mess: val.DescribePart(part),
-				f:    func() { w.inspectBodyPart(val, part, ent) },
-			})
-		}
-
-	default:
-		w.log("what even is a %T", item)
-	}
-}
-
-func (w *world) inspectBodyPart(bo *body, part, item ecs.Entity) {
-	ent := w.firstSoulBody()
-	if ent == ecs.NilEntity {
-		w.log("You have no body!")
-		return
-	}
-
-	prior := w.prompt
-	w.prompt = prompt{
-		prior:  &prior,
-		mess:   bo.DescribePart(part),
-		action: make([]promptAction, 0, 10),
-	}
-
-	// root part can be grafted
-	if bo.rel.LookupB(ecs.All(bcPart), part.ID()).Count() == 0 {
-		w.prompt.action = append(w.prompt.action, promptAction{
-			mess: "graft",
-			f:    func() { w.graftBodyPart(ent, bo, part, item) },
-		})
-	}
-
-	// any part can be integrated
-	w.prompt.action = append(w.prompt.action, promptAction{
-		mess: "integrate",
-		f:    func() { w.integrateBodyPart(ent, bo, part, item) },
-	})
-}
-
-func (w *world) graftBodyPart(ent ecs.Entity, rem *body, part, item ecs.Entity) {
-	defer func() { w.prompt = *w.prompt.prior }()
-	w.log("grafting unimplemented")
-
-	/*
-		bo := w.bodies[ent.ID()]
-
-		attach, limit := ecs.NoType, 0
-		switch part.Type() & bcPartMask {
-		case bcRight | bcUpperArm, bcLeft | bcUpperArm:
-			attach, limit = bcTorso, 2
-		case bcRight | bcForeArm:
-			attach, limit = bcRight|bcUpperArm, 1
-		case bcLeft | bcForeArm:
-			attach, limit = bcLeft|bcUpperArm, 1
-		case bcRight | bcHand:
-			attach, limit = bcRight|bcForeArm, 1
-		case bcLeft | bcHand:
-			attach, limit = bcLeft|bcForeArm, 1
-		case bcRight | bcThigh, bcLeft | bcThigh:
-			attach, limit = bcTorso, 2
-		case bcRight | bcCalf:
-			attach, limit = bcRight|bcThigh, 1
-		case bcLeft | bcCalf:
-			attach, limit = bcLeft|bcThigh, 1
-		case bcRight | bcFoot:
-			attach, limit = bcRight|bcCalf, 1
-		case bcLeft | bcFoot:
-			attach, limit = bcLeft|bcCalf, 1
-		case bcTail:
-			attach, limit = bcTorso, 3
-		default:
-			w.log("don't know how to graft a %s", body.DescribePart(part))
-		}
-
-		for it := bo.Iter(ecs.All(attach)); it.Next(); {
-			for cur := bo.rel.LookupA(ecs.AllRel(brControl), it.ID()); cur.Scan(); {
-				// TODO: should be a cursor w/ where .Count()
-				n := 0
-				if sub := cur.B(); sub.Type() == part.Type() {
-					n++
-				}
-				if n < limit {
-					par := it.Entity()
-					// TODO: import the sub graph, insert relation from par to it
-				}
-
-			}
-		}
-	*/
-}
-
-func (w *world) integrateBodyPart(ent ecs.Entity, rem *body, part, item ecs.Entity) {
-	defer func() {
+func (w *world) buildItemMenu() {
+	if pr, ok := w.itemPrompt(w.prompt); ok {
+		w.prompt = pr
+	} else if w.prompt.mess != "" {
 		w.resetPrompt()
-		if item.Type() == ecs.NoType {
-			w.buildItemMenu()
-		} else {
-			w.inspectItem(item)
+	}
+}
+
+func (w *world) itemPrompt(pr prompt) (prompt, bool) {
+	// TODO: once we have a proper spatial index, stop relying on
+	// collision relations for this
+	prompting := false
+	for cur := w.moves.Cursor(ecs.RelClause(mrCollide, mrItem), nil); cur.Scan(); {
+		if !prompting {
+			pr = pr.makeSub("Items Here")
+			prompting = true
 		}
-	}()
-	bo := w.bodies[ent.ID()]
+		ent, item := cur.A(), cur.B()
+		if !pr.addAction(
+			func(pr prompt) (prompt, bool) { return w.interactWith(pr, ent, item) },
+			w.getName(item, "unknown item"),
+		) {
+			break
+		}
+	}
+	return pr, prompting
+}
+
+func (w *world) interactWith(pr prompt, ent, item ecs.Entity) (prompt, bool) {
+	return w.items[item.ID()].interact(pr, w, item, ent)
+}
+
+type bodyRemains struct {
+	w    *world     // the world it's in
+	bo   *body      // the body it's in
+	part ecs.Entity // the part
+	item ecs.Entity // its container
+	ent  ecs.Entity // what's interacting with it
+}
+
+func (bo *body) interact(pr prompt, w *world, item, ent ecs.Entity) (prompt, bool) {
+	if !ent.Type().All(wcBody) {
+		w.log("you have no body!")
+		return pr, false
+	}
+
+	pr = pr.makeSub(w.getName(item, "unknown item"))
+
+	for it := bo.Iter(ecs.All(bcPart)); len(pr.action) < cap(pr.action) && it.Next(); {
+		part := it.Entity()
+		rem := bodyRemains{w, bo, part, item, ent}
+		// TODO: inspect menu when more than just scavengable
+
+		// any part can be scavenged
+		if !pr.addAction(
+			rem.scavenge,
+			rem.describeScavenge(),
+		) {
+			break
+		}
+
+	}
+
+	return pr, true
+}
+
+func (rem bodyRemains) describeScavenge() string {
+	return fmt.Sprintf("scavenge %s (armor:%+d damage:%+d)",
+		rem.bo.DescribePart(rem.part),
+		rem.bo.armor[rem.part.ID()],
+		rem.bo.dmg[rem.part.ID()])
+}
+
+func (rem bodyRemains) scavenge(pr prompt) (prompt, bool) {
+	entBo := rem.w.bodies[rem.ent.ID()]
 
 	imp := make([]string, 0, 2)
-	if armor := bo.armor[part.ID()]; armor > 0 {
-		recv := w.chooseAttackedPart(ent)
-		bo.armor[recv.ID()] += armor
-		imp = append(imp, fmt.Sprintf("%s armor +%v", bo.DescribePart(recv), armor))
+	if armor := entBo.armor[rem.part.ID()]; armor > 0 {
+		recv := rem.w.chooseAttackedPart(rem.ent)
+		entBo.armor[recv.ID()] += armor
+		imp = append(imp, fmt.Sprintf("%s armor +%v", entBo.DescribePart(recv), armor))
 	}
-	if damage := bo.dmg[part.ID()]; damage > 0 {
-		recv := w.chooseAttackerPart(ent)
-		bo.dmg[recv.ID()] += damage
-		imp = append(imp, fmt.Sprintf("%s damage +%v", bo.DescribePart(recv), damage))
+	if damage := entBo.dmg[rem.part.ID()]; damage > 0 {
+		recv := rem.w.chooseAttackerPart(rem.ent)
+		entBo.dmg[recv.ID()] += damage
+		imp = append(imp, fmt.Sprintf("%s damage +%v", entBo.DescribePart(recv), damage))
 	}
-	part.Destroy()
+	rem.part.Destroy()
 
-	w.log("%s gained %v from %s",
-		w.getName(ent, "unknown"),
+	rem.w.log("%s gained %v from %s",
+		rem.w.getName(rem.ent, "unknown"),
 		strings.Join(imp, " and "),
-		w.getName(item, "unknown"),
+		rem.w.getName(rem.item, "unknown"),
 	)
-	if rem.Len() == 0 {
-		item.Destroy()
+
+	pr, ok := rem.w.itemPrompt(pr.unwind())
+	if !ok {
+		return pr, ok
 	}
+
+	if rem.bo.Len() == 0 {
+		rem.item.Destroy()
+		return pr, ok
+	}
+
+	return rem.bo.interact(pr, rem.w, rem.item, rem.ent)
 }
+
+// func (w *world) graftBodyPart(soul ecs.Entity, rem *body, part, item ecs.Entity) {
+// 	defer func() { w.prompt = *w.prompt.prior }()
+
+// 		bo := w.bodies[soul.ID()]
+
+// 		attach, limit := ecs.NoType, 0
+// 		switch part.Type() & bcPartMask {
+// 		case bcRight | bcUpperArm, bcLeft | bcUpperArm:
+// 			attach, limit = bcTorso, 2
+// 		case bcRight | bcForeArm:
+// 			attach, limit = bcRight|bcUpperArm, 1
+// 		case bcLeft | bcForeArm:
+// 			attach, limit = bcLeft|bcUpperArm, 1
+// 		case bcRight | bcHand:
+// 			attach, limit = bcRight|bcForeArm, 1
+// 		case bcLeft | bcHand:
+// 			attach, limit = bcLeft|bcForeArm, 1
+// 		case bcRight | bcThigh, bcLeft | bcThigh:
+// 			attach, limit = bcTorso, 2
+// 		case bcRight | bcCalf:
+// 			attach, limit = bcRight|bcThigh, 1
+// 		case bcLeft | bcCalf:
+// 			attach, limit = bcLeft|bcThigh, 1
+// 		case bcRight | bcFoot:
+// 			attach, limit = bcRight|bcCalf, 1
+// 		case bcLeft | bcFoot:
+// 			attach, limit = bcLeft|bcCalf, 1
+// 		case bcTail:
+// 			attach, limit = bcTorso, 3
+// 		default:
+// 			w.log("don't know how to graft a %s", body.DescribePart(part))
+// 		}
+
+// 		for it := bo.Iter(ecs.All(attach)); it.Next(); {
+// 			for cur := bo.rel.LookupA(ecs.AllRel(brControl), it.ID()); cur.Scan(); {
+// 				// TODO: should be a cursor w/ where .Count()
+// 				n := 0
+// 				if sub := cur.B(); sub.Type() == part.Type() {
+// 					n++
+// 				}
+// 				if n < limit {
+// 					par := it.Entity()
+// 					// TODO: import the sub graph, insert relation from par to it
+// 				}
+
+// 			}
+// 		}
+// }
 
 func (w *world) firstSoulBody() ecs.Entity {
 	if it := w.Iter(ecs.All(wcBody | wcSoul)); it.Next() {
@@ -928,6 +960,7 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 		return
 	}
 
+	// TODO: drop armor scraps on the floor instead
 	if imp := w.reclaimDestroyedPart(src, part); len(imp) > 0 {
 		w.log("%s gained %v from %s's %s",
 			w.getName(src, "!?!"),
@@ -1066,7 +1099,7 @@ func (w *world) addBox(box point.Box, glyph rune) {
 	})
 }
 
-func (w *world) newItem(pos point.Point, name string, glyph rune, val interface{}) ecs.Entity {
+func (w *world) newItem(pos point.Point, name string, glyph rune, val worldItem) ecs.Entity {
 	ent := w.AddEntity(wcPosition | wcCollide | wcName | wcGlyph | wcItem)
 	w.Positions[ent.ID()] = pos
 	w.Glyphs[ent.ID()] = glyph
