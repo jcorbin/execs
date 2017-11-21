@@ -218,7 +218,7 @@ func (rel *Relation) LookupB(tcl TypeClause, ids ...EntityID) Cursor {
 func (rel *Relation) Update(
 	tcl TypeClause,
 	where func(r RelationType, ent, a, b Entity) bool,
-	set func(ent, a, b Entity, r RelationType) (Entity, Entity),
+	set func(r RelationType, ent, a, b Entity) (RelationType, Entity, Entity),
 ) int {
 	n := 0
 	if fixIndex := rel.deferIndexing(); fixIndex != nil {
@@ -228,10 +228,16 @@ func (rel *Relation) Update(
 		ent := cur.Entity()
 		oa, ob, or := cur.A(), cur.B(), cur.R()
 		n++ // TODO: differetiate updated vs destroyed?
-		na, nb := set(ent, oa, ob, or)
-		if na == NilEntity || nb == NilEntity {
-			rel.setType(cur.Entity().ID(), NoType)
+		nr, na, nb := set(or, ent, oa, ob)
+		if nr == NoRelType || na == NilEntity || nb == NilEntity {
+			ent.Destroy()
 			continue
+		}
+		if ent.Type() == NoType {
+			continue
+		}
+		if nr != or {
+			ent.SetType(ComponentType(nr) | relType)
 		}
 		i := ent.ID() - 1
 		if na != oa {
