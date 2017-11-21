@@ -212,14 +212,14 @@ func (bo *body) DescribePart(ent ecs.Entity) string {
 	return s
 }
 
-func (bo *body) damagePart(ent ecs.Entity, dmg int) (bodyPart, bool) {
+func (bo *body) damagePart(ent ecs.Entity, dmg int) (int, bodyPart, bool) {
 	hp := bo.hp[ent.ID()]
-	hp -= dmg
-	bo.hp[ent.ID()] = hp
-	if hp > 0 {
-		return bodyPart{}, false
+	if dmg < hp {
+		bo.hp[ent.ID()] = hp - dmg
+		return dmg, bodyPart{}, false
 	}
-	part := bodyPart{
+	bo.hp[ent.ID()] = 0
+	return hp, bodyPart{
 		Type: ent.Type(),
 		Name: bo.PartName(ent),
 		Desc: bo.DescribePart(ent),
@@ -229,8 +229,24 @@ func (bo *body) damagePart(ent ecs.Entity, dmg int) (bodyPart, bool) {
 			Damage: bo.dmg[ent.ID()],
 			Armor:  bo.armor[ent.ID()],
 		},
+	}, true
+}
+
+func (bo *body) spiritScore() int {
+	n := 0
+	for it := bo.Iter(ecs.All(bcHead)); it.Next(); {
+		n += bo.hp[it.ID()]
 	}
-	return part, true
+	return n
+}
+
+func (bo *body) partHPRating(ent ecs.Entity) float64 {
+	rating := 1.0
+	for gt := bo.rel.Traverse(ecs.AllRel(brControl), ecs.TraverseCoDFS, ent.ID()); gt.Traverse(); {
+		id := gt.Node().ID()
+		rating *= float64(bo.hp[id]) / float64(bo.maxHP[id])
+	}
+	return rating
 }
 
 func (bo *body) sever(ids ...ecs.EntityID) *body {

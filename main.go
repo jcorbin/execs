@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jcorbin/execs/internal/ecs"
+	"github.com/jcorbin/execs/internal/moremath"
 	"github.com/jcorbin/execs/internal/point"
 	"github.com/jcorbin/execs/internal/view"
 	termbox "github.com/nsf/termbox-go"
@@ -201,14 +202,27 @@ func (w *world) Render(ctx *view.Context) error {
 	)
 
 	it := w.Iter(ecs.All(wcSoul | wcBody))
-	hpParts := make([]string, 0, it.Count())
+	footParts := make([]string, 0, it.Count()*3)
 	for it.Next() {
 		bo := w.bodies[it.ID()]
 
-		parts := make([]string, 0, bo.Len())
+		armor, damage := 0, 0
+		hpParts := make([]string, 0, bo.Len())
+		armorParts := make([]string, 0, bo.Len())
+		damageParts := make([]string, 0, bo.Len())
 		for gt := bo.rel.Traverse(ecs.AllRel(brControl), ecs.TraverseDFS); gt.Traverse(); {
 			ent := gt.Node()
-			parts = append(parts, fmt.Sprintf("%s:%v", bo.DescribePart(ent), bo.hp[ent.ID()]))
+			id := ent.ID()
+			desc := bo.DescribePart(ent)
+			hpParts = append(hpParts, fmt.Sprintf("%s:%v", desc, bo.hp[id]))
+			if n := bo.armor[id]; n > 0 {
+				armorParts = append(armorParts, fmt.Sprintf("%s:%v", desc, n))
+				armor += n
+			}
+			if n := bo.dmg[id]; n > 0 {
+				damageParts = append(damageParts, fmt.Sprintf("%s:%v", desc, n))
+				damage += n
+			}
 		}
 
 		// TODO: render a doll like
@@ -219,10 +233,13 @@ func (w *world) Render(ctx *view.Context) error {
 		//  _/   \_
 
 		hp, maxHP := bo.HPRange()
-		hpParts = append(hpParts, fmt.Sprintf("HP(%v/%v):<%s>", hp, maxHP, strings.Join(parts, " ")))
-		// hpParts = append(hpParts, fmt.Sprintf("HP(%v/%v)", hp, maxHP))
+		footParts = append(footParts,
+			fmt.Sprintf("HP(%v/%v): %s", hp, maxHP, strings.Join(hpParts, " ")),
+			fmt.Sprintf("Armor(%v): %s", armor, strings.Join(armorParts, " ")),
+			fmt.Sprintf("Damage(%v): %s", damage, strings.Join(damageParts, " ")),
+		)
 	}
-	ctx.SetFooter(hpParts...)
+	ctx.SetFooter(footParts...)
 
 	// collect world extent, and compute a viewport focus position
 	var (
@@ -612,92 +629,41 @@ func (w *world) maybeSpawn() {
 }
 
 func (w *world) attack(src, targ ecs.Entity) {
-	const numSpiritTurns = 5
-
-	srcName := w.getName(src, "!?!")
-	targName := w.getName(targ, "?!?")
+	aPart, bPart := w.checkAttackHit(src, targ)
+	if aPart == ecs.NilEntity || bPart == ecs.NilEntity {
+		return
+	}
 
 	srcBo, targBo := w.bodies[src.ID()], w.bodies[targ.ID()]
-
-	aPart := srcBo.chooseRandomPart(w.rng, func(ent ecs.Entity) int {
-		if srcBo.dmg[ent.ID()] <= 0 {
-			return 0
-		}
-		return 4*srcBo.dmg[ent.ID()] + 2*srcBo.armor[ent.ID()] + srcBo.hp[ent.ID()]
-	})
-	if aPart == ecs.NilEntity {
-		w.log("%s has nothing to hit %s with.", srcName, targName)
-		return
-	}
-
-	bPart := targBo.chooseRandomPart(w.rng, func(ent ecs.Entity) int {
-		if targBo.hp[ent.ID()] <= 0 {
-			return 0
-		}
-		switch ent.Type() & bcPartMask {
-		case bcTorso:
-			return 100 * (1 + targBo.maxHP[ent.ID()] - targBo.hp[ent.ID()])
-		case bcHead:
-			return 10 * (1 + targBo.maxHP[ent.ID()] - targBo.hp[ent.ID()])
-		}
-		return 0
-	})
-	if bPart == ecs.NilEntity {
-		w.log("%s can find nothing worth hitting on %s.", srcName, targName)
-		return
-	}
-
-	aEff, bEff := 1.0, 1.0
-
-	for gt := srcBo.rel.Traverse(ecs.AllRel(brControl), ecs.TraverseCoDFS, aPart.ID()); gt.Traverse(); {
-		id := gt.Node().ID()
-		aEff *= float64(srcBo.hp[id]) / float64(srcBo.maxHP[id])
-	}
-
-	for gt := targBo.rel.Traverse(ecs.AllRel(brControl), ecs.TraverseCoDFS, bPart.ID()); gt.Traverse(); {
-		id := gt.Node().ID()
-		bEff *= float64(targBo.hp[id]) / float64(targBo.maxHP[id])
-	}
-
-	aDesc := srcBo.DescribePart(aPart)
-	bDesc := targBo.DescribePart(bPart)
-
-	if 1.0-bEff*w.rng.Float64()/aEff*w.rng.Float64() < -1.0 {
-		w.log("%s's %s misses %s's %s", srcName, aDesc, targName, bDesc)
-		return
-	}
-
-	dmg := srcBo.dmg[aPart.ID()]
-	if dmg > 1 {
-		dmg = dmg/2 + rand.Intn(dmg/2)
-	} else if dmg == 1 {
-		dmg = rand.Intn(1)
-	}
+	rating := srcBo.partHPRating(aPart) / targBo.partHPRating(bPart)
+	rand := (1 + w.rng.Float64()) / 2 // like an x/2 + 1D(x/2) XXX reconsider
+	dmg := int(moremath.Round(float64(srcBo.dmg[aPart.ID()]) * rating * rand))
 	dmg -= targBo.armor[bPart.ID()]
-
 	if dmg == 0 {
-		w.log("%s's %s bounces off %s's %s", srcName, aDesc, targName, bDesc)
+		w.log("%s's %s bounces off %s's %s",
+			w.getName(src, "!?!"), srcBo.DescribePart(aPart),
+			w.getName(targ, "?!?"), targBo.DescribePart(bPart))
 		return
 	}
 
 	if dmg < 0 {
-		src, targ = targ, src
-		srcBo, targBo = targBo, srcBo
-		srcName, targName = targName, srcName
-		aPart, bPart = bPart, aPart
-		aEff, bEff = bEff, aEff
-		aDesc, bDesc = bDesc, aDesc
-		dmg = -dmg
+		w.dealAttackDamage(targ, bPart, src, aPart, -dmg)
+	} else {
+		w.dealAttackDamage(src, aPart, targ, bPart, dmg)
 	}
+}
 
-	targID := targ.ID()
-
+func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 	// TODO: store damage and kill relations
 
-	// dmg > 0
-	part, destroyed := targBo.damagePart(bPart, dmg)
-	w.log("%s's %s dealt %v damage to %s's %s", srcName, aDesc, dmg, targName, bDesc)
+	srcBo, targBo := w.bodies[src.ID()], w.bodies[targ.ID()]
+	dealt, part, destroyed := targBo.damagePart(bPart, dmg)
 	if !destroyed {
+		w.log("%s's %s dealt %v damage to %s's %s",
+			w.getName(src, "!?!"), srcBo.DescribePart(aPart),
+			dealt,
+			w.getName(targ, "?!?"), targBo.DescribePart(bPart),
+		)
 		// TODO: Relation.Upsert would be nice
 		if w.moves.Update(
 			ecs.AllRel(mrAgro),
@@ -716,30 +682,105 @@ func (w *world) attack(src, targ ecs.Entity) {
 		return
 	}
 
+	if imp := w.integrateBodyPart(src, part); len(imp) > 0 {
+		w.log("%s gained %v from %s's %s",
+			w.getName(src, "!?!"),
+			strings.Join(imp, " and "),
+			w.getName(targ, "?!?"), part.Desc,
+		)
+	}
+
+	targID := targ.ID()
+
 	if severed := targBo.sever(bPart.ID()); severed != nil {
+		targName := w.getName(targ, "nameless")
 		w.newItem(w.Positions[targID], fmt.Sprintf("remains of %s", targName), '%', severed)
-		if roots := severed.rel.Roots(ecs.AllRel(brControl), nil); len(roots) > 0 {
-			for _, ent := range roots {
-				w.log("%s's %s has dropped on the floor", targName, severed.DescribePart(ent))
-			}
+		if severed.Len() > 0 {
+			w.log("%s's remains have dropped on the floor", targName)
 		}
 	}
 
+	w.log("%s's %s destroyed by %s's %s",
+		w.getName(targ, "?!?"), targBo.DescribePart(bPart),
+		w.getName(src, "!?!"), srcBo.DescribePart(aPart),
+	)
+
 	if bo := w.bodies[targID]; bo.Iter(ecs.All(bcPart)).Count() > 0 {
-		w.log("%s's %s destroyed by %s's %s", targName, bDesc, srcName, aDesc)
 		return
 	}
 
-	// head not destroyed -> become spirit
-	if part.Type.All(bcHead) {
+	// maybe become spirit
+	if spi := targBo.spiritScore(); spi == 0 {
 		targ.Destroy()
-		w.log("%s destroyed by %s (headshot)", targName, srcName)
+		w.log("%s destroyed by %s", w.getName(targ, "?!?"), w.getName(src, "!?!"))
 	} else {
 		targ.Delete(wcBody)
 		w.Glyphs[targID] = '⟡'
+		numSpiritTurns := 5 * spi
 		w.setTimer(targ, numSpiritTurns, timerDestroy)
-		w.log("%s was disembodied by %s (moving as spirit for %v turns)", targName, srcName, numSpiritTurns)
+		w.log("%s was disembodied by %s (moving as spirit for %v turns)", w.getName(targ, "?!?"), w.getName(src, "!?!"), numSpiritTurns)
 	}
+}
+
+func (w *world) integrateBodyPart(ent ecs.Entity, part bodyPart) []string {
+	bo := w.bodies[ent.ID()]
+	imp := make([]string, 0, 2)
+	if part.Armor > 0 {
+		recv := w.chooseAttackedPart(ent)
+		bo.armor[recv.ID()] += part.Armor
+		imp = append(imp, fmt.Sprintf("%s armor +%v", bo.DescribePart(recv), part.Armor))
+	}
+	if part.Damage > 0 {
+		recv := w.chooseAttackerPart(ent)
+		bo.dmg[recv.ID()] += part.Armor
+		imp = append(imp, fmt.Sprintf("%s damage +%v", bo.DescribePart(recv), part.Damage))
+	}
+	return imp
+}
+
+func (w *world) checkAttackHit(src, targ ecs.Entity) (ecs.Entity, ecs.Entity) {
+	aPart := w.chooseAttackerPart(src)
+	if aPart == ecs.NilEntity {
+		w.log("%s has nothing to hit %s with.", w.getName(src, "!?!"), w.getName(targ, "?!?"))
+		return ecs.NilEntity, ecs.NilEntity
+	}
+	bPart := w.chooseAttackedPart(targ)
+	if bPart == ecs.NilEntity {
+		w.log("%s can find nothing worth hitting on %s.", w.getName(src, "!?!"), w.getName(targ, "?!?"))
+		return ecs.NilEntity, ecs.NilEntity
+	}
+	return aPart, bPart
+}
+
+func (w *world) chooseAttackerPart(ent ecs.Entity) ecs.Entity {
+	bo := w.bodies[ent.ID()]
+	return bo.chooseRandomPart(w.rng, func(part ecs.Entity) int {
+		if bo.dmg[part.ID()] <= 0 {
+			return 0
+		}
+		return 4*bo.dmg[part.ID()] + 2*bo.armor[part.ID()] + bo.hp[part.ID()]
+	})
+}
+
+func (w *world) chooseAttackedPart(ent ecs.Entity) ecs.Entity {
+	bo := w.bodies[ent.ID()]
+	return bo.chooseRandomPart(w.rng, func(part ecs.Entity) int {
+		id := part.ID()
+		hp := bo.hp[id]
+		if hp <= 0 {
+			return 0
+		}
+		maxHP := bo.maxHP[id]
+		armor := bo.armor[id]
+		stick := 1 + maxHP - hp
+		switch part.Type() & bcPartMask {
+		case bcTorso:
+			stick *= 100
+		case bcHead:
+			stick *= 10
+		}
+		return stick - armor
+	})
 }
 
 func (w *world) setTimer(ent ecs.Entity, n int, a timerAction) *timer {
