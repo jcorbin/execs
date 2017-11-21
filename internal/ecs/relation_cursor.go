@@ -12,7 +12,7 @@ type Cursor interface {
 
 func (rel *Relation) scanLookup(tcl TypeClause, co bool, qids []EntityID) Cursor {
 	// TODO: if qids is big enough, build a set first
-	return rel.Cursor(tcl, func(ent, a, b Entity, r RelationType) bool {
+	return rel.Cursor(tcl, func(r RelationType, ent, a, b Entity) bool {
 		var id EntityID
 		if co {
 			id = b.ID()
@@ -32,7 +32,7 @@ type iterCursor struct {
 	rel *Relation
 
 	it    Iterator
-	where func(ent, a, b Entity, r RelationType) bool
+	where func(r RelationType, ent, a, b Entity) bool
 
 	ent Entity
 	a   Entity
@@ -53,7 +53,7 @@ func (cur iterCursor) Count() int {
 		r := RelationType(cur.rel.types[i] & ^relType)
 		a := cur.rel.aCore.Ref(cur.rel.aids[i])
 		b := cur.rel.aCore.Ref(cur.rel.bids[i])
-		if cur.where(ent, a, b, r) {
+		if cur.where(r, ent, a, b) {
 			n++
 		}
 	}
@@ -67,7 +67,7 @@ func (cur *iterCursor) Scan() bool {
 		cur.r = RelationType(cur.rel.types[i] & ^relType)
 		cur.a = cur.rel.aCore.Ref(cur.rel.aids[i])
 		cur.b = cur.rel.aCore.Ref(cur.rel.bids[i])
-		if cur.where == nil || cur.where(cur.ent, cur.a, cur.b, cur.r) {
+		if cur.where == nil || cur.where(cur.r, cur.ent, cur.a, cur.b) {
 			return true
 		}
 	}
