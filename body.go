@@ -7,7 +7,7 @@ import (
 	"github.com/jcorbin/execs/internal/ecs"
 )
 
-// TODO: more explicit guard against orphans
+// TODO: more body parts: thigh/calf, forearm/upper, neck, fingers, toes, organs, joints, items
 
 const (
 	bcHP ecs.ComponentType = 1 << iota
@@ -17,17 +17,19 @@ const (
 	bcRight
 	bcLeft
 
-	bcHead  // o
-	bcTorso // O
-	bcArm   // \ /
-	bcHand  // w
-	bcLeg   // |
-	bcFoot  // ^
+	bcHead     // o
+	bcTorso    // O
+	bcUpperArm // \ /
+	bcForeArm  // \ /
+	bcHand     // w
+	bcThigh    // |
+	bcCalf     // |
+	bcFoot     // ^
 	bcTail
 )
 
 const (
-	bcPartMask = bcHead | bcTorso | bcTail | bcArm | bcHand | bcLeg | bcFoot
+	bcPartMask = bcHead | bcTorso | bcTail | bcUpperArm | bcForeArm | bcHand | bcThigh | bcCalf | bcFoot
 	bcLocMask  = bcRight | bcLeft
 )
 
@@ -92,28 +94,38 @@ func (bo *body) build(rng *rand.Rand) {
 	head := bo.AddPart(bcHead, 5, 3, 4)
 	torso := bo.AddPart(bcTorso, 8, 0, 2)
 
-	rightArm := bo.AddPart(bcRight|bcArm, 5, 3, 2)
-	leftArm := bo.AddPart(bcLeft|bcArm, 5, 3, 2)
+	rightUpperArm := bo.AddPart(bcRight|bcUpperArm, 5, 3, 2)
+	leftUpperArm := bo.AddPart(bcLeft|bcUpperArm, 5, 3, 2)
+
+	rightForeArm := bo.AddPart(bcRight|bcForeArm, 4, 4, 2)
+	leftForeArm := bo.AddPart(bcLeft|bcForeArm, 4, 4, 2)
 
 	rightHand := bo.AddPart(bcRight|bcHand, 2, 5, 1)
 	leftHand := bo.AddPart(bcLeft|bcHand, 2, 5, 1)
 
-	rightLeg := bo.AddPart(bcRight|bcLeg, 6, 5, 3)
-	leftLeg := bo.AddPart(bcLeft|bcLeg, 6, 5, 3)
+	rightThigh := bo.AddPart(bcRight|bcThigh, 6, 1, 3)
+	leftThigh := bo.AddPart(bcLeft|bcThigh, 6, 1, 3)
+
+	rightCalf := bo.AddPart(bcRight|bcCalf, 4, 5, 3)
+	leftCalf := bo.AddPart(bcLeft|bcCalf, 4, 5, 3)
 
 	rightFoot := bo.AddPart(bcRight|bcFoot, 3, 6, 2)
 	leftFoot := bo.AddPart(bcLeft|bcFoot, 3, 6, 2)
 
 	bo.rel.InsertMany(func(insert func(r ecs.RelationType, a, b ecs.Entity) ecs.Entity) {
 		insert(brControl, head, torso)
-		insert(brControl, torso, rightArm)
-		insert(brControl, torso, leftArm)
-		insert(brControl, torso, rightLeg)
-		insert(brControl, torso, leftLeg)
-		insert(brControl, rightArm, rightHand)
-		insert(brControl, leftArm, leftHand)
-		insert(brControl, rightLeg, rightFoot)
-		insert(brControl, leftLeg, leftFoot)
+		insert(brControl, torso, rightUpperArm)
+		insert(brControl, torso, leftUpperArm)
+		insert(brControl, torso, rightThigh)
+		insert(brControl, torso, leftThigh)
+		insert(brControl, rightUpperArm, rightForeArm)
+		insert(brControl, leftUpperArm, leftForeArm)
+		insert(brControl, rightForeArm, rightHand)
+		insert(brControl, leftForeArm, leftHand)
+		insert(brControl, rightThigh, rightCalf)
+		insert(brControl, leftThigh, leftCalf)
+		insert(brControl, rightCalf, rightFoot)
+		insert(brControl, leftCalf, leftFoot)
 	})
 }
 
@@ -181,12 +193,16 @@ func (bo *body) PartName(ent ecs.Entity) string {
 		return "head"
 	case bcTorso:
 		return "torso"
-	case bcArm:
-		return "arm"
+	case bcUpperArm:
+		return "upper arm"
+	case bcForeArm:
+		return "fore arm"
 	case bcHand:
 		return "hand"
-	case bcLeg:
-		return "leg"
+	case bcThigh:
+		return "thigh"
+	case bcCalf:
+		return "calf"
 	case bcFoot:
 		return "foot"
 	case bcTail:

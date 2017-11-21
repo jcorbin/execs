@@ -17,7 +17,6 @@ import (
 
 // TODO: spirit possession
 // TODO: movement based on body status
-// TODO: more body parts: thigh/calf, forearm/upper, neck, fingers, toes, organs, joints, items
 // TODO: factor out something like ecs.Relation
 
 const (
@@ -213,14 +212,14 @@ func (w *world) Render(ctx *view.Context) error {
 		for gt := bo.rel.Traverse(ecs.AllRel(brControl), ecs.TraverseDFS); gt.Traverse(); {
 			ent := gt.Node()
 			id := ent.ID()
-			desc := bo.DescribePart(ent)
-			hpParts = append(hpParts, fmt.Sprintf("%s:%v", desc, bo.hp[id]))
+			// desc := bo.DescribePart(ent)
+			hpParts = append(hpParts, fmt.Sprintf("%v", bo.hp[id]))
 			if n := bo.armor[id]; n > 0 {
-				armorParts = append(armorParts, fmt.Sprintf("%s:%v", desc, n))
+				armorParts = append(armorParts, fmt.Sprintf("%v", n))
 				armor += n
 			}
 			if n := bo.dmg[id]; n > 0 {
-				damageParts = append(damageParts, fmt.Sprintf("%s:%v", desc, n))
+				damageParts = append(damageParts, fmt.Sprintf("%v", n))
 				damage += n
 			}
 		}
