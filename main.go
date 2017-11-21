@@ -52,7 +52,6 @@ type world struct {
 	ecs.Core
 
 	over         bool
-	playerMove   point.Point
 	enemyCounter int
 
 	Names     []string
@@ -83,6 +82,9 @@ const (
 	mrAgro
 	mrDamage
 	mrKill
+	mrPending
+
+	movPending = movP | ecs.ComponentType(mrPending)
 )
 
 func (mov *moves) init(core *ecs.Core) {
@@ -341,19 +343,27 @@ func (w *world) Close() error { return nil }
 
 func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 	// parse player move
+	var move point.Point
 	switch k.Key {
 	case termbox.KeyEsc:
 		return view.ErrStop
 	case termbox.KeyArrowDown:
-		w.playerMove = point.Point{X: 0, Y: 1}
+		move = point.Point{X: 0, Y: 1}
 	case termbox.KeyArrowUp:
-		w.playerMove = point.Point{X: 0, Y: -1}
+		move = point.Point{X: 0, Y: -1}
 	case termbox.KeyArrowLeft:
-		w.playerMove = point.Point{X: -1, Y: 0}
+		move = point.Point{X: -1, Y: 0}
 	case termbox.KeyArrowRight:
-		w.playerMove = point.Point{X: 1, Y: 0}
+		move = point.Point{X: 1, Y: 0}
 	default:
-		w.playerMove = point.Zero
+		move = point.Zero
+	}
+
+	for it := w.Iter(ecs.All(playMoveMask)); it.Next(); {
+		player := it.Entity()
+		rel := w.moves.Insert(mrPending, player, player)
+		rel.Add(movP)
+		w.moves.p[rel.ID()] = move
 	}
 
 	w.Process()
@@ -412,9 +422,11 @@ func (w *world) tick() {
 }
 
 func (w *world) applyMoves() {
-	// apply player move
-	for it := w.Iter(ecs.All(playMoveMask)); it.Next(); {
-		w.move(it.Entity(), w.playerMove)
+	// apply pending moves
+	for cur := w.moves.Cursor(ecs.All(movPending), nil); cur.Scan(); {
+		ent, move := cur.A(), cur.Entity()
+		w.move(ent, w.moves.p[move.ID()])
+		move.Destroy()
 	}
 
 	// generate ai moves
