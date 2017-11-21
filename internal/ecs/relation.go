@@ -71,6 +71,11 @@ func (t RelationType) Any(mask RelationType) bool { return t&mask != 0 }
 
 const relType ComponentType = 1 << (63 - iota)
 
+// RelClause is a convenience for Clause(ComponentType(all), ComponentType(any)).
+func RelClause(all, any RelationType) TypeClause {
+	return Clause(ComponentType(all), ComponentType(any))
+}
+
 // AnyRel is a convenience for Any(ComponentType(t)).
 func AnyRel(t RelationType) TypeClause { return Any(ComponentType(t)) }
 
