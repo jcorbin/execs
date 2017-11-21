@@ -698,12 +698,12 @@ func (w *world) attack(src, targ ecs.Entity) {
 		// TODO: Relation.Upsert would be nice
 		if w.moves.Update(
 			ecs.AllRel(mrAgro),
-			func(ent ecs.Entity, a ecs.Entity, b ecs.Entity, r ecs.RelationType) bool {
+			func(r ecs.RelationType, ent, a, b ecs.Entity) bool {
 				return a == targ && b == src
 			},
-			func(ent ecs.Entity, a ecs.Entity, b ecs.Entity, r ecs.RelationType) (ecs.Entity, ecs.Entity) {
+			func(r ecs.RelationType, ent, a, b ecs.Entity) (ecs.RelationType, ecs.Entity, ecs.Entity) {
 				w.moves.n[ent.ID()] += dmg
-				return a, b
+				return r, a, b
 			},
 		) == 0 {
 			ent := w.moves.Insert(mrAgro, targ, src)
