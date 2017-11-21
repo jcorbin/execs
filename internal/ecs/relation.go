@@ -185,7 +185,7 @@ func (rel *Relation) insert(r RelationType, a, b Entity) Entity {
 // that meet the optional where clause.
 func (rel *Relation) Cursor(
 	tcl TypeClause,
-	where func(ent, a, b Entity, r RelationType) bool,
+	where func(r RelationType, ent, a, b Entity) bool,
 ) Cursor {
 	tcl.All |= relType
 	it := rel.Iter(tcl)
@@ -217,7 +217,7 @@ func (rel *Relation) LookupB(tcl TypeClause, ids ...EntityID) Cursor {
 // destroyed.
 func (rel *Relation) Update(
 	tcl TypeClause,
-	where func(ent, a, b Entity, r RelationType) bool,
+	where func(r RelationType, ent, a, b Entity) bool,
 	set func(ent, a, b Entity, r RelationType) (Entity, Entity),
 ) int {
 	n := 0
@@ -249,7 +249,7 @@ func (rel *Relation) Update(
 // but marginally faster / simpler.
 func (rel *Relation) Delete(
 	tcl TypeClause,
-	where func(ent, a, b Entity, r RelationType) bool,
+	where func(r RelationType, ent, a, b Entity) bool,
 ) {
 	if fixIndex := rel.deferIndexing(); fixIndex != nil {
 		defer fixIndex()
