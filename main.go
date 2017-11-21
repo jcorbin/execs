@@ -24,6 +24,7 @@ const (
 	wcTimer
 	wcPosition
 	wcCollide
+	wcSolid
 	wcGlyph
 	wcBG
 	wcFG
@@ -38,7 +39,7 @@ const (
 const (
 	renderMask   = wcPosition | wcGlyph
 	playMoveMask = wcPosition | wcInput | wcSoul
-	charMask     = wcName | wcGlyph | wcBody
+	charMask     = wcName | wcGlyph | wcBody | wcSolid
 	aiMoveMask   = wcPosition | wcInput | wcAI
 	collMask     = wcPosition | wcCollide
 	combatMask   = wcCollide | wcBody
@@ -54,6 +55,8 @@ type world struct {
 	over         bool
 	enemyCounter int
 
+	prompt prompt
+
 	Names     []string
 	Positions []point.Point
 	Glyphs    []rune
@@ -67,6 +70,17 @@ type world struct {
 	moves moves
 }
 
+type prompt struct {
+	prior  *prompt
+	mess   string
+	action []promptAction
+}
+
+type promptAction struct {
+	mess string
+	f    func()
+}
+
 type moves struct {
 	ecs.Relation
 	n []int
@@ -78,10 +92,10 @@ const (
 	movP
 
 	mrCollide ecs.RelationType = 1 << iota
+	mrHit
+	mrItem
 	mrGoal
 	mrAgro
-	mrDamage
-	mrKill
 	mrPending
 
 	movPending = movP | ecs.ComponentType(mrPending)
@@ -144,6 +158,8 @@ func (w *world) init() {
 	w.timers = []timer{timer{}}
 	w.bodies = []*body{nil}
 	w.items = []interface{}{nil}
+
+	w.prompt.action = make([]promptAction, 0, 10)
 
 	w.moves.init(&w.Core)
 
@@ -238,6 +254,17 @@ func (w *world) Render(ctx *view.Context) error {
 			fmt.Sprintf("Damage(%v): %s", damage, strings.Join(damageParts, " ")),
 		)
 	}
+
+	if w.prompt.mess != "" {
+		promptLines := make([]string, 0, 1+len(w.prompt.action)+len(footParts)+1)
+		promptLines = append(promptLines, fmt.Sprintf("%s: (Press Number, 0 to exit menu)", w.prompt.mess))
+		for i, act := range w.prompt.action {
+			promptLines = append(promptLines, fmt.Sprintf("%d) %s", i+1, act.mess))
+		}
+		promptLines = append(promptLines, "")
+		footParts = append(promptLines, footParts...)
+	}
+
 	ctx.SetFooter(footParts...)
 
 	// collect world extent, and compute a viewport focus position
@@ -358,11 +385,30 @@ func (w *world) extent() point.Box {
 func (w *world) Close() error { return nil }
 
 func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
+	if k.Key == termbox.KeyEsc {
+		return view.ErrStop
+	}
+
+	// maybe run prompt
+	if w.prompt.mess != "" {
+		if n := int(k.Ch - '0'); 0 <= n && n <= 9 {
+			if n == 0 {
+				if w.prompt.prior != nil {
+					w.prompt = *w.prompt.prior
+				} else {
+					w.prompt.mess = ""
+					w.prompt.action = w.prompt.action[:0]
+				}
+			} else if i := n - 1; i < len(w.prompt.action) {
+				w.prompt.action[i].f()
+			}
+			return nil
+		}
+	}
+
 	// parse player move
 	var move point.Point
 	switch k.Key {
-	case termbox.KeyEsc:
-		return view.ErrStop
 	case termbox.KeyArrowDown:
 		move = point.Point{X: 0, Y: 1}
 	case termbox.KeyArrowUp:
@@ -397,11 +443,21 @@ func (w *world) Process() {
 	w.maybeSpawn()        // spawn more demons
 }
 
+func (w *world) resetPrompt() {
+	for w.prompt.prior != nil {
+		w.prompt = *w.prompt.prior
+	}
+	w.prompt.mess = ""
+	w.prompt.action = w.prompt.action[:0]
+}
+
 func (w *world) reset() {
+	w.resetPrompt()
+
 	w.View.ClearLog()
 
-	// reset collisions, damage, and kills
-	w.moves.Delete(ecs.AnyRel(mrCollide|mrDamage|mrKill), nil)
+	// reset collisions
+	w.moves.Delete(ecs.AnyRel(mrCollide), nil)
 
 	// collect collidables
 	w.prepareCollidables()
@@ -460,13 +516,22 @@ func (w *world) generateAIMoves() {
 
 func (w *world) applyMoves() {
 	// TODO: better resolution strategy based on connected components
-	w.moves.Update(ecs.All(movPending), nil, func(r ecs.RelationType, ent, a, b ecs.Entity) (ecs.RelationType, ecs.Entity, ecs.Entity) {
-		new := w.Positions[a.ID()].Add(w.moves.p[ent.ID()])
-		if hit := w.collides(a, new); hit != ecs.NilEntity {
-			return mrCollide, a, hit
-		}
-		w.Positions[a.ID()] = new
-		return ecs.NoRelType, a, b
+	w.moves.InsertMany(func(insert func(r ecs.RelationType, a ecs.Entity, b ecs.Entity) ecs.Entity) {
+		w.moves.Update(ecs.All(movPending), nil, func(r ecs.RelationType, ent, a, b ecs.Entity) (ecs.RelationType, ecs.Entity, ecs.Entity) {
+			new := w.Positions[a.ID()].Add(w.moves.p[ent.ID()])
+			if hit := w.collides(a, new); len(hit) > 0 {
+				for _, other := range hit {
+					if other.Type().All(wcSolid) {
+						return mrCollide | mrHit, a, other
+					}
+					if other.Type().All(wcItem) {
+						insert(mrCollide|mrItem, a, other)
+					}
+				}
+			}
+			w.Positions[a.ID()] = new
+			return ecs.NoRelType, a, b
+		})
 	})
 }
 
@@ -552,9 +617,43 @@ func (w *world) chooseAIGoal(ai ecs.Entity) ecs.Entity {
 	return goal
 }
 
+func (w *world) buildItemMenu() {
+	prompting := false
+	for cur := w.moves.Cursor(ecs.RelClause(mrCollide, mrItem), nil); cur.Scan(); {
+		if !prompting && w.prompt.mess != "" {
+			continue
+		}
+		prompting = true
+		if w.prompt.mess == "" {
+			w.prompt.mess = "Items Here"
+		}
+		b := cur.B()
+		w.prompt.action = append(w.prompt.action, promptAction{
+			mess: w.getName(b, "unknown item"),
+			f:    func() { w.inspectItem(b) },
+		})
+	}
+}
+
 func (w *world) processCollisions() {
-	for cur := w.moves.Cursor(ecs.AllRel(mrCollide), nil); cur.Scan(); {
+	prompting := false
+	for cur := w.moves.Cursor(ecs.RelClause(mrCollide, mrHit|mrItem), nil); cur.Scan(); {
 		a, b := cur.A(), cur.B()
+
+		if cur.R().All(mrItem) {
+			if !prompting && w.prompt.mess != "" {
+				continue
+			}
+			prompting = true
+			if w.prompt.mess == "" {
+				w.prompt.mess = "Items Here"
+			}
+			w.prompt.action = append(w.prompt.action, promptAction{
+				mess: w.getName(b, "unknown item"),
+				f:    func() { w.inspectItem(b) },
+			})
+			continue
+		}
 
 		if a.Type().All(combatMask) && b.Type().All(combatMask) {
 			// combat collisions deal damage
@@ -579,6 +678,155 @@ func (w *world) processCollisions() {
 	}
 }
 
+func (w *world) inspectItem(ent ecs.Entity) {
+	if !ent.Type().All(wcItem) {
+		w.log("not an item?!?")
+		return
+	}
+	item := w.items[ent.ID()]
+	switch val := item.(type) {
+	case *body:
+		prior := w.prompt
+		w.prompt = prompt{
+			prior:  &prior,
+			mess:   w.getName(ent, "unknown item"),
+			action: make([]promptAction, 0, 10),
+		}
+		for it := val.Iter(ecs.All(bcPart)); len(w.prompt.action) < cap(w.prompt.action) && it.Next(); {
+			part := it.Entity()
+			w.prompt.action = append(w.prompt.action, promptAction{
+				mess: val.DescribePart(part),
+				f:    func() { w.inspectBodyPart(val, part, ent) },
+			})
+		}
+
+	default:
+		w.log("what even is a %T", item)
+	}
+}
+
+func (w *world) inspectBodyPart(bo *body, part, item ecs.Entity) {
+	ent := w.firstSoulBody()
+	if ent == ecs.NilEntity {
+		w.log("You have no body!")
+		return
+	}
+
+	prior := w.prompt
+	w.prompt = prompt{
+		prior:  &prior,
+		mess:   bo.DescribePart(part),
+		action: make([]promptAction, 0, 10),
+	}
+
+	// root part can be grafted
+	if bo.rel.LookupB(ecs.All(bcPart), part.ID()).Count() == 0 {
+		w.prompt.action = append(w.prompt.action, promptAction{
+			mess: "graft",
+			f:    func() { w.graftBodyPart(ent, bo, part, item) },
+		})
+	}
+
+	// any part can be integrated
+	w.prompt.action = append(w.prompt.action, promptAction{
+		mess: "integrate",
+		f:    func() { w.integrateBodyPart(ent, bo, part, item) },
+	})
+}
+
+func (w *world) graftBodyPart(ent ecs.Entity, rem *body, part, item ecs.Entity) {
+	defer func() { w.prompt = *w.prompt.prior }()
+	w.log("grafting unimplemented")
+
+	/*
+		bo := w.bodies[ent.ID()]
+
+		attach, limit := ecs.NoType, 0
+		switch part.Type() & bcPartMask {
+		case bcRight | bcUpperArm, bcLeft | bcUpperArm:
+			attach, limit = bcTorso, 2
+		case bcRight | bcForeArm:
+			attach, limit = bcRight|bcUpperArm, 1
+		case bcLeft | bcForeArm:
+			attach, limit = bcLeft|bcUpperArm, 1
+		case bcRight | bcHand:
+			attach, limit = bcRight|bcForeArm, 1
+		case bcLeft | bcHand:
+			attach, limit = bcLeft|bcForeArm, 1
+		case bcRight | bcThigh, bcLeft | bcThigh:
+			attach, limit = bcTorso, 2
+		case bcRight | bcCalf:
+			attach, limit = bcRight|bcThigh, 1
+		case bcLeft | bcCalf:
+			attach, limit = bcLeft|bcThigh, 1
+		case bcRight | bcFoot:
+			attach, limit = bcRight|bcCalf, 1
+		case bcLeft | bcFoot:
+			attach, limit = bcLeft|bcCalf, 1
+		case bcTail:
+			attach, limit = bcTorso, 3
+		default:
+			w.log("don't know how to graft a %s", body.DescribePart(part))
+		}
+
+		for it := bo.Iter(ecs.All(attach)); it.Next(); {
+			for cur := bo.rel.LookupA(ecs.AllRel(brControl), it.ID()); cur.Scan(); {
+				// TODO: should be a cursor w/ where .Count()
+				n := 0
+				if sub := cur.B(); sub.Type() == part.Type() {
+					n++
+				}
+				if n < limit {
+					par := it.Entity()
+					// TODO: import the sub graph, insert relation from par to it
+				}
+
+			}
+		}
+	*/
+}
+
+func (w *world) integrateBodyPart(ent ecs.Entity, rem *body, part, item ecs.Entity) {
+	defer func() {
+		w.resetPrompt()
+		if item.Type() == ecs.NoType {
+			w.buildItemMenu()
+		} else {
+			w.inspectItem(item)
+		}
+	}()
+	bo := w.bodies[ent.ID()]
+
+	imp := make([]string, 0, 2)
+	if armor := bo.armor[part.ID()]; armor > 0 {
+		recv := w.chooseAttackedPart(ent)
+		bo.armor[recv.ID()] += armor
+		imp = append(imp, fmt.Sprintf("%s armor +%v", bo.DescribePart(recv), armor))
+	}
+	if damage := bo.dmg[part.ID()]; damage > 0 {
+		recv := w.chooseAttackerPart(ent)
+		bo.dmg[recv.ID()] += damage
+		imp = append(imp, fmt.Sprintf("%s damage +%v", bo.DescribePart(recv), damage))
+	}
+	part.Destroy()
+
+	w.log("%s gained %v from %s",
+		w.getName(ent, "unknown"),
+		strings.Join(imp, " and "),
+		w.getName(item, "unknown"),
+	)
+	if rem.Len() == 0 {
+		item.Destroy()
+	}
+}
+
+func (w *world) firstSoulBody() ecs.Entity {
+	if it := w.Iter(ecs.All(wcBody | wcSoul)); it.Next() {
+		return it.Entity()
+	}
+	return ecs.NilEntity
+}
+
 func (w *world) checkOver() {
 	// count remaining souls
 	if w.Iter(ecs.All(wcSoul)).Count() == 0 {
@@ -589,8 +837,7 @@ func (w *world) checkOver() {
 
 func (w *world) maybeSpawn() {
 	// TODO: randomize position?
-	hit := w.collides(w.Ref(0), point.Zero)
-	if hit != ecs.NilEntity {
+	if len(w.collides(w.Ref(0), point.Zero)) > 0 {
 		return
 	}
 
@@ -681,7 +928,7 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 		return
 	}
 
-	if imp := w.integrateBodyPart(src, part); len(imp) > 0 {
+	if imp := w.reclaimDestroyedPart(src, part); len(imp) > 0 {
 		w.log("%s gained %v from %s's %s",
 			w.getName(src, "!?!"),
 			strings.Join(imp, " and "),
@@ -721,7 +968,7 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 	}
 }
 
-func (w *world) integrateBodyPart(ent ecs.Entity, part bodyPart) []string {
+func (w *world) reclaimDestroyedPart(ent ecs.Entity, part bodyPart) []string {
 	bo := w.bodies[ent.ID()]
 	imp := make([]string, 0, 2)
 	if part.Armor > 0 {
@@ -731,7 +978,7 @@ func (w *world) integrateBodyPart(ent ecs.Entity, part bodyPart) []string {
 	}
 	if part.Damage > 0 {
 		recv := w.chooseAttackerPart(ent)
-		bo.dmg[recv.ID()] += part.Armor
+		bo.dmg[recv.ID()] += part.Damage
 		imp = append(imp, fmt.Sprintf("%s damage +%v", bo.DescribePart(recv), part.Damage))
 	}
 	return imp
@@ -801,7 +1048,7 @@ func (w *world) addBox(box point.Box, glyph rune) {
 		{n: sz.Y, d: point.Point{Y: -1}},
 	} {
 		for i := 0; i < r.n; i++ {
-			wall := w.AddEntity(wcPosition | wcCollide | wcGlyph | wcBG | wcFG)
+			wall := w.AddEntity(wcPosition | wcCollide | wcSolid | wcGlyph | wcBG | wcFG)
 			w.Glyphs[wall.ID()] = glyph
 			w.Positions[wall.ID()] = pos
 			c, _ := wallTable.toColor(last)
@@ -820,7 +1067,7 @@ func (w *world) addBox(box point.Box, glyph rune) {
 }
 
 func (w *world) newItem(pos point.Point, name string, glyph rune, val interface{}) ecs.Entity {
-	ent := w.AddEntity(wcPosition | wcName | wcGlyph | wcItem)
+	ent := w.AddEntity(wcPosition | wcCollide | wcName | wcGlyph | wcItem)
 	w.Positions[ent.ID()] = pos
 	w.Glyphs[ent.ID()] = glyph
 	w.Names[ent.ID()] = name
@@ -874,19 +1121,20 @@ func (w *world) prepareCollidables() {
 	}
 }
 
-func (w *world) collides(ent ecs.Entity, pos point.Point) ecs.Entity {
+func (w *world) collides(ent ecs.Entity, pos point.Point) []ecs.Entity {
 	var id ecs.EntityID
 	if ent != ecs.NilEntity {
 		id = w.Deref(ent)
 	}
+	var r []ecs.Entity
 	for _, hitID := range w.coll {
 		if hitID != id {
 			if hitPos := w.Positions[hitID]; hitPos.Equal(pos) {
-				return w.Ref(hitID)
+				r = append(r, w.Ref(hitID))
 			}
 		}
 	}
-	return ecs.NilEntity
+	return r
 
 	// TODO: binary search
 	// i := sort.Search(len(w.coll), func(i int) bool {
