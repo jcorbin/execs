@@ -199,4 +199,19 @@ And for all that refactoring, the main game now:
 So in net: the AIs now mill around and kill each other, while the player can
 play it safe from the edge; Whew!
 
+### [Nine](../../tree/nine)
+
+Small improvements and completing things:
+
+- ecs progress:
+  - several small fixes and improvements to Relation and friends
+  - some parts got more debug friendly (fmt.Stringer implementations)
+- world progress:
+  - closed the agro loop: damage deals agro
+  - added ai goal unsticking so that they stop getting stuck on the wall
+    indefinitely
+  - move generation decoupled from move applying; this leaves room for more
+    mature move resolution strategies than first-one-wins
+  - many cleanups and improvements to control flow
+
 [es-beta]: http://entity-systems.wikidot.com/rdbms-beta
