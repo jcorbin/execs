@@ -687,26 +687,32 @@ func (w *world) processCombat() {
 }
 
 func (w *world) buildItemMenu() {
-	if pr, ok := w.itemPrompt(w.prompt); ok {
+	it := w.Iter(ecs.All(playMoveMask))
+	if !it.Next() {
+		w.log("wru?")
+		return
+	}
+
+	if pr, ok := w.itemPrompt(w.prompt, it.Entity()); ok {
 		w.prompt = pr
 	} else if w.prompt.mess != "" {
 		w.prompt.reset()
 	}
 }
 
-func (w *world) itemPrompt(pr prompt) (prompt, bool) {
+func (w *world) itemPrompt(pr prompt, ent ecs.Entity) (prompt, bool) {
 	// TODO: once we have a proper spatial index, stop relying on
 	// collision relations for this
 	prompting := false
 	for cur := w.moves.Cursor(
 		ecs.RelClause(mrCollide, mrItem),
-		nil,
+		func(r ecs.RelationType, rel, a, b ecs.Entity) bool { return a == ent },
 	); cur.Scan(); {
 		if !prompting {
 			pr = pr.makeSub("Items Here")
 			prompting = true
 		}
-		ent, item := cur.A(), cur.B()
+		item := cur.B()
 		if !pr.addAction(
 			func(pr prompt) (prompt, bool) { return w.interactWith(pr, ent, item) },
 			w.getName(item, "unknown item"),
