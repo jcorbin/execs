@@ -650,7 +650,10 @@ func (w *world) itemPrompt(pr prompt) (prompt, bool) {
 	// TODO: once we have a proper spatial index, stop relying on
 	// collision relations for this
 	prompting := false
-	for cur := w.moves.Cursor(ecs.RelClause(mrCollide, mrItem), nil); cur.Scan(); {
+	for cur := w.moves.Cursor(
+		ecs.RelClause(mrCollide, mrItem),
+		nil,
+	); cur.Scan(); {
 		if !prompting {
 			pr = pr.makeSub("Items Here")
 			prompting = true
