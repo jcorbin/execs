@@ -79,63 +79,6 @@ type world struct {
 	moves moves
 }
 
-type prompt struct {
-	prior  *prompt
-	mess   string
-	action []promptAction
-}
-
-type promptAction struct {
-	mess string
-	run  func(prompt) (prompt, bool)
-}
-
-func (pr *prompt) addAction(
-	run func(prompt) (prompt, bool),
-	mess string, args ...interface{},
-) bool {
-	if len(pr.action) < cap(pr.action) {
-		pr.action = append(pr.action, promptAction{mess, run})
-		return true
-	}
-	return false
-}
-
-func (pr prompt) run(ch rune) (prompt, bool) {
-	n := int(ch - '0')
-	if n < 0 || n > 9 {
-		return pr, false
-	}
-	if i := n - 1; i < 0 {
-		return pr.pop(), true
-	} else if i < len(pr.action) {
-		return pr.action[i].run(pr)
-	}
-	return pr, true
-}
-
-func (pr prompt) pop() prompt {
-	if pr.prior != nil {
-		return *pr.prior
-	}
-	return pr
-}
-
-func (pr prompt) unwind() prompt {
-	for pr.prior != nil {
-		pr = *pr.prior
-	}
-	return pr
-}
-
-func (pr prompt) makeSub(mess string, args ...interface{}) prompt {
-	return prompt{
-		prior:  &pr,
-		mess:   fmt.Sprintf(mess, args...),
-		action: make([]promptAction, 0, 10),
-	}
-}
-
 type moves struct {
 	ecs.Relation
 	n []int
@@ -275,7 +218,14 @@ func (w *world) Render(ctx *view.Context) error {
 	)
 
 	it := w.Iter(ecs.All(wcSoul | wcBody))
-	footParts := make([]string, 0, it.Count()*3)
+	promptLines := w.prompt.render("")
+	footParts := make([]string, 0, it.Count()*3+len(promptLines)+1)
+
+	if len(promptLines) > 0 {
+		footParts = append(footParts, promptLines...)
+		footParts = append(footParts, "")
+	}
+
 	for it.Next() {
 		bo := w.bodies[it.ID()]
 
@@ -311,16 +261,6 @@ func (w *world) Render(ctx *view.Context) error {
 			fmt.Sprintf("Armor(%v): %s", armor, strings.Join(armorParts, " ")),
 			fmt.Sprintf("Damage(%v): %s", damage, strings.Join(damageParts, " ")),
 		)
-	}
-
-	if w.prompt.mess != "" {
-		promptLines := make([]string, 0, 1+len(w.prompt.action)+len(footParts)+1)
-		promptLines = append(promptLines, fmt.Sprintf("%s: (Press Number, 0 to exit menu)", w.prompt.mess))
-		for i, act := range w.prompt.action {
-			promptLines = append(promptLines, fmt.Sprintf("%d) %s", i+1, act.mess))
-		}
-		promptLines = append(promptLines, "")
-		footParts = append(promptLines, footParts...)
 	}
 
 	ctx.SetFooter(footParts...)
@@ -448,12 +388,8 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 	}
 
 	// maybe run prompt
-	if w.prompt.mess != "" {
-		if pr, ok := w.prompt.run(k.Ch); ok {
-			w.prompt = pr
-			return nil
-		}
-		w.resetPrompt()
+	if w.prompt.handle(k.Ch) {
+		return nil
 	}
 
 	// parse player move
@@ -494,16 +430,8 @@ func (w *world) Process() {
 	w.maybeSpawn()        // spawn more demons
 }
 
-func (w *world) resetPrompt() {
-	for w.prompt.prior != nil {
-		w.prompt = *w.prompt.prior
-	}
-	w.prompt.mess = ""
-	w.prompt.action = w.prompt.action[:0]
-}
-
 func (w *world) reset() {
-	w.resetPrompt()
+	w.prompt.reset()
 
 	w.View.ClearLog()
 
@@ -699,7 +627,7 @@ func (w *world) buildItemMenu() {
 	if pr, ok := w.itemPrompt(w.prompt); ok {
 		w.prompt = pr
 	} else if w.prompt.mess != "" {
-		w.resetPrompt()
+		w.prompt.reset()
 	}
 }
 
