@@ -600,6 +600,9 @@ func (w *world) chooseAIGoal(ai ecs.Entity) ecs.Entity {
 		pos := w.Positions[it.ID()]
 		diff := pos.Sub(myPos)
 		score := diff.X*diff.X + diff.Y*diff.Y
+		if it.Type().All(wcItem) {
+			score *= 64
+		}
 		sum += score
 		if w.rng.Intn(sum) < score {
 			goal = it.Entity()
