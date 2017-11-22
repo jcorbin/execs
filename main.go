@@ -183,14 +183,8 @@ func (w *world) createBody(id ecs.EntityID, t ecs.ComponentType) {
 }
 
 func (w *world) destroyBody(id ecs.EntityID, t ecs.ComponentType) {
-	// TODO: could reset the body ecs for re-use
 	if bo := w.bodies[id]; bo != nil {
-		if !bo.Empty() {
-			name := w.getName(w.Ref(id), "???")
-			name = fmt.Sprintf("remains of %s", name)
-			w.newItem(w.Positions[id], name, '%', bo)
-			w.bodies[id] = nil
-		}
+		bo.Clear()
 	}
 }
 
