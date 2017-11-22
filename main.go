@@ -897,7 +897,7 @@ func (w *world) maybeSpawn() {
 	bo := w.bodies[enemy.ID()]
 
 	sum := 0
-	for it := w.Iter(ecs.All(combatMask)); it.Next(); {
+	for it := w.Iter(ecs.All(combatMask | wcInput)); it.Next(); {
 		if !it.Type().All(wcWaiting) {
 			bo := w.bodies[it.ID()]
 			if it.Type().All(wcSoul) {
