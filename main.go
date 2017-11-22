@@ -441,15 +441,16 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 }
 
 func (w *world) Process() {
-	w.reset()           // reset state from last time
-	w.tick()            // run timers
-	w.generateAIMoves() // give AI a chance!
-	w.applyMoves()      // resolve moves
-	w.buildItemMenu()   // what items are here
-	w.processAIItems()  // nom nom
-	w.processCombat()   // e.g. deal damage
-	w.checkOver()       // no souls => done
-	w.maybeSpawn()      // spawn more demons
+	w.reset()              // reset state from last time
+	w.tick()               // run timers
+	w.prepareCollidables() // collect collidables
+	w.generateAIMoves()    // give AI a chance!
+	w.applyMoves()         // resolve moves
+	w.buildItemMenu()      // what items are here
+	w.processAIItems()     // nom nom
+	w.processCombat()      // e.g. deal damage
+	w.checkOver()          // no souls => done
+	w.maybeSpawn()         // spawn more demons
 }
 
 func (w *world) reset() {
@@ -459,9 +460,6 @@ func (w *world) reset() {
 
 	// reset collisions
 	w.moves.Delete(ecs.AnyRel(mrCollide), nil)
-
-	// collect collidables
-	w.prepareCollidables()
 }
 
 func (w *world) tick() {
