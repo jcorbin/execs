@@ -398,7 +398,24 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 	case termbox.KeyArrowRight:
 		move = point.Point{X: 1, Y: 0}
 	default:
-		move = point.Zero
+		switch k.Ch {
+		case 'y':
+			move = point.Point{X: -1, Y: -1}
+		case 'u':
+			move = point.Point{X: 1, Y: -1}
+		case 'n':
+			move = point.Point{X: 1, Y: 1}
+		case 'b':
+			move = point.Point{X: -1, Y: 1}
+		case 'h':
+			move = point.Point{X: -1, Y: 0}
+		case 'j':
+			move = point.Point{X: 0, Y: 1}
+		case 'k':
+			move = point.Point{X: 0, Y: -1}
+		case 'l':
+			move = point.Point{X: 1, Y: 0}
+		}
 	}
 
 	for it := w.Iter(ecs.All(playMoveMask)); it.Next(); {
