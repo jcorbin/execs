@@ -674,10 +674,7 @@ func (bo *body) interact(pr prompt, w *world, item, ent ecs.Entity) (prompt, boo
 		// TODO: inspect menu when more than just scavengable
 
 		// any part can be scavenged
-		if !pr.addAction(
-			rem.scavenge,
-			rem.describeScavenge(),
-		) {
+		if !pr.addAction(rem.scavenge, rem.describeScavenge()) {
 			break
 		}
 
