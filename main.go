@@ -718,12 +718,12 @@ func (rem bodyRemains) scavenge(pr prompt) (prompt, bool) {
 	entBo := rem.w.bodies[rem.ent.ID()]
 
 	imp := make([]string, 0, 2)
-	if armor := entBo.armor[rem.part.ID()]; armor > 0 {
+	if armor := rem.bo.armor[rem.part.ID()]; armor > 0 {
 		recv := rem.w.chooseAttackedPart(rem.ent)
 		entBo.armor[recv.ID()] += armor
 		imp = append(imp, fmt.Sprintf("%s armor +%v", entBo.DescribePart(recv), armor))
 	}
-	if damage := entBo.dmg[rem.part.ID()]; damage > 0 {
+	if damage := rem.bo.dmg[rem.part.ID()]; damage > 0 {
 		recv := rem.w.chooseAttackerPart(rem.ent)
 		entBo.dmg[recv.ID()] += damage
 		imp = append(imp, fmt.Sprintf("%s damage +%v", entBo.DescribePart(recv), damage))
