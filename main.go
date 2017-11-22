@@ -1157,6 +1157,9 @@ func (w *world) prepareCollidables() {
 }
 
 func (w *world) collides(ent ecs.Entity, pos point.Point) []ecs.Entity {
+	if !ent.Type().All(wcCollide) {
+		return nil
+	}
 	var id ecs.EntityID
 	if ent != ecs.NilEntity {
 		id = w.Deref(ent)
