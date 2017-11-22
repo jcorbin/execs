@@ -937,7 +937,7 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 	// TODO: store damage and kill relations
 
 	srcBo, targBo := w.bodies[src.ID()], w.bodies[targ.ID()]
-	dealt, part, destroyed := targBo.damagePart(bPart, dmg)
+	dealt, _, destroyed := targBo.damagePart(bPart, dmg)
 	if !destroyed {
 		w.log("%s's %s dealt %v damage to %s's %s",
 			w.getName(src, "!?!"), srcBo.DescribePart(aPart),
@@ -963,13 +963,13 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 	}
 
 	// TODO: drop armor scraps on the floor instead
-	if imp := w.reclaimDestroyedPart(src, part); len(imp) > 0 {
-		w.log("%s gained %v from %s's %s",
-			w.getName(src, "!?!"),
-			strings.Join(imp, " and "),
-			w.getName(targ, "?!?"), part.Desc,
-		)
-	}
+	// if imp := w.reclaimDestroyedPart(src, part); len(imp) > 0 {
+	// 	w.log("%s gained %v from %s's %s",
+	// 		w.getName(src, "!?!"),
+	// 		strings.Join(imp, " and "),
+	// 		w.getName(targ, "?!?"), part.Desc,
+	// 	)
+	// }
 
 	targID := targ.ID()
 
@@ -1003,21 +1003,21 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 	}
 }
 
-func (w *world) reclaimDestroyedPart(ent ecs.Entity, part bodyPart) []string {
-	bo := w.bodies[ent.ID()]
-	imp := make([]string, 0, 2)
-	if part.Armor > 0 {
-		recv := w.chooseAttackedPart(ent)
-		bo.armor[recv.ID()] += part.Armor
-		imp = append(imp, fmt.Sprintf("%s armor +%v", bo.DescribePart(recv), part.Armor))
-	}
-	if part.Damage > 0 {
-		recv := w.chooseAttackerPart(ent)
-		bo.dmg[recv.ID()] += part.Damage
-		imp = append(imp, fmt.Sprintf("%s damage +%v", bo.DescribePart(recv), part.Damage))
-	}
-	return imp
-}
+// func (w *world) reclaimDestroyedPart(ent ecs.Entity, part bodyPart) []string {
+// 	bo := w.bodies[ent.ID()]
+// 	imp := make([]string, 0, 2)
+// 	if part.Armor > 0 {
+// 		recv := w.chooseAttackedPart(ent)
+// 		bo.armor[recv.ID()] += part.Armor
+// 		imp = append(imp, fmt.Sprintf("%s armor +%v", bo.DescribePart(recv), part.Armor))
+// 	}
+// 	if part.Damage > 0 {
+// 		recv := w.chooseAttackerPart(ent)
+// 		bo.dmg[recv.ID()] += part.Damage
+// 		imp = append(imp, fmt.Sprintf("%s damage +%v", bo.DescribePart(recv), part.Damage))
+// 	}
+// 	return imp
+// }
 
 func (w *world) checkAttackHit(src, targ ecs.Entity) (ecs.Entity, ecs.Entity) {
 	aPart := w.chooseAttackerPart(src)
