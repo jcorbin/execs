@@ -594,14 +594,15 @@ func (w *world) chooseAIGoal(ai ecs.Entity) ecs.Entity {
 	myPos := w.Positions[ai.ID()]
 	goal, sum := ecs.NilEntity, 0
 	for it := w.Iter(ecs.All(collMask)); it.Next(); {
-		if !it.Type().All(combatMask) {
-			pos := w.Positions[it.ID()]
-			diff := pos.Sub(myPos)
-			quad := diff.X*diff.X + diff.Y*diff.Y
-			sum += quad
-			if w.rng.Intn(sum) < quad {
-				goal = it.Entity()
-			}
+		if it.Type().All(combatMask) {
+			continue
+		}
+		pos := w.Positions[it.ID()]
+		diff := pos.Sub(myPos)
+		score := diff.X*diff.X + diff.Y*diff.Y
+		sum += score
+		if w.rng.Intn(sum) < score {
+			goal = it.Entity()
 		}
 	}
 	return goal
