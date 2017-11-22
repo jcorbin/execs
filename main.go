@@ -1012,7 +1012,7 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 		return
 	}
 
-	targ.Delete(wcBody)
+	targ.Delete(wcBody | wcCollide)
 	w.Glyphs[targID] = '⟡'
 	for _, head := range heads {
 		head.Add(bcDerived)
