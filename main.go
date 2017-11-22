@@ -634,12 +634,14 @@ func (w *world) processAIItems() {
 		ai, b := cur.A(), cur.B()
 
 		if b.Type().All(wcItem) {
-			w.log("%s> :shrug: %v @%v",
-				w.getName(ai, "anon"),
-				w.getName(b, "???"),
-				w.Positions[b.ID()],
-			)
-			goals[ab{ai.ID(), b.ID()}].Destroy()
+			// can haz?
+			if pr, ok := w.itemPrompt(prompt{}, ai); ok {
+				w.runAIInteraction(pr, ai)
+			}
+			// can haz moar?
+			if pr, ok := w.itemPrompt(prompt{}, ai); !ok || len(pr.action) == 0 {
+				goals[ab{ai.ID(), b.ID()}].Destroy()
+			}
 		} else {
 			// have booped?
 			w.log("%s> booped %v @%v",
@@ -649,6 +651,23 @@ func (w *world) processAIItems() {
 			)
 			goals[ab{ai.ID(), b.ID()}].Destroy()
 		}
+	}
+}
+
+func (w *world) runAIInteraction(pr prompt, ai ecs.Entity) {
+	for ok := true; ok && len(pr.action) > 0; {
+		sum, i := 0, 0
+		for j := range pr.action {
+			rate := 1 // TODO: action rating
+			sum += rate
+			if w.rng.Intn(sum) < rate {
+				i = j
+			}
+		}
+
+		act := pr.action[i]
+		w.log("%s> I choose #%d %q", w.getName(ai, "anon"), i+1, act.mess)
+		pr, ok = act.run(pr)
 	}
 }
 
