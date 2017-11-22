@@ -705,14 +705,20 @@ func (w *world) processCombat() {
 	}
 }
 
+func (w *world) findPlayer() ecs.Entity {
+	if it := w.Iter(ecs.All(playMoveMask)); it.Next() {
+		return it.Entity()
+	}
+	return ecs.NilEntity
+}
+
 func (w *world) buildItemMenu() {
-	it := w.Iter(ecs.All(playMoveMask))
-	if !it.Next() {
+	ent := w.findPlayer()
+	if ent == ecs.NilEntity {
 		w.log("wru?")
 		return
 	}
-
-	if pr, ok := w.itemPrompt(w.prompt, it.Entity()); ok {
+	if pr, ok := w.itemPrompt(w.prompt, ent); ok {
 		w.prompt = pr
 	} else if w.prompt.mess != "" {
 		w.prompt.reset()
