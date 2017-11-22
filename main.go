@@ -646,7 +646,10 @@ func (w *world) itemPrompt(pr prompt) (prompt, bool) {
 }
 
 func (w *world) interactWith(pr prompt, ent, item ecs.Entity) (prompt, bool) {
-	return w.items[item.ID()].interact(pr, w, item, ent)
+	if it := w.items[item.ID()]; it != nil {
+		return w.items[item.ID()].interact(pr, w, item, ent)
+	}
+	return pr.unwind(), false
 }
 
 type bodyRemains struct {
