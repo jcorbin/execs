@@ -431,14 +431,15 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 }
 
 func (w *world) Process() {
-	w.reset()             // reset state from last time
-	w.tick()              // run timers
-	w.generateAIMoves()   // give AI a chance!
-	w.applyMoves()        // resolve moves
-	w.buildItemMenu()     // what items are here
-	w.processCollisions() // e.g. deal damage
-	w.checkOver()         // no souls => done
-	w.maybeSpawn()        // spawn more demons
+	w.reset()           // reset state from last time
+	w.tick()            // run timers
+	w.generateAIMoves() // give AI a chance!
+	w.applyMoves()      // resolve moves
+	w.buildItemMenu()   // what items are here
+	w.processAIItems()  // nom nom
+	w.processCombat()   // e.g. deal damage
+	w.checkOver()       // no souls => done
+	w.maybeSpawn()      // spawn more demons
 }
 
 func (w *world) reset() {
@@ -611,30 +612,55 @@ func (w *world) chooseAIGoal(ai ecs.Entity) ecs.Entity {
 	return goal
 }
 
-func (w *world) processCollisions() {
-	for cur := w.moves.Cursor(ecs.RelClause(mrCollide, mrHit), nil); cur.Scan(); {
-		a, b := cur.A(), cur.B()
+func (w *world) processAIItems() {
+	type ab struct{ a, b ecs.EntityID }
+	goals := make(map[ab]ecs.Entity)
+	for cur := w.moves.Cursor(
+		ecs.AllRel(mrGoal),
+		func(r ecs.RelationType, ent, a, b ecs.Entity) bool {
+			return a.Type().All(aiMoveMask)
+		},
+	); cur.Scan(); {
+		goals[ab{cur.A().ID(), cur.B().ID()}] = cur.Entity()
+	}
 
-		if a.Type().All(combatMask) && b.Type().All(combatMask) {
-			// combat collisions deal damage
-			w.attack(a, b)
-		}
+	for cur := w.moves.Cursor(
+		ecs.RelClause(mrCollide, mrItem|mrHit),
+		func(r ecs.RelationType, ent, a, b ecs.Entity) bool {
+			_, isGoal := goals[ab{a.ID(), b.ID()}]
+			return isGoal
+		},
+	); cur.Scan(); {
+		ai, b := cur.A(), cur.B()
 
-		// am ai?
-		if a.Type().All(aiMoveMask) {
+		if b.Type().All(wcItem) {
+			w.log("%s> :shrug: %v @%v",
+				w.getName(ai, "anon"),
+				w.getName(b, "???"),
+				w.Positions[b.ID()],
+			)
+			goals[ab{ai.ID(), b.ID()}].Destroy()
+		} else {
 			// have booped?
-			for gc := w.moves.LookupA(ecs.AllRel(mrGoal), a.ID()); gc.Scan(); {
-				if gc.B() == b {
-					w.log("%s> booped %v @%v",
-						w.getName(a, "anon"),
-						w.getName(b, "???"),
-						w.Positions[b.ID()],
-					)
-					gc.Entity().Destroy()
-					break
-				}
-			}
+			w.log("%s> booped %v @%v",
+				w.getName(ai, "anon"),
+				w.getName(b, "???"),
+				w.Positions[b.ID()],
+			)
+			goals[ab{ai.ID(), b.ID()}].Destroy()
 		}
+	}
+}
+
+func (w *world) processCombat() {
+	for cur := w.moves.Cursor(
+		ecs.AllRel(mrCollide|mrHit),
+		func(r ecs.RelationType, ent, a, b ecs.Entity) bool {
+			return a.Type().All(combatMask) && b.Type().All(combatMask)
+		},
+	); cur.Scan(); {
+		src, targ := cur.A(), cur.B()
+		w.attack(src, targ)
 	}
 }
 
