@@ -12,10 +12,16 @@ import (
 const (
 	bcHP ecs.ComponentType = 1 << iota
 	bcPart
+	bcDerived
+	// bcStats TODO missing
 	bcName
 
 	bcRight
 	bcLeft
+
+	// TODO: draw a line between flags above, and
+	// monotonic / exclusive types below; probably a
+	// 32/32-bit split is a good place to start
 
 	bcHead     // o
 	bcTorso    // O
@@ -46,16 +52,26 @@ type body struct {
 	hp    []int
 	dmg   []int
 	armor []int
+
+	derived []ecs.Entity // TODO: replace this with a Relation;
+	// TODO: Relation would need foreign key support (i.e. everything in the B
+	//       side may come from a different Core (body)).
+	// TODO: Relation would need a new flag "last cascades" so that destroy
+	//       only happens after the last relation is destroyed.
 }
 
+// TODO: split package and intermediate through:
+// - body api
+// - type Part struct { ecs.Entity }
+
+// TODO: func (Part) Stats()
 type bodyStats struct {
 	HP, MaxHP int
 	Damage    int
 	Armor     int
 }
 
-type bodyParts []bodyPart
-
+// TODO: func (Part) Serialize()
 type bodyPart struct {
 	Type ecs.ComponentType
 	Name string
@@ -66,14 +82,16 @@ type bodyPart struct {
 func newBody() *body {
 	bo := &body{
 		// TODO: consider eliminating the padding for EntityID(0)
-		fmt:   []string{""},
-		maxHP: []int{0},
-		hp:    []int{0},
-		dmg:   []int{0},
-		armor: []int{0},
+		fmt:     []string{""},
+		maxHP:   []int{0},
+		hp:      []int{0},
+		dmg:     []int{0},
+		armor:   []int{0},
+		derived: []ecs.Entity{ecs.NilEntity},
 	}
 	bo.rel.Init(&bo.Core, 0)
 	bo.RegisterAllocator(bcPart, bo.allocPart)
+	bo.RegisterDestroyer(bcDerived, bo.destroyDerived)
 	return bo
 }
 
@@ -88,6 +106,23 @@ func (bo *body) allocPart(id ecs.EntityID, t ecs.ComponentType) {
 	bo.hp = append(bo.hp, 0)
 	bo.dmg = append(bo.dmg, 0)
 	bo.armor = append(bo.armor, 0)
+	bo.derived = append(bo.derived, ecs.NilEntity)
+}
+
+func (bo *body) destroyDerived(id ecs.EntityID, t ecs.ComponentType) {
+	if ent := bo.derived[id]; ent != ecs.NilEntity {
+		bo.derived[id] = ecs.NilEntity
+		any := false
+		for it := bo.Iter(ecs.All(bcDerived)); it.Next(); {
+			if bo.derived[it.ID()] == ent {
+				any = true
+				break
+			}
+		}
+		if !any {
+			ent.Destroy()
+		}
+	}
 }
 
 func (bo *body) build(rng *rand.Rand) {
@@ -248,12 +283,13 @@ func (bo *body) damagePart(ent ecs.Entity, dmg int) (int, bodyPart, bool) {
 	}, true
 }
 
-func (bo *body) spiritScore() int {
-	n := 0
-	for it := bo.Iter(ecs.All(bcHead)); it.Next(); {
-		n += bo.hp[it.ID()]
+func (bo *body) allHeads() []ecs.Entity {
+	it := bo.Iter(ecs.All(bcHead))
+	r := make([]ecs.Entity, 0, it.Count())
+	for it.Next() {
+		r = append(r, it.Entity())
 	}
-	return n
+	return r
 }
 
 func (bo *body) partHPRating(ent ecs.Entity) float64 {

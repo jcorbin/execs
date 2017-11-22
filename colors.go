@@ -13,6 +13,7 @@ import (
 var (
 	aiColors    = []termbox.Attribute{124, 160, 196, 202, 208, 214}
 	soulColors  = []termbox.Attribute{19, 20, 21, 27, 33, 39}
+	itemColors  = []termbox.Attribute{22, 23, 29, 35, 41, 47}
 	wallColors  = []termbox.Attribute{233, 234, 235, 236, 237, 238, 239}
 	floorColors = []termbox.Attribute{232, 233, 234}
 

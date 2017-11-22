@@ -49,6 +49,11 @@ type worldItem interface {
 	interact(pr prompt, w *world, item, ent ecs.Entity) (prompt, bool)
 }
 
+type durableItem interface {
+	worldItem
+	HPRange() (int, int)
+}
+
 type destroyableItem interface {
 	worldItem
 	destroy(w *world)
@@ -117,19 +122,9 @@ func (mov *moves) deleteN(id ecs.EntityID, t ecs.ComponentType) { mov.n[id] = 0 
 func (mov *moves) deleteP(id ecs.EntityID, t ecs.ComponentType) { mov.p[id] = point.Zero }
 
 type timer struct {
-	n int
-	a timerAction
-	t ecs.ComponentType
-	f func(ecs.Entity)
+	n, m int
+	f    func(ecs.Entity)
 }
-
-type timerAction uint8
-
-const (
-	timerDestroy timerAction = iota
-	// timerSetType FIXME
-	timerCallback
-)
 
 func newWorld(v *view.View) (*world, error) {
 	f, err := os.Create(fmt.Sprintf("%v.log", time.Now().Format(time.RFC3339)))
@@ -163,8 +158,10 @@ func (w *world) init() {
 
 	w.RegisterAllocator(wcName|wcPosition|wcGlyph|wcBG|wcFG|wcBody|wcItem|wcTimer, w.allocWorld)
 	w.RegisterCreator(wcBody, w.createBody)
+	w.RegisterDestroyer(wcTimer, w.destroyTimer)
 	w.RegisterDestroyer(wcBody, w.destroyBody)
 	w.RegisterDestroyer(wcItem, w.destroyItem)
+	w.RegisterDestroyer(wcInput, w.destroyInput)
 }
 
 func (w *world) allocWorld(id ecs.EntityID, t ecs.ComponentType) {
@@ -182,6 +179,10 @@ func (w *world) createBody(id ecs.EntityID, t ecs.ComponentType) {
 	w.bodies[id] = newBody()
 }
 
+func (w *world) destroyTimer(id ecs.EntityID, t ecs.ComponentType) {
+	w.timers[id] = timer{}
+}
+
 func (w *world) destroyBody(id ecs.EntityID, t ecs.ComponentType) {
 	if bo := w.bodies[id]; bo != nil {
 		bo.Clear()
@@ -193,6 +194,14 @@ func (w *world) destroyItem(id ecs.EntityID, t ecs.ComponentType) {
 	w.items[id] = nil
 	if des, ok := item.(destroyableItem); ok {
 		des.destroy(w)
+	}
+}
+
+func (w *world) destroyInput(id ecs.EntityID, t ecs.ComponentType) {
+	if name := w.Names[id]; name != "" {
+		// TODO: restore attribution
+		// w.log("%s destroyed by %s", w.getName(targ, "?!?"), w.getName(src, "!?!"))
+		w.log("%s has been destroyed", name)
 	}
 }
 
@@ -312,25 +321,13 @@ func (w *world) Render(ctx *view.Context) error {
 			// TODO: move to hp update
 			if it.Type().All(wcBody) && it.Type().Any(wcSoul|wcAI) {
 				zVal = 255
-				colors := soulColors
+				hp, maxHP := w.bodies[it.ID()].HPRange()
 				if !it.Type().All(wcSoul) {
 					zVal--
-					colors = aiColors
-				}
-
-				hp, maxHP := w.bodies[it.ID()].HPRange()
-				// XXX range error FIXME
-				i := 1 + (len(colors)-2)*hp/maxHP
-				if i < 0 {
-					fg = colors[1]
-					w.log("lo color index hp=%v maxHP=%v", hp, maxHP)
-				} else if i >= len(colors) {
-					fg = colors[len(colors)-1]
-					w.log("hi color index hp=%v maxHP=%v", hp, maxHP)
+					fg = safeColorsIX(aiColors, 1+(len(aiColors)-2)*hp/maxHP)
 				} else {
-					fg = colors[i]
+					fg = safeColorsIX(soulColors, 1+(len(soulColors)-2)*hp/maxHP)
 				}
-
 			} else if it.Type().All(wcSoul) {
 				zVal = 127
 				fg = soulColors[0]
@@ -339,7 +336,13 @@ func (w *world) Render(ctx *view.Context) error {
 				fg = aiColors[0]
 			} else if it.Type().All(wcItem) {
 				zVal = 10
-				fg = 35
+				fg = itemColors[len(itemColors)-1]
+				if dur, ok := w.items[it.ID()].(durableItem); ok {
+					fg = itemColors[0]
+					if hp, maxHP := dur.HPRange(); maxHP > 0 {
+						fg = safeColorsIX(itemColors, (len(itemColors)-1)*hp/maxHP)
+					}
+				}
 			} else {
 				zVal = 2
 				if it.Type().All(wcFG) {
@@ -364,6 +367,16 @@ func (w *world) Render(ctx *view.Context) error {
 	}
 
 	return nil
+}
+
+func safeColorsIX(colors []termbox.Attribute, i int) termbox.Attribute {
+	if i < 0 {
+		return colors[1]
+	}
+	if i >= len(colors) {
+		return colors[len(colors)-1]
+	}
+	return colors[i]
 }
 
 func (w *world) extent() point.Box {
@@ -465,32 +478,33 @@ func (w *world) reset() {
 func (w *world) tick() {
 	// run timers
 	for it := w.Iter(ecs.All(wcTimer)); it.Next(); {
-		if w.timers[it.ID()].n <= 0 {
+		timer := &w.timers[it.ID()]
+
+		if timer.n <= 0 {
 			continue
 		}
-		w.timers[it.ID()].n--
-		if w.timers[it.ID()].n > 0 {
+		timer.n--
+		if timer.n > 0 {
 			continue
 		}
+
 		ent := it.Entity()
-		ent.Delete(wcTimer)
-		switch w.timers[it.ID()].a {
-		case timerDestroy:
-			ent.Destroy()
-			// FIXME
-			// case timerSetType:
-			//	 w.Ref(it.ID()).SetType(w.timers[it.ID()].t)
-		case timerCallback:
-			f := w.timers[it.ID()].f
-			if f != nil {
-				w.timers[it.ID()].f = nil
-				f(ent)
-			}
+		timer.f(ent)
+		if timer.m != 0 {
+			// refresh interval timer
+			timer.n = timer.m
+			w.log("reset %s timer for %v", w.getName(it.Entity(), "?"), timer.n)
+		} else {
+			// one shot timer
+			ent.Delete(wcTimer)
 		}
 	}
 }
 
 func (w *world) addPendingMove(ent ecs.Entity, move point.Point) ecs.Entity {
+	if !ent.Type().All(wcInput) {
+		return ecs.NilEntity // who asked you
+	}
 	rel := w.moves.Insert(mrPending, ent, ent)
 	rel.Add(movP)
 	w.moves.p[rel.ID()] = move
@@ -515,6 +529,7 @@ func (w *world) generateAIMoves() {
 
 func (w *world) applyMoves() {
 	// TODO: better resolution strategy based on connected components
+	// TODO: could really use that Upsert
 	w.moves.InsertMany(func(insert func(r ecs.RelationType, a ecs.Entity, b ecs.Entity) ecs.Entity) {
 		w.moves.Update(ecs.All(movPending), nil, func(r ecs.RelationType, ent, a, b ecs.Entity) (ecs.RelationType, ecs.Entity, ecs.Entity) {
 			new := w.Positions[a.ID()].Add(w.moves.p[ent.ID()])
@@ -548,7 +563,6 @@ func (w *world) aiTarget(ai ecs.Entity) (point.Point, bool) {
 		}
 	}
 	if opp != ecs.NilEntity {
-		w.log("%v hates %v the most", w.getName(ai, "?!?"), w.getName(opp, "!?!"))
 		return w.Positions[opp.ID()], true
 	}
 
@@ -575,23 +589,12 @@ func (w *world) aiTarget(ai ecs.Entity) (point.Point, bool) {
 			}
 		}
 
-		w.log("%s> giving up on %v @%v",
-			w.getName(ai, "anon"),
-			w.getName(goal, "???"),
-			w.Positions[goal.ID()],
-		)
-
 		rel.Destroy() // bogus or stuck goal
 	}
 
 	// ... no goal, pick one!
 	if goal := w.chooseAIGoal(ai); goal != ecs.NilEntity {
 		w.moves.Insert(mrGoal, ai, goal)
-		w.log("%s> going to boop %v @%v",
-			w.getName(ai, "anon"),
-			w.getName(goal, "???"),
-			w.Positions[goal.ID()],
-		)
 		return w.Positions[goal.ID()], true
 	}
 
@@ -674,7 +677,7 @@ func (w *world) runAIInteraction(pr prompt, ai ecs.Entity) {
 		}
 
 		act := pr.action[i]
-		w.log("%s> I choose #%d %q", w.getName(ai, "anon"), i+1, act.mess)
+		w.log("%s chooses #%d %q", w.getName(ai, "anon"), i+1, act.mess)
 		pr, ok = act.run(pr)
 	}
 }
@@ -802,6 +805,8 @@ func (rem bodyRemains) describeScavenge() string {
 }
 
 func (rem bodyRemains) scavenge(pr prompt) (prompt, bool) {
+	defer rem.part.Destroy()
+
 	entBo := rem.w.bodies[rem.ent.ID()]
 
 	imp := make([]string, 0, 2)
@@ -815,16 +820,16 @@ func (rem bodyRemains) scavenge(pr prompt) (prompt, bool) {
 		entBo.dmg[recv.ID()] += damage
 		imp = append(imp, fmt.Sprintf("%s damage +%v", entBo.DescribePart(recv), damage))
 	}
-	rem.part.Destroy()
 
-	rem.w.log("%s gained %v from %s",
+	rem.w.log("%s gained %v from %s's %s",
 		rem.w.getName(rem.ent, "unknown"),
 		strings.Join(imp, " and "),
 		rem.w.getName(rem.item, "unknown"),
+		rem.bo.DescribePart(rem.part),
 	)
 
 	if rem.bo.Len() == 0 {
-		rem.item.Destroy()
+		defer rem.item.Destroy()
 	}
 
 	return pr.unwind(), false
@@ -962,6 +967,11 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 		return
 	}
 
+	w.log("%s's %s destroyed by %s's %s",
+		w.getName(targ, "?!?"), targBo.DescribePart(bPart),
+		w.getName(src, "!?!"), srcBo.DescribePart(aPart),
+	)
+
 	// TODO: drop armor scraps on the floor instead
 	// if imp := w.reclaimDestroyedPart(src, part); len(imp) > 0 {
 	// 	w.log("%s gained %v from %s's %s",
@@ -973,33 +983,62 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 
 	targID := targ.ID()
 
-	if severed := targBo.sever(bPart.ID()); severed != nil {
+	severed := targBo.sever(bPart.ID())
+	if severed != nil {
 		targName := w.getName(targ, "nameless")
-		w.newItem(w.Positions[targID], fmt.Sprintf("remains of %s", targName), '%', severed)
+		name := fmt.Sprintf("remains of %s", targName)
+		item := w.newItem(w.Positions[targID], name, '%', severed)
+		w.setInterval(item, 5, w.decayRemains)
 		if severed.Len() > 0 {
 			w.log("%s's remains have dropped on the floor", targName)
 		}
 	}
 
-	w.log("%s's %s destroyed by %s's %s",
-		w.getName(targ, "?!?"), targBo.DescribePart(bPart),
-		w.getName(src, "!?!"), srcBo.DescribePart(aPart),
-	)
-
 	if bo := w.bodies[targID]; bo.Iter(ecs.All(bcPart)).Count() > 0 {
 		return
 	}
 
-	// maybe become spirit
-	if spi := targBo.spiritScore(); spi == 0 {
+	if severed == nil {
+		return
+	}
+
+	// may become spirit
+	spi := 0
+	heads := severed.allHeads()
+	for _, head := range heads {
+		spi += severed.hp[head.ID()]
+	}
+	if spi == 0 {
 		targ.Destroy()
-		w.log("%s destroyed by %s", w.getName(targ, "?!?"), w.getName(src, "!?!"))
-	} else {
-		targ.Delete(wcBody)
-		w.Glyphs[targID] = '⟡'
-		numSpiritTurns := 5 * spi
-		w.setTimer(targ, numSpiritTurns, timerDestroy)
-		w.log("%s was disembodied by %s (moving as spirit for %v turns)", w.getName(targ, "?!?"), w.getName(src, "!?!"), numSpiritTurns)
+		return
+	}
+
+	targ.Delete(wcBody)
+	w.Glyphs[targID] = '⟡'
+	for _, head := range heads {
+		head.Add(bcDerived)
+		severed.derived[head.ID()] = targ
+	}
+	w.log("%s was disembodied by %s", w.getName(targ, "?!?"), w.getName(src, "!?!"))
+}
+
+func (w *world) decayRemains(item ecs.Entity) {
+	rem := w.items[item.ID()].(*body)
+	for it := rem.Iter(ecs.All(bcPart | bcHP)); it.Next(); {
+		id := it.ID()
+		rem.hp[id]--
+		if rem.hp[id] <= 0 {
+			part := it.Entity()
+			w.log(
+				"%s from %s has decayed away to nothing",
+				rem.DescribePart(part),
+				w.getName(item, "unknown item"),
+			)
+			part.Destroy()
+		}
+	}
+	if rem.Len() == 0 {
+		item.Destroy()
 	}
 }
 
@@ -1064,9 +1103,15 @@ func (w *world) chooseAttackedPart(ent ecs.Entity) ecs.Entity {
 	})
 }
 
-func (w *world) setTimer(ent ecs.Entity, n int, a timerAction) *timer {
+func (w *world) setTimer(ent ecs.Entity, n int, f func(ecs.Entity)) *timer {
 	ent.Add(wcTimer)
-	w.timers[ent.ID()] = timer{n: n, a: a}
+	w.timers[ent.ID()] = timer{n: n, f: f}
+	return &w.timers[ent.ID()]
+}
+
+func (w *world) setInterval(ent ecs.Entity, n int, f func(ecs.Entity)) *timer {
+	ent.Add(wcTimer)
+	w.timers[ent.ID()] = timer{n: n, m: n, f: f}
 	return &w.timers[ent.ID()]
 }
 
