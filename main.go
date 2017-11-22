@@ -736,17 +736,11 @@ func (rem bodyRemains) scavenge(pr prompt) (prompt, bool) {
 		rem.w.getName(rem.item, "unknown"),
 	)
 
-	pr, ok := rem.w.itemPrompt(pr.unwind())
-	if !ok {
-		return pr, ok
+	if rem.bo.Len() == 0 {
+		rem.item.Destroy()
 	}
 
-	if rem.bo.Len() > 0 {
-		return rem.bo.interact(pr, rem.w, rem.item, rem.ent)
-	}
-
-	rem.item.Destroy()
-	return rem.w.itemPrompt(pr.unwind())
+	return pr.unwind(), false
 }
 
 // func (w *world) graftBodyPart(soul ecs.Entity, rem *body, part, item ecs.Entity) {
