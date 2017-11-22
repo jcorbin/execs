@@ -101,6 +101,11 @@ func (pt Point) Dot(other Point) int {
 	return pt.X*other.X + pt.Y*other.Y
 }
 
+// SumSQ returns the sum-of-squared components.
+func (pt Point) SumSQ() int {
+	return pt.X*pt.X + pt.Y*pt.Y
+}
+
 func sign(i int) int {
 	if i < 0 {
 		return -1
