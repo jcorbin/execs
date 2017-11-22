@@ -214,4 +214,34 @@ Small improvements and completing things:
     mature move resolution strategies than first-one-wins
   - many cleanups and improvements to control flow
 
+### [Ten](../../tree/ten)
+
+Prompts, Interaction, and Combat:
+
+- ECS progress:
+  - improved where function convention
+  - made Update's set function more useful/consistent
+  - more minor conveniences
+
+- Game Progress:
+  - continued to improve the move processing
+  - added more body parts (legs and arms now have an upper and lower part)
+  - reworked the combat system to be less tedious:
+    - potential damage is now `Round(dmg * rating * randBetween(0.5, 1.0))`, where:
+    - `dmg` is the attacking part's damage score
+    - `rating` is `srcHPRating / targHPRating`
+    - `rand` is a random number in the internal `[0.5, 1.0)`
+    - each `HPRating` is a hierarchical average rating of `hp/maxHP` from the
+      attacking part all the way up its control path (i.e. rating compounding
+      goes down for damage along any upstream part)
+    - after potential damage, comes armor mitigation
+    - misses are no longer a thing; may bring them back at some point once
+      movement is taken into account during combat
+  - started sketching an item interaction system:
+    - spent most of my time building out a menu-based prompt system
+    - body remains can now be looted for armor and damage points
+
+- Misc:
+  - added a `moremath.Round` utility
+
 [es-beta]: http://entity-systems.wikidot.com/rdbms-beta
