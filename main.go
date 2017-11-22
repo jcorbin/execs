@@ -717,12 +717,12 @@ func (rem bodyRemains) scavenge(pr prompt) (prompt, bool) {
 		return pr, ok
 	}
 
-	if rem.bo.Len() == 0 {
-		rem.item.Destroy()
-		return pr, ok
+	if rem.bo.Len() > 0 {
+		return rem.bo.interact(pr, rem.w, rem.item, rem.ent)
 	}
 
-	return rem.bo.interact(pr, rem.w, rem.item, rem.ent)
+	rem.item.Destroy()
+	return rem.w.itemPrompt(pr.unwind())
 }
 
 // func (w *world) graftBodyPart(soul ecs.Entity, rem *body, part, item ecs.Entity) {
