@@ -660,7 +660,29 @@ func (w *world) processCombat() {
 		},
 	); cur.Scan(); {
 		src, targ := cur.A(), cur.B()
-		w.attack(src, targ)
+
+		aPart, bPart := w.checkAttackHit(src, targ)
+		if aPart == ecs.NilEntity || bPart == ecs.NilEntity {
+			continue
+		}
+
+		srcBo, targBo := w.bodies[src.ID()], w.bodies[targ.ID()]
+		rating := srcBo.partHPRating(aPart) / targBo.partHPRating(bPart)
+		rand := (1 + w.rng.Float64()) / 2 // like an x/2 + 1D(x/2) XXX reconsider
+		dmg := int(moremath.Round(float64(srcBo.dmg[aPart.ID()]) * rating * rand))
+		dmg -= targBo.armor[bPart.ID()]
+		if dmg == 0 {
+			w.log("%s's %s bounces off %s's %s",
+				w.getName(src, "!?!"), srcBo.DescribePart(aPart),
+				w.getName(targ, "?!?"), targBo.DescribePart(bPart))
+			continue
+		}
+
+		if dmg < 0 {
+			w.dealAttackDamage(targ, bPart, src, aPart, -dmg)
+		} else {
+			w.dealAttackDamage(src, aPart, targ, bPart, dmg)
+		}
 	}
 }
 
@@ -869,31 +891,6 @@ func (w *world) maybeSpawn() {
 			w.Names[enemy.ID()],
 			w.Positions[enemy.ID()],
 			bo.Stats())
-	}
-}
-
-func (w *world) attack(src, targ ecs.Entity) {
-	aPart, bPart := w.checkAttackHit(src, targ)
-	if aPart == ecs.NilEntity || bPart == ecs.NilEntity {
-		return
-	}
-
-	srcBo, targBo := w.bodies[src.ID()], w.bodies[targ.ID()]
-	rating := srcBo.partHPRating(aPart) / targBo.partHPRating(bPart)
-	rand := (1 + w.rng.Float64()) / 2 // like an x/2 + 1D(x/2) XXX reconsider
-	dmg := int(moremath.Round(float64(srcBo.dmg[aPart.ID()]) * rating * rand))
-	dmg -= targBo.armor[bPart.ID()]
-	if dmg == 0 {
-		w.log("%s's %s bounces off %s's %s",
-			w.getName(src, "!?!"), srcBo.DescribePart(aPart),
-			w.getName(targ, "?!?"), targBo.DescribePart(bPart))
-		return
-	}
-
-	if dmg < 0 {
-		w.dealAttackDamage(targ, bPart, src, aPart, -dmg)
-	} else {
-		w.dealAttackDamage(src, aPart, targ, bPart, dmg)
 	}
 }
 
