@@ -36,6 +36,9 @@ func (t ComponentType) All(mask ComponentType) bool { return mask != NoType && t
 // mask is NoType, always returns true.
 func (t ComponentType) Any(mask ComponentType) bool { return mask == NoType || t&mask != 0 }
 
+// ApplyTo sets the given entity's type to t; simply a dual of Entity.SetType.
+func (t ComponentType) ApplyTo(ent Entity) { ent.SetType(t) }
+
 // Len counts how many active entities exist.
 func (co *Core) Len() int {
 	n := 0
