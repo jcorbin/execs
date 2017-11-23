@@ -254,26 +254,32 @@ func (rel *Relation) update(
 	n := 0
 	for cur := rel.Cursor(tcl, where); cur.Scan(); {
 		ent := cur.Entity()
-		oa, ob, or := cur.A(), cur.B(), cur.R()
+		rel.doUpdate(cur.R(), ent, cur.A(), cur.B(), set)
 		n++ // TODO: differetiate updated vs destroyed?
-		nr, na, nb := set(or, ent, oa, ob)
-		if nr == NoRelType || na == NilEntity || nb == NilEntity {
-			ent.Destroy()
-			continue
-		}
-		if ent.Type() == NoType {
-			continue
-		}
-		if nr != or {
-			ent.SetType(ComponentType(nr) | relType)
-		}
-		i := ent.ID() - 1
-		if na != oa {
-			rel.aids[i] = na.ID()
-		}
-		if nb != ob {
-			rel.bids[i] = nb.ID()
-		}
 	}
 	return n
+}
+
+func (rel *Relation) doUpdate(
+	or RelationType, ent, oa, ob Entity,
+	set func(r RelationType, ent, a, b Entity) (RelationType, Entity, Entity),
+) {
+	nr, na, nb := set(or, ent, oa, ob)
+	if nr == NoRelType || na == NilEntity || nb == NilEntity {
+		ent.Destroy()
+		return
+	}
+	if ent.Type() == NoType {
+		return
+	}
+	if nr != or {
+		ent.SetType(ComponentType(nr) | relType)
+	}
+	i := ent.ID() - 1
+	if na != oa {
+		rel.aids[i] = na.ID()
+	}
+	if nb != ob {
+		rel.bids[i] = nb.ID()
+	}
 }
