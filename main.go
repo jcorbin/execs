@@ -579,7 +579,11 @@ func (w *world) applyMoves() {
 			if hit := w.collides(a, new); len(hit) > 0 {
 				for _, b := range hit {
 					if b.Type().All(wcSolid) {
-						emit(mrCollide|mrHit, a, b)
+						hitRel := emit(mrCollide|mrHit, a, b)
+						if m := n - i; m > 1 {
+							hitRel.Add(movN)
+							w.moves.n[hitRel.ID()] = m
+						}
 						break candidates
 					}
 				}
