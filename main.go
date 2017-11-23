@@ -1035,8 +1035,30 @@ func (w *world) decayRemains(item ecs.Entity) {
 		}
 	}
 	if rem.Len() == 0 {
+		w.dirtyFloorTile(w.Positions[item.ID()])
+		// TODO: do something neat after max dirty (spawn something
+		// creepy)
 		item.Destroy()
 	}
+}
+
+func (w *world) dirtyFloorTile(pos point.Point) (ecs.Entity, bool) {
+	for it := w.Iter(ecs.All(wcPosition | wcBG | wcFloor)); it.Next(); {
+		if id := it.ID(); w.Positions[id] == pos {
+			bg := w.BG[id]
+			for i := range floorColors {
+				if floorColors[i] == bg {
+					j := i + 1
+					canDirty := j < len(floorColors)
+					if canDirty {
+						w.BG[id] = floorColors[j]
+					}
+					return it.Entity(), canDirty
+				}
+			}
+		}
+	}
+	return ecs.NilEntity, false
 }
 
 // func (w *world) reclaimDestroyedPart(ent ecs.Entity, part bodyPart) []string {
