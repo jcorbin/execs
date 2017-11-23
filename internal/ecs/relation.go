@@ -150,42 +150,6 @@ func (rel *Relation) B(ent Entity) Entity {
 	return NilEntity
 }
 
-// Insert relations under the given type clause. TODO: constraints, indices,
-// etc.
-func (rel *Relation) Insert(r RelationType, a, b Entity) Entity {
-	if fixIndex := rel.deferIndexing(); fixIndex != nil {
-		// TODO: a bit of over kill for single insertion
-		defer fixIndex()
-	}
-	return rel.insert(r, a, b)
-}
-
-// InsertMany allows a function to insert many relations without incurring
-// indexing cost; indexing is deferred until the with function returns, at
-// which point indices are fixed.
-func (rel *Relation) InsertMany(with func(func(r RelationType, a, b Entity) Entity)) {
-	if fixIndex := rel.deferIndexing(); fixIndex != nil {
-		defer fixIndex()
-	}
-	with(rel.insert)
-}
-
-func (rel *Relation) insert(r RelationType, a, b Entity) Entity {
-	aid := rel.aCore.Deref(a)
-	bid := rel.bCore.Deref(b)
-	ent := rel.AddEntity(ComponentType(r) | relType)
-	i := int(ent.ID()) - 1
-	rel.aids[i] = aid
-	rel.bids[i] = bid
-	if rel.aix != nil {
-		rel.aix[i] = i
-	}
-	if rel.bix != nil {
-		rel.bix[i] = i
-	}
-	return ent
-}
-
 // Cursor returns a cursor that will scan over relations with given type and
 // that meet the optional where clause.
 func (rel *Relation) Cursor(
@@ -213,6 +177,26 @@ func (rel *Relation) LookupB(tcl TypeClause, ids ...EntityID) Cursor {
 		return rel.scanLookup(tcl, true, ids)
 	}
 	return rel.indexLookup(tcl, ids, rel.bids, rel.bix)
+}
+
+// Insert relations under the given type clause. TODO: constraints, indices,
+// etc.
+func (rel *Relation) Insert(r RelationType, a, b Entity) Entity {
+	if fixIndex := rel.deferIndexing(); fixIndex != nil {
+		// TODO: a bit of over kill for single insertion
+		defer fixIndex()
+	}
+	return rel.insert(r, a, b)
+}
+
+// InsertMany allows a function to insert many relations without incurring
+// indexing cost; indexing is deferred until the with function returns, at
+// which point indices are fixed.
+func (rel *Relation) InsertMany(with func(func(r RelationType, a, b Entity) Entity)) {
+	if fixIndex := rel.deferIndexing(); fixIndex != nil {
+		defer fixIndex()
+	}
+	with(rel.insert)
 }
 
 // Update relations specified by an optional where function and type
@@ -268,4 +252,20 @@ func (rel *Relation) Delete(
 	for cur := rel.Cursor(tcl, where); cur.Scan(); {
 		rel.setType(cur.Entity().ID(), NoType)
 	}
+}
+
+func (rel *Relation) insert(r RelationType, a, b Entity) Entity {
+	aid := rel.aCore.Deref(a)
+	bid := rel.bCore.Deref(b)
+	ent := rel.AddEntity(ComponentType(r) | relType)
+	i := int(ent.ID()) - 1
+	rel.aids[i] = aid
+	rel.bids[i] = bid
+	if rel.aix != nil {
+		rel.aix[i] = i
+	}
+	if rel.bix != nil {
+		rel.bix[i] = i
+	}
+	return ent
 }
