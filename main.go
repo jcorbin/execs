@@ -916,19 +916,23 @@ func (w *world) maybeSpawn() {
 	}
 	bo := w.bodies[enemy.ID()]
 
-	sum := 0
+	totalHP := 0
+	totalDmg := 0
 	for it := w.Iter(ecs.All(combatMask | wcInput)); it.Next(); {
 		if !it.Type().All(wcWaiting) {
 			bo := w.bodies[it.ID()]
 			if it.Type().All(wcSoul) {
 				hp, maxHP := bo.HPRange()
 				dmg := maxHP - hp
-				sum += 10*maxHP + 100*dmg
+				totalHP += maxHP
+				totalDmg += dmg
 			} else {
-				sum += bo.HP()
+				totalHP += bo.HP()
 			}
 		}
 	}
+
+	sum := 10*totalHP + 100*totalDmg
 	if hp := bo.HP(); w.rng.Intn(sum+hp) < hp {
 		enemy.Delete(wcWaiting)
 		enemy.Add(wcPosition | wcCollide | wcInput | wcAI)
