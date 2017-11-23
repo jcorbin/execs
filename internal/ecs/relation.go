@@ -208,7 +208,7 @@ func (rel *Relation) Update(
 	tcl TypeClause,
 	where func(r RelationType, ent, a, b Entity) bool,
 	set func(r RelationType, ent, a, b Entity) (RelationType, Entity, Entity),
-) int {
+) (updated, destroyed int) {
 	if fixIndex := rel.deferIndexing(); fixIndex != nil {
 		defer fixIndex()
 	}
@@ -250,27 +250,29 @@ func (rel *Relation) update(
 	tcl TypeClause,
 	where func(r RelationType, ent, a, b Entity) bool,
 	set func(r RelationType, ent, a, b Entity) (RelationType, Entity, Entity),
-) int {
-	n := 0
+) (updated, destroyed int) {
 	for cur := rel.Cursor(tcl, where); cur.Scan(); {
 		ent := cur.Entity()
-		rel.doUpdate(cur.R(), ent, cur.A(), cur.B(), set)
-		n++ // TODO: differetiate updated vs destroyed?
+		if rel.doUpdate(cur.R(), ent, cur.A(), cur.B(), set) {
+			updated++
+		} else {
+			destroyed++
+		}
 	}
-	return n
+	return updated, destroyed
 }
 
 func (rel *Relation) doUpdate(
 	or RelationType, ent, oa, ob Entity,
 	set func(r RelationType, ent, a, b Entity) (RelationType, Entity, Entity),
-) {
+) bool {
 	nr, na, nb := set(or, ent, oa, ob)
 	if nr == NoRelType || na == NilEntity || nb == NilEntity {
 		ent.Destroy()
-		return
+		return false
 	}
 	if ent.Type() == NoType {
-		return
+		return false
 	}
 	if nr != or {
 		ent.SetType(ComponentType(nr) | relType)
@@ -282,4 +284,5 @@ func (rel *Relation) doUpdate(
 	if nb != ob {
 		rel.bids[i] = nb.ID()
 	}
+	return true
 }
