@@ -244,4 +244,22 @@ Prompts, Interaction, and Combat:
 - Misc:
   - added a `moremath.Round` utility
 
+### [Eleven](../../tree/eleven)
+
+Getting more out of your remains (but be quick!)
+
+Today's focus was on the game, such as it is; no progress made in ECS land
+itself:
+- completed the item interaction system
+- the first interaction is integrating a body part's armor and damage points
+  into your own; doing so consumes a turn
+- AI can now use items (and it prefers to do so when choosing a goal)
+  - it uses the same prompting system that the user does, choosing randomly
+- body remains now decay rapidly; also spirit duration is now coupled to the
+  head from whence it came!
+- added standard rogue-like vikeys
+- added a quick hack to "phase" the palyer out of the collision system, mostly
+  because this aids developing since I can just "phase out, and let the enemies
+  have at it" for a while to see how things play out
+
 [es-beta]: http://entity-systems.wikidot.com/rdbms-beta
