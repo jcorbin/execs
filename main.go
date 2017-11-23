@@ -566,6 +566,7 @@ func (w *world) applyMoves() {
 			rating := w.bodies[a.ID()].movementRating()
 			pend = pend.Mul(int(moremath.Round(rating * float64(n))))
 			if pend.SumSQ() == 0 {
+				emit(r, a, b)
 				return
 			}
 		}
