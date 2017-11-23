@@ -529,34 +529,26 @@ func (w *world) generateAIMoves() {
 
 func (w *world) applyMoves() {
 	// TODO: better resolution strategy based on connected components
-	// TODO: could really use that Upsert
-	w.moves.InsertMany(func(insert func(r ecs.RelationType, a ecs.Entity, b ecs.Entity) ecs.Entity) {
-		w.moves.Update(ecs.All(movPending), nil, func(r ecs.RelationType, ent, a, b ecs.Entity) (ecs.RelationType, ecs.Entity, ecs.Entity) {
-			blocked, nr, nb := false, ecs.NoRelType, b
-			emit := func(er ecs.RelationType, eb ecs.Entity) {
-				if nr == ecs.NoRelType {
-					nr, nb = er, eb
-				} else {
-					insert(er, a, eb)
+	w.moves.UpsertMany(ecs.All(movPending), func(
+		r ecs.RelationType, ent, a, b ecs.Entity,
+		emit func(r ecs.RelationType, a, b ecs.Entity) ecs.Entity,
+	) {
+		blocked := false
+		new := w.Positions[a.ID()].Add(w.moves.p[ent.ID()])
+		if hit := w.collides(a, new); len(hit) > 0 {
+			for _, b := range hit {
+				if b.Type().All(wcSolid) {
+					emit(mrCollide|mrHit, a, b)
+					blocked = true
+				}
+				if b.Type().All(wcItem) {
+					emit(mrCollide|mrItem, a, b)
 				}
 			}
-			new := w.Positions[a.ID()].Add(w.moves.p[ent.ID()])
-			if hit := w.collides(a, new); len(hit) > 0 {
-				for _, other := range hit {
-					if other.Type().All(wcSolid) {
-						emit(mrCollide|mrHit, other)
-						blocked = true
-					}
-					if other.Type().All(wcItem) {
-						emit(mrCollide|mrItem, other)
-					}
-				}
-			}
-			if !blocked {
-				w.Positions[a.ID()] = new
-			}
-			return nr, a, nb
-		})
+		}
+		if !blocked {
+			w.Positions[a.ID()] = new
+		}
 	})
 }
 
