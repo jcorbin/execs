@@ -62,16 +62,16 @@ type destroyableItem interface {
 }
 
 type world struct {
+	ecs.Core
+
 	logFile *os.File
 	logger  *log.Logger
 	rng     *rand.Rand
-	View    *view.View
-	ecs.Core
+
+	ui
 
 	over         bool
 	enemyCounter int
-
-	prompt prompt
 
 	Names     []string
 	Positions []point.Point
@@ -135,15 +135,16 @@ func newWorld(v *view.View) (*world, error) {
 	}
 	w := &world{
 		rng:    rand.New(rand.NewSource(rand.Int63())),
-		View:   v,
 		logger: log.New(f, "", 0),
 	}
-	w.init()
+	w.init(v)
 	w.log("logging to %q", f.Name())
 	return w, nil
 }
 
-func (w *world) init() {
+func (w *world) init(v *view.View) {
+	w.ui.init(v)
+
 	// TODO: consider eliminating the padding for EntityID(0)
 	w.Names = []string{""}
 	w.Positions = []point.Point{point.Point{}}
@@ -153,8 +154,6 @@ func (w *world) init() {
 	w.timers = []timer{timer{}}
 	w.bodies = []*body{nil}
 	w.items = []worldItem{nil}
-
-	w.prompt.action = make([]promptAction, 0, 10)
 
 	w.moves.init(&w.Core)
 
@@ -217,176 +216,6 @@ func (bo *body) destroy(w *world) {
 	}
 }
 
-func (w *world) Render(ctx *view.Context) error {
-	ctx.SetHeader(
-		fmt.Sprintf("%v souls v %v demons", w.Iter(ecs.All(wcSoul)).Count(), w.Iter(ecs.All(wcAI)).Count()),
-	)
-
-	it := w.Iter(ecs.All(wcSoul | wcBody))
-	promptLines := w.prompt.render("")
-	footParts := make([]string, 0, it.Count()*4+len(promptLines)+1)
-
-	if len(promptLines) > 0 {
-		footParts = append(footParts, promptLines...)
-		footParts = append(footParts, "")
-	}
-
-	for it.Next() {
-		bo := w.bodies[it.ID()]
-
-		armor, damage := 0, 0
-		hpParts := make([]string, 0, bo.Len())
-		armorParts := make([]string, 0, bo.Len())
-		damageParts := make([]string, 0, bo.Len())
-		for gt := bo.rel.Traverse(ecs.AllRel(brControl), ecs.TraverseDFS); gt.Traverse(); {
-			ent := gt.Node()
-			id := ent.ID()
-			// desc := bo.DescribePart(ent)
-			hpParts = append(hpParts, fmt.Sprintf("%v", bo.hp[id]))
-			if n := bo.armor[id]; n > 0 {
-				armorParts = append(armorParts, fmt.Sprintf("%v", n))
-				armor += n
-			}
-			if n := bo.dmg[id]; n > 0 {
-				damageParts = append(damageParts, fmt.Sprintf("%v", n))
-				damage += n
-			}
-		}
-
-		charge := 0
-		for cur := w.moves.LookupA(ecs.All(movPending), it.ID()); cur.Scan(); {
-			charge += w.moves.n[cur.Entity().ID()]
-		}
-
-		// TODO: render a doll like
-		//    _O_
-		//   / | \
-		//   = | =
-		//    / \
-		//  _/   \_
-
-		hp, maxHP := bo.HPRange()
-		footParts = append(footParts,
-			fmt.Sprintf("Charge: %v", charge),
-			fmt.Sprintf("HP(%v/%v): %s", hp, maxHP, strings.Join(hpParts, " ")),
-			fmt.Sprintf("Armor(%v): %s", armor, strings.Join(armorParts, " ")),
-			fmt.Sprintf("Damage(%v): %s", damage, strings.Join(damageParts, " ")),
-		)
-	}
-
-	ctx.SetFooter(footParts...)
-
-	// collect world extent, and compute a viewport focus position
-	var (
-		bbox  point.Box
-		focus point.Point
-	)
-	for it := w.Iter(ecs.All(renderMask)); it.Next(); {
-		pos := w.Positions[it.ID()]
-		if it.Type().All(wcSoul) {
-			// TODO: centroid between all souls would be a way to move beyond
-			// "last wins"
-			focus = pos
-		}
-		bbox = bbox.ExpandTo(pos)
-	}
-
-	// center clamped grid around focus
-	offset := bbox.TopLeft.Add(bbox.Size().Div(2)).Sub(focus)
-	ofbox := bbox.Add(offset)
-	if ofbox.TopLeft.X < 0 {
-		offset.X -= ofbox.TopLeft.X
-	}
-	if ofbox.TopLeft.Y < 0 {
-		offset.Y -= ofbox.TopLeft.Y
-	}
-
-	if sz := ofbox.Size().Min(ctx.Avail); !sz.Equal(ctx.Grid.Size) {
-		ctx.Grid = view.MakeGrid(sz)
-	} else {
-		for i := range ctx.Grid.Data {
-			ctx.Grid.Data[i] = termbox.Cell{}
-		}
-	}
-
-	zVals := make([]uint8, len(ctx.Grid.Data))
-
-	for it := w.Iter(ecs.Clause(wcPosition, wcGlyph|wcBG)); it.Next(); {
-		pos := w.Positions[it.ID()].Add(offset)
-		if !pos.Less(point.Zero) && !ctx.Grid.Size.Less(pos) {
-			var (
-				ch     rune
-				fg, bg termbox.Attribute
-			)
-
-			var zVal uint8
-
-			if it.Type().All(wcGlyph) {
-				ch = w.Glyphs[it.ID()]
-				zVal = 1
-			}
-
-			// TODO: move to hp update
-			if it.Type().All(wcBody) && it.Type().Any(wcSoul|wcAI) {
-				zVal = 255
-				hp, maxHP := w.bodies[it.ID()].HPRange()
-				if !it.Type().All(wcSoul) {
-					zVal--
-					fg = safeColorsIX(aiColors, 1+(len(aiColors)-2)*hp/maxHP)
-				} else {
-					fg = safeColorsIX(soulColors, 1+(len(soulColors)-2)*hp/maxHP)
-				}
-			} else if it.Type().All(wcSoul) {
-				zVal = 127
-				fg = soulColors[0]
-			} else if it.Type().All(wcAI) {
-				zVal = 126
-				fg = aiColors[0]
-			} else if it.Type().All(wcItem) {
-				zVal = 10
-				fg = itemColors[len(itemColors)-1]
-				if dur, ok := w.items[it.ID()].(durableItem); ok {
-					fg = itemColors[0]
-					if hp, maxHP := dur.HPRange(); maxHP > 0 {
-						fg = safeColorsIX(itemColors, (len(itemColors)-1)*hp/maxHP)
-					}
-				}
-			} else {
-				zVal = 2
-				if it.Type().All(wcFG) {
-					fg = w.FG[it.ID()]
-				}
-			}
-
-			if i := pos.Y*ctx.Grid.Size.X + pos.X; zVals[i] < zVal {
-				zVals[i] = zVal
-				if it.Type().All(wcBG) {
-					bg = w.BG[it.ID()]
-				}
-				if fg != 0 {
-					fg++
-				}
-				if bg != 0 {
-					bg++
-				}
-				ctx.Grid.Merge(pos.X, pos.Y, ch, fg, bg)
-			}
-		}
-	}
-
-	return nil
-}
-
-func safeColorsIX(colors []termbox.Attribute, i int) termbox.Attribute {
-	if i < 0 {
-		return colors[1]
-	}
-	if i >= len(colors) {
-		return colors[len(colors)-1]
-	}
-	return colors[i]
-}
-
 func (w *world) extent() point.Box {
 	var bbox point.Box
 	for it := w.Iter(ecs.All(renderMask)); it.Next(); {
@@ -396,70 +225,6 @@ func (w *world) extent() point.Box {
 }
 
 func (w *world) Close() error { return nil }
-
-func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
-	if k.Key == termbox.KeyEsc {
-		return view.ErrStop
-	}
-
-	// maybe run prompt
-	if w.prompt.handle(k.Ch) {
-		return nil
-	}
-
-	// parse player move
-	var move point.Point
-	switch k.Key {
-	case termbox.KeyArrowDown:
-		move = point.Point{X: 0, Y: 1}
-	case termbox.KeyArrowUp:
-		move = point.Point{X: 0, Y: -1}
-	case termbox.KeyArrowLeft:
-		move = point.Point{X: -1, Y: 0}
-	case termbox.KeyArrowRight:
-		move = point.Point{X: 1, Y: 0}
-	default:
-		switch k.Ch {
-		case '_':
-			if ent := w.findPlayer(); ent != ecs.NilEntity {
-				if ent.Type().All(wcCollide) {
-					ent.Delete(wcCollide)
-					w.Glyphs[ent.ID()] = '~'
-				} else {
-					ent.Add(wcCollide)
-					w.Glyphs[ent.ID()] = 'X'
-				}
-			}
-		case 'y':
-			move = point.Point{X: -1, Y: -1}
-		case 'u':
-			move = point.Point{X: 1, Y: -1}
-		case 'n':
-			move = point.Point{X: 1, Y: 1}
-		case 'b':
-			move = point.Point{X: -1, Y: 1}
-		case 'h':
-			move = point.Point{X: -1, Y: 0}
-		case 'j':
-			move = point.Point{X: 0, Y: 1}
-		case 'k':
-			move = point.Point{X: 0, Y: -1}
-		case 'l':
-			move = point.Point{X: 1, Y: 0}
-		}
-	}
-
-	for it := w.Iter(ecs.All(playMoveMask)); it.Next(); {
-		w.addPendingMove(it.Entity(), move)
-	}
-
-	w.Process()
-
-	if w.over {
-		return view.ErrStop
-	}
-	return nil
-}
 
 func (w *world) Process() {
 	w.reset()              // reset state from last time
@@ -475,11 +240,7 @@ func (w *world) Process() {
 }
 
 func (w *world) reset() {
-	w.prompt.reset()
-
-	w.View.ClearLog()
-
-	// reset collisions
+	w.ui.reset()
 	w.moves.Delete(ecs.AnyRel(mrCollide), nil)
 }
 
@@ -795,121 +556,6 @@ func (w *world) findPlayer() ecs.Entity {
 	return ecs.NilEntity
 }
 
-func (w *world) buildItemMenu() {
-	ent := w.findPlayer()
-	if ent == ecs.NilEntity {
-		w.log("wru?")
-		return
-	}
-	if pr, ok := w.itemPrompt(w.prompt, ent); ok {
-		w.prompt = pr
-	} else if w.prompt.mess != "" {
-		w.prompt.reset()
-	}
-}
-
-func (w *world) itemPrompt(pr prompt, ent ecs.Entity) (prompt, bool) {
-	// TODO: once we have a proper spatial index, stop relying on
-	// collision relations for this
-	prompting := false
-	for cur := w.moves.Cursor(
-		ecs.RelClause(mrCollide, mrItem),
-		func(r ecs.RelationType, rel, a, b ecs.Entity) bool { return a == ent },
-	); cur.Scan(); {
-		if !prompting {
-			pr = pr.makeSub("Items Here")
-			prompting = true
-		}
-		item := cur.B()
-		if !pr.addAction(
-			func(pr prompt) (prompt, bool) { return w.interactWith(pr, ent, item) },
-			w.getName(item, "unknown item"),
-		) {
-			break
-		}
-	}
-	return pr, prompting
-}
-
-func (w *world) interactWith(pr prompt, ent, item ecs.Entity) (prompt, bool) {
-	if it := w.items[item.ID()]; it != nil {
-		return w.items[item.ID()].interact(pr, w, item, ent)
-	}
-	return pr.unwind(), false
-}
-
-func (bo *body) interact(pr prompt, w *world, item, ent ecs.Entity) (prompt, bool) {
-	if !ent.Type().All(wcBody) {
-		w.log("you have no body!")
-		return pr, false
-	}
-
-	pr = pr.makeSub(w.getName(item, "unknown item"))
-
-	for it := bo.Iter(ecs.All(bcPart)); len(pr.action) < cap(pr.action) && it.Next(); {
-		part := it.Entity()
-		rem := bodyRemains{w, bo, part, item, ent}
-		// TODO: inspect menu when more than just scavengable
-
-		// any part can be scavenged
-		if !pr.addAction(rem.scavenge, rem.describeScavenge()) {
-			break
-		}
-
-	}
-
-	return pr, true
-}
-
-// func (w *world) graftBodyPart(soul ecs.Entity, rem *body, part, item ecs.Entity) {
-// 	defer func() { w.prompt = *w.prompt.prior }()
-
-// 		bo := w.bodies[soul.ID()]
-
-// 		attach, limit := ecs.NoType, 0
-// 		switch part.Type() & bcPartMask {
-// 		case bcRight | bcUpperArm, bcLeft | bcUpperArm:
-// 			attach, limit = bcTorso, 2
-// 		case bcRight | bcForeArm:
-// 			attach, limit = bcRight|bcUpperArm, 1
-// 		case bcLeft | bcForeArm:
-// 			attach, limit = bcLeft|bcUpperArm, 1
-// 		case bcRight | bcHand:
-// 			attach, limit = bcRight|bcForeArm, 1
-// 		case bcLeft | bcHand:
-// 			attach, limit = bcLeft|bcForeArm, 1
-// 		case bcRight | bcThigh, bcLeft | bcThigh:
-// 			attach, limit = bcTorso, 2
-// 		case bcRight | bcCalf:
-// 			attach, limit = bcRight|bcThigh, 1
-// 		case bcLeft | bcCalf:
-// 			attach, limit = bcLeft|bcThigh, 1
-// 		case bcRight | bcFoot:
-// 			attach, limit = bcRight|bcCalf, 1
-// 		case bcLeft | bcFoot:
-// 			attach, limit = bcLeft|bcCalf, 1
-// 		case bcTail:
-// 			attach, limit = bcTorso, 3
-// 		default:
-// 			w.log("don't know how to graft a %s", body.DescribePart(part))
-// 		}
-
-// 		for it := bo.Iter(ecs.All(attach)); it.Next(); {
-// 			for cur := bo.rel.LookupA(ecs.AllRel(brControl), it.ID()); cur.Scan(); {
-// 				// TODO: should be a cursor w/ where .Count()
-// 				n := 0
-// 				if sub := cur.B(); sub.Type() == part.Type() {
-// 					n++
-// 				}
-// 				if n < limit {
-// 					par := it.Entity()
-// 					// TODO: import the sub graph, insert relation from par to it
-// 				}
-
-// 			}
-// 		}
-// }
-
 func (w *world) firstSoulBody() ecs.Entity {
 	if it := w.Iter(ecs.All(wcBody | wcSoul)); it.Next() {
 		return it.Entity()
@@ -1193,8 +839,8 @@ func (w *world) log(mess string, args ...interface{}) {
 	} {
 		s = strings.Replace(s, rule.old, rule.new, -1)
 	}
-	w.View.Log(s)
 	w.logger.Printf(s)
+	w.View.Log(s)
 }
 
 func (w *world) getName(ent ecs.Entity, deflt string) string {
