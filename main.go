@@ -571,8 +571,9 @@ func (w *world) applyMoves() {
 			}
 		}
 
+		pos := w.Positions[a.ID()]
 		blocked := false
-		new := w.Positions[a.ID()].Add(pend)
+		new := pos.Add(pend)
 		if hit := w.collides(a, new); len(hit) > 0 {
 			for _, b := range hit {
 				if b.Type().All(wcSolid) {
@@ -582,8 +583,9 @@ func (w *world) applyMoves() {
 			}
 		}
 		if !blocked {
-			w.Positions[a.ID()] = new
+			pos = new
 		}
+		w.Positions[a.ID()] = pos
 	})
 }
 
