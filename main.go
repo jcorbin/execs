@@ -537,6 +537,15 @@ func (w *world) applyMoves() {
 		r ecs.RelationType, ent, a, b ecs.Entity,
 		emit func(r ecs.RelationType, a, b ecs.Entity) ecs.Entity,
 	) {
+		defer func() {
+			pos := w.Positions[a.ID()]
+			for it := w.Iter(ecs.All(wcItem | wcPosition)); it.Next(); {
+				if w.Positions[it.ID()] == pos {
+					emit(mrCollide|mrItem, a, it.Entity())
+				}
+			}
+		}()
+
 		id := ent.ID()
 		pend := w.moves.p[id]
 		if a.Type().All(wcBody) {
@@ -554,9 +563,6 @@ func (w *world) applyMoves() {
 				if b.Type().All(wcSolid) {
 					emit(mrCollide|mrHit, a, b)
 					blocked = true
-				}
-				if b.Type().All(wcItem) {
-					emit(mrCollide|mrItem, a, b)
 				}
 			}
 		}
