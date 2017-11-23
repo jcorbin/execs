@@ -103,7 +103,7 @@ const (
 	mrAgro
 	mrPending
 
-	movPending = movP | ecs.ComponentType(mrPending)
+	movPending = ecs.ComponentType(mrPending) | movN | movP
 )
 
 func (mov *moves) init(core *ecs.Core) {
@@ -503,14 +503,16 @@ func (w *world) tick() {
 	}
 }
 
-func (w *world) addPendingMove(ent ecs.Entity, move point.Point) ecs.Entity {
+func (w *world) addPendingMove(ent ecs.Entity, move point.Point) {
 	if !ent.Type().All(wcInput) {
-		return ecs.NilEntity // who asked you
+		return // who asked you
 	}
-	rel := w.moves.Insert(mrPending, ent, ent)
-	rel.Add(movP)
-	w.moves.p[rel.ID()] = move
-	return rel
+	w.moves.UpsertOne(mrPending, ent, ent, func(rel ecs.Entity) {
+		id := rel.ID()
+		rel.Add(movP | movN)
+		w.moves.p[id] = w.moves.p[id].Add(move)
+		w.moves.n[id]++
+	}, nil)
 }
 
 func (w *world) generateAIMoves() {
@@ -535,8 +537,18 @@ func (w *world) applyMoves() {
 		r ecs.RelationType, ent, a, b ecs.Entity,
 		emit func(r ecs.RelationType, a, b ecs.Entity) ecs.Entity,
 	) {
+		id := ent.ID()
+		pend := w.moves.p[id]
+		if a.Type().All(wcBody) {
+			rating := w.bodies[a.ID()].movementRating()
+			pend = pend.Mul(int(moremath.Round(rating * float64(w.moves.n[id]))))
+			if pend.SumSQ() == 0 {
+				return
+			}
+		}
+
 		blocked := false
-		new := w.Positions[a.ID()].Add(w.moves.p[ent.ID()])
+		new := w.Positions[a.ID()].Add(pend)
 		if hit := w.collides(a, new); len(hit) > 0 {
 			for _, b := range hit {
 				if b.Type().All(wcSolid) {
@@ -552,6 +564,29 @@ func (w *world) applyMoves() {
 			w.Positions[a.ID()] = new
 		}
 	})
+}
+
+func (bo *body) movementRating() float64 {
+	ratings := make(map[ecs.EntityID]float64, 6)
+	for it := bo.Iter(ecs.Any(bcFoot | bcCalf | bcThigh)); it.Next(); {
+		rating := 1.0
+		for gt := bo.rel.Traverse(ecs.AllRel(brControl), ecs.TraverseCoDFS, it.ID()); gt.Traverse(); {
+			id := gt.Node().ID()
+			delete(ratings, id)
+			rating *= float64(bo.hp[id]) / float64(bo.maxHP[id])
+		}
+		if it.Type().All(bcCalf) {
+			rating *= 2 / 3
+		} else if it.Type().All(bcThigh) {
+			rating *= 1 / 3
+		}
+		ratings[it.ID()] = rating
+	}
+	rating := 0.0
+	for _, r := range ratings {
+		rating += r
+	}
+	return rating / 2.0
 }
 
 func (w *world) aiTarget(ai ecs.Entity) (point.Point, bool) {
