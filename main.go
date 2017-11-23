@@ -618,7 +618,7 @@ func (w *world) chooseAIGoal(ai ecs.Entity) ecs.Entity {
 			score *= 64
 		}
 		sum += score
-		if w.rng.Intn(sum) < score {
+		if sum <= 0 || w.rng.Intn(sum) < score {
 			goal = it.Entity()
 		}
 	}
