@@ -501,7 +501,6 @@ func (w *world) tick() {
 		if timer.m != 0 {
 			// refresh interval timer
 			timer.n = timer.m
-			w.log("reset %s timer for %v", w.getName(it.Entity(), "?"), timer.n)
 		} else {
 			// one shot timer
 			ent.Delete(wcTimer)
