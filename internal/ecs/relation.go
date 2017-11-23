@@ -215,6 +215,55 @@ func (rel *Relation) Update(
 	return rel.update(tcl, where, set)
 }
 
+// UpsertOne updates a relation, or inserts one if none existed; if more than
+// one matching relation exists, all but the first are destroyed. The optional
+// reduce function will be called if more than one matching relation is found;
+// it should transfer any important data from the `next` into the `accum`
+// Entity.
+func (rel *Relation) UpsertOne(
+	r RelationType, a, b Entity,
+	sert func(ent Entity),
+	reduce func(accum, next Entity),
+) (updated, inserted, destroyed int) {
+	if fixIndex := rel.deferIndexing(); fixIndex != nil {
+		defer fixIndex()
+	}
+	tcl := AllRel(r)
+	first := NilEntity
+	where := func(_ RelationType, _, ra, rb Entity) bool { return ra == a && rb == b }
+	set := func(r RelationType, ent, a, b Entity) (RelationType, Entity, Entity) {
+		if first == NilEntity {
+			first = ent
+			sert(first)
+			return r, a, b
+		}
+		if reduce != nil {
+			reduce(first, ent)
+		}
+		return NoRelType, NilEntity, NilEntity
+	}
+	for cur := rel.Cursor(tcl, where); cur.Scan(); {
+		ent := cur.Entity()
+		or, oa, ob := cur.R(), cur.A(), cur.B()
+		nr, na, nb := set(or, ent, oa, ob)
+		if rel.doUpdate(ent, or, oa, ob, nr, na, nb) {
+			updated++
+		} else {
+			destroyed++
+		}
+	}
+	if updated == 0 {
+		ent := rel.insert(r, a, b)
+		nr, na, nb := set(r, ent, a, b)
+		if rel.doUpdate(ent, r, a, b, nr, na, nb) {
+			inserted++
+		} else {
+			destroyed++
+		}
+	}
+	return
+}
+
 // Delete all relations matching the given type clause and optional where
 // function; this is like Update with a set function that zeros the relation,
 // but marginally faster / simpler.
