@@ -679,7 +679,6 @@ func (w *world) runAIInteraction(pr prompt, ai ecs.Entity) {
 		}
 
 		act := pr.action[i]
-		w.log("%s chooses #%d %q", w.getName(ai, "anon"), i+1, act.mess)
 		pr, ok = act.run(pr)
 	}
 }
