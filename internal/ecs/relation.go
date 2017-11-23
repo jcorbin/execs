@@ -244,14 +244,18 @@ func (rel *Relation) UpsertOne(
 	}
 	for cur := rel.Cursor(tcl, where); cur.Scan(); {
 		ent := cur.Entity()
-		if rel.doUpdate(cur.R(), ent, cur.A(), cur.B(), set) {
+		or, oa, ob := cur.R(), cur.A(), cur.B()
+		nr, na, nb := set(or, ent, oa, ob)
+		if rel.doUpdate(ent, or, oa, ob, nr, na, nb) {
 			updated++
 		} else {
 			destroyed++
 		}
 	}
 	if updated == 0 {
-		if ent := rel.insert(r, a, b); rel.doUpdate(r, ent, a, b, set) {
+		ent := rel.insert(r, a, b)
+		nr, na, nb := set(r, ent, a, b)
+		if rel.doUpdate(ent, r, a, b, nr, na, nb) {
 			inserted++
 		} else {
 			destroyed++
@@ -337,7 +341,9 @@ func (rel *Relation) update(
 ) (updated, destroyed int) {
 	for cur := rel.Cursor(tcl, where); cur.Scan(); {
 		ent := cur.Entity()
-		if rel.doUpdate(cur.R(), ent, cur.A(), cur.B(), set) {
+		or, oa, ob := cur.R(), cur.A(), cur.B()
+		nr, na, nb := set(or, ent, oa, ob)
+		if rel.doUpdate(ent, or, oa, ob, nr, na, nb) {
 			updated++
 		} else {
 			destroyed++
@@ -347,10 +353,10 @@ func (rel *Relation) update(
 }
 
 func (rel *Relation) doUpdate(
-	or RelationType, ent, oa, ob Entity,
-	set func(r RelationType, ent, a, b Entity) (RelationType, Entity, Entity),
+	ent Entity,
+	or RelationType, oa, ob Entity,
+	nr RelationType, na, nb Entity,
 ) bool {
-	nr, na, nb := set(or, ent, oa, ob)
 	if nr == NoRelType || na == NilEntity || nb == NilEntity {
 		ent.Destroy()
 		return false
