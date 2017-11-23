@@ -34,6 +34,8 @@ const (
 	wcSoul
 	wcItem
 	wcAI
+	wcFloor
+	wcWall
 )
 
 const (
@@ -1123,7 +1125,7 @@ func (w *world) addBox(box point.Box, glyph rune) {
 		{n: sz.Y, d: point.Point{Y: -1}},
 	} {
 		for i := 0; i < r.n; i++ {
-			wall := w.AddEntity(wcPosition | wcCollide | wcSolid | wcGlyph | wcBG | wcFG)
+			wall := w.AddEntity(wcPosition | wcCollide | wcSolid | wcGlyph | wcBG | wcFG | wcWall)
 			w.Glyphs[wall.ID()] = glyph
 			w.Positions[wall.ID()] = pos
 			c, _ := wallTable.toColor(last)
@@ -1135,7 +1137,7 @@ func (w *world) addBox(box point.Box, glyph rune) {
 	}
 
 	floorTable.genTile(w.rng, box, func(pos point.Point, bg termbox.Attribute) {
-		floor := w.AddEntity(wcPosition | wcBG)
+		floor := w.AddEntity(wcPosition | wcBG | wcFloor)
 		w.Positions[floor.ID()] = pos
 		w.BG[floor.ID()] = bg
 	})
