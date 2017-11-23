@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 
 	"github.com/jcorbin/execs/internal/ecs"
 )
@@ -377,4 +378,50 @@ func (bo *body) sever(ids ...ecs.EntityID) *body {
 	})
 
 	return cont
+}
+
+type bodyRemains struct {
+	w    *world     // the world it's in
+	bo   *body      // the body it's in
+	part ecs.Entity // the part
+	item ecs.Entity // its container
+	ent  ecs.Entity // what's interacting with it
+}
+
+func (rem bodyRemains) describeScavenge() string {
+	return fmt.Sprintf("scavenge %s (armor:%+d damage:%+d)",
+		rem.bo.DescribePart(rem.part),
+		rem.bo.armor[rem.part.ID()],
+		rem.bo.dmg[rem.part.ID()])
+}
+
+func (rem bodyRemains) scavenge(pr prompt) (prompt, bool) {
+	defer rem.part.Destroy()
+
+	entBo := rem.w.bodies[rem.ent.ID()]
+
+	imp := make([]string, 0, 2)
+	if armor := rem.bo.armor[rem.part.ID()]; armor > 0 {
+		recv := rem.w.chooseAttackedPart(rem.ent)
+		entBo.armor[recv.ID()] += armor
+		imp = append(imp, fmt.Sprintf("%s armor +%v", entBo.DescribePart(recv), armor))
+	}
+	if damage := rem.bo.dmg[rem.part.ID()]; damage > 0 {
+		recv := rem.w.chooseAttackerPart(rem.ent)
+		entBo.dmg[recv.ID()] += damage
+		imp = append(imp, fmt.Sprintf("%s damage +%v", entBo.DescribePart(recv), damage))
+	}
+
+	rem.w.log("%s gained %v from %s's %s",
+		rem.w.getName(rem.ent, "unknown"),
+		strings.Join(imp, " and "),
+		rem.w.getName(rem.item, "unknown"),
+		rem.bo.DescribePart(rem.part),
+	)
+
+	if rem.bo.Len() == 0 {
+		defer rem.item.Destroy()
+	}
+
+	return pr.unwind(), false
 }
