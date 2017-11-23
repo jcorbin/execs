@@ -658,11 +658,13 @@ func (w *world) chooseAIGoal(ai ecs.Entity) ecs.Entity {
 		pos := w.Positions[it.ID()]
 		score := pos.Sub(myPos).SumSQ()
 		if it.Type().All(wcItem) {
-			score *= 64
+			score = (64 - score) * 64
 		}
-		sum += score
-		if sum <= 0 || w.rng.Intn(sum) < score {
-			goal = it.Entity()
+		if score > 0 {
+			sum += score
+			if sum <= 0 || w.rng.Intn(sum) < score {
+				goal = it.Entity()
+			}
 		}
 	}
 	return goal
