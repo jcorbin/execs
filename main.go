@@ -532,19 +532,30 @@ func (w *world) applyMoves() {
 	// TODO: could really use that Upsert
 	w.moves.InsertMany(func(insert func(r ecs.RelationType, a ecs.Entity, b ecs.Entity) ecs.Entity) {
 		w.moves.Update(ecs.All(movPending), nil, func(r ecs.RelationType, ent, a, b ecs.Entity) (ecs.RelationType, ecs.Entity, ecs.Entity) {
+			blocked, nr, nb := false, ecs.NoRelType, b
+			emit := func(er ecs.RelationType, eb ecs.Entity) {
+				if nr == ecs.NoRelType {
+					nr, nb = er, eb
+				} else {
+					insert(er, a, eb)
+				}
+			}
 			new := w.Positions[a.ID()].Add(w.moves.p[ent.ID()])
 			if hit := w.collides(a, new); len(hit) > 0 {
 				for _, other := range hit {
 					if other.Type().All(wcSolid) {
-						return mrCollide | mrHit, a, other
+						emit(mrCollide|mrHit, other)
+						blocked = true
 					}
 					if other.Type().All(wcItem) {
-						insert(mrCollide|mrItem, a, other)
+						emit(mrCollide|mrItem, other)
 					}
 				}
 			}
-			w.Positions[a.ID()] = new
-			return ecs.NoRelType, a, b
+			if !blocked {
+				w.Positions[a.ID()] = new
+			}
+			return nr, a, nb
 		})
 	})
 }
