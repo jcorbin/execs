@@ -532,6 +532,10 @@ func (w *world) generateAIMoves() {
 }
 
 func (w *world) applyMoves() {
+	const (
+		maxCharge = 4
+	)
+
 	// TODO: better resolution strategy based on connected components
 	w.moves.UpsertMany(ecs.All(movPending), func(
 		r ecs.RelationType, ent, a, b ecs.Entity,
@@ -547,10 +551,14 @@ func (w *world) applyMoves() {
 		}()
 
 		id := ent.ID()
-		pend := w.moves.p[id]
+		pend, n := w.moves.p[id], w.moves.n[id]
+		if n > maxCharge {
+			n = maxCharge
+			w.moves.n[id] = n
+		}
 		if a.Type().All(wcBody) {
 			rating := w.bodies[a.ID()].movementRating()
-			pend = pend.Mul(int(moremath.Round(rating * float64(w.moves.n[id]))))
+			pend = pend.Mul(int(moremath.Round(rating * float64(n))))
 			if pend.SumSQ() == 0 {
 				return
 			}
