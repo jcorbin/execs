@@ -657,28 +657,25 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 		return
 	}
 
-	if severed == nil {
-		return
-	}
-
 	// may become spirit
-	spi := 0
-	heads := severed.allHeads()
-	for _, head := range heads {
-		spi += severed.hp[head.ID()]
-	}
-	if spi == 0 {
-		targ.Destroy()
-		return
+	if severed != nil {
+		heads, spi := severed.allHeads(), 0
+		for _, head := range heads {
+			spi += severed.hp[head.ID()]
+		}
+		if spi > 0 {
+			targ.Delete(wcBody | wcCollide)
+			w.Glyphs[targID] = '⟡'
+			for _, head := range heads {
+				head.Add(bcDerived)
+				severed.derived[head.ID()] = targ
+			}
+			w.log("%s was disembodied by %s", w.getName(targ, "?!?"), w.getName(src, "!?!"))
+			return
+		}
 	}
 
-	targ.Delete(wcBody | wcCollide)
-	w.Glyphs[targID] = '⟡'
-	for _, head := range heads {
-		head.Add(bcDerived)
-		severed.derived[head.ID()] = targ
-	}
-	w.log("%s was disembodied by %s", w.getName(targ, "?!?"), w.getName(src, "!?!"))
+	targ.Destroy()
 }
 
 func (w *world) decayRemains(item ecs.Entity) {
