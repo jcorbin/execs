@@ -283,23 +283,22 @@ func (rel *Relation) UpsertMany(
 		defer fixIndex()
 	}
 	n := 0
-	rel.update(tcl, nil, func(r RelationType, ent, a, b Entity) (RelationType, Entity, Entity) {
-		any, nr, na, nb := false, NoRelType, a, b
+	for cur := rel.Cursor(tcl, nil); cur.Scan(); {
+		ent, any := cur.Entity(), false
 		emit := func(er RelationType, ea, eb Entity) Entity {
-			any = true
 			n++
-			if nr == NoRelType {
-				nr, na, nb = er, ea, eb
-				return ent
+			if any {
+				return rel.insert(er, ea, eb)
 			}
-			return rel.insert(er, a, eb)
+			any = true
+			rel.doUpdate(ent, cur.R(), cur.A(), cur.B(), er, ea, eb)
+			return ent
 		}
-		each(r, ent, a, b, emit)
-		if any {
-			return nr, na, nb
+		each(cur.R(), ent, cur.A(), cur.B(), emit)
+		if !any {
+			ent.Destroy()
 		}
-		return NoRelType, NilEntity, NilEntity
-	})
+	}
 	return n
 }
 
