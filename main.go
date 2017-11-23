@@ -959,21 +959,11 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 			dealt,
 			w.getName(targ, "?!?"), targBo.DescribePart(bPart),
 		)
-		// TODO: Relation.Upsert would be nice
-		if updated, _ := w.moves.Update(
-			ecs.AllRel(mrAgro),
-			func(r ecs.RelationType, ent, a, b ecs.Entity) bool {
-				return a == targ && b == src
-			},
-			func(r ecs.RelationType, ent, a, b ecs.Entity) (ecs.RelationType, ecs.Entity, ecs.Entity) {
-				w.moves.n[ent.ID()] += dmg
-				return r, a, b
-			},
-		); updated == 0 {
-			ent := w.moves.Insert(mrAgro, targ, src)
-			ent.Add(movN)
-			w.moves.n[ent.ID()] = dmg
-		}
+		w.moves.UpsertOne(
+			mrAgro, targ, src,
+			func(ent ecs.Entity) { w.moves.n[ent.ID()] += dmg },
+			func(accum, next ecs.Entity) { w.moves.n[accum.ID()] += w.moves.n[next.ID()] },
+		)
 		return
 	}
 
