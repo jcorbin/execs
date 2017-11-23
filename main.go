@@ -751,6 +751,7 @@ func (w *world) runAIInteraction(pr prompt, ai ecs.Entity) {
 }
 
 func (w *world) processCombat() {
+	// TODO: make this an upsert that transmutes hits into damage/kill relations
 	for cur := w.moves.Cursor(
 		ecs.AllRel(mrCollide|mrHit),
 		func(r ecs.RelationType, ent, a, b ecs.Entity) bool {
@@ -1025,6 +1026,8 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 			dealt,
 			w.getName(targ, "?!?"), targBo.DescribePart(bPart),
 		)
+		// TODO: decouple damage -> agro into a separate upsert after the
+		// damage proc; requires damage/kill relations
 		w.moves.UpsertOne(
 			mrAgro, targ, src,
 			func(ent ecs.Entity) { w.moves.n[ent.ID()] += dmg },
