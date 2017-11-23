@@ -766,6 +766,10 @@ func (w *world) processCombat() {
 
 		srcBo, targBo := w.bodies[src.ID()], w.bodies[targ.ID()]
 		rating := srcBo.partHPRating(aPart) / targBo.partHPRating(bPart)
+		if cur.Entity().Type().All(movN) {
+			mult := w.moves.n[cur.Entity().ID()]
+			rating *= float64(mult)
+		}
 		rand := (1 + w.rng.Float64()) / 2 // like an x/2 + 1D(x/2) XXX reconsider
 		dmg := int(moremath.Round(float64(srcBo.dmg[aPart.ID()]) * rating * rand))
 		dmg -= targBo.armor[bPart.ID()]
