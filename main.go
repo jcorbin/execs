@@ -757,11 +757,16 @@ func soulInvolved(a, b ecs.Entity) bool {
 	return a.Type().All(wcSoul) || b.Type().All(wcSoul)
 }
 
-func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
+func (w *world) dealAttackDamage(
+	src, aPart ecs.Entity,
+	targ, bPart ecs.Entity,
+	dmg int,
+) (leftover int, destroyed bool) {
 	// TODO: store damage and kill relations
 
 	srcBo, targBo := w.bodies[src.ID()], w.bodies[targ.ID()]
 	dealt, _, destroyed := targBo.damagePart(bPart, dmg)
+	leftover = dmg - dealt
 	if !destroyed {
 		if soulInvolved(src, targ) {
 			w.log("%s's %s dealt %v damage to %s's %s",
@@ -785,7 +790,7 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 				}
 			},
 		)
-		return
+		return leftover, false
 	}
 
 	if soulInvolved(src, targ) {
@@ -827,7 +832,7 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 	// }
 
 	if bo := w.bodies[targID]; bo.Iter(ecs.All(bcPart)).Count() > 0 {
-		return
+		return leftover, false
 	}
 
 	// may become spirit
@@ -846,11 +851,13 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 			if soulInvolved(src, targ) {
 				w.log("%s was disembodied by %s", w.getName(targ, "?!?"), w.getName(src, "!?!"))
 			}
-			return
+			return leftover, true
 		}
 	}
 
 	targ.Destroy()
+
+	return leftover, true
 }
 
 func (w *world) decayRemains(item ecs.Entity) {
