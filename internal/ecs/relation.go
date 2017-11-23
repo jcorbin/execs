@@ -260,6 +260,45 @@ func (rel *Relation) UpsertOne(
 	return
 }
 
+// UpsertMany updates many relations by calling the supplied `each` function.
+//
+// The `each` function may call `emit` 0 or more times for each relation
+// entity; `emit` will return a, maybe newly inserted, entity for the given
+// `r`, `a`, `b` triple that its given.
+//
+// If emit isn't called for an entity, then it is destroyed. The first time
+// `emit` is called the entity is updated; thereafter a new entity is inserted.
+func (rel *Relation) UpsertMany(
+	tcl TypeClause,
+	each func(
+		r RelationType, ent, a, b Entity,
+		emit func(r RelationType, a, b Entity) Entity,
+	),
+) int {
+	if fixIndex := rel.deferIndexing(); fixIndex != nil {
+		defer fixIndex()
+	}
+	n := 0
+	rel.update(tcl, nil, func(r RelationType, ent, a, b Entity) (RelationType, Entity, Entity) {
+		any, nr, na, nb := false, NoRelType, a, b
+		emit := func(er RelationType, ea, eb Entity) Entity {
+			any = true
+			n++
+			if nr == NoRelType {
+				nr, na, nb = er, ea, eb
+				return ent
+			}
+			return rel.insert(er, a, eb)
+		}
+		each(r, ent, a, b, emit)
+		if any {
+			return nr, na, nb
+		}
+		return NoRelType, NilEntity, NilEntity
+	})
+	return n
+}
+
 // Delete all relations matching the given type clause and optional where
 // function; this is like Update with a set function that zeros the relation,
 // but marginally faster / simpler.
