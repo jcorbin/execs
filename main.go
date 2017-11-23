@@ -539,6 +539,7 @@ func (w *world) generateAIMoves() {
 
 func (w *world) applyMoves() {
 	const (
+		maxLunge  = 2
 		maxCharge = 4
 	)
 
@@ -572,17 +573,17 @@ func (w *world) applyMoves() {
 		}
 
 		pos := w.Positions[a.ID()]
-		blocked := false
-		new := pos.Add(pend)
-		if hit := w.collides(a, new); len(hit) > 0 {
-			for _, b := range hit {
-				if b.Type().All(wcSolid) {
-					emit(mrCollide|mrHit, a, b)
-					blocked = true
+	candidates:
+		for i := 0; i < n && i < maxLunge; i++ {
+			new := pos.Add(pend.Sign())
+			if hit := w.collides(a, new); len(hit) > 0 {
+				for _, b := range hit {
+					if b.Type().All(wcSolid) {
+						emit(mrCollide|mrHit, a, b)
+						break candidates
+					}
 				}
 			}
-		}
-		if !blocked {
 			pos = new
 		}
 		w.Positions[a.ID()] = pos
