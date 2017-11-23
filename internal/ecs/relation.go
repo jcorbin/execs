@@ -209,34 +209,10 @@ func (rel *Relation) Update(
 	where func(r RelationType, ent, a, b Entity) bool,
 	set func(r RelationType, ent, a, b Entity) (RelationType, Entity, Entity),
 ) int {
-	n := 0
 	if fixIndex := rel.deferIndexing(); fixIndex != nil {
 		defer fixIndex()
 	}
-	for cur := rel.Cursor(tcl, where); cur.Scan(); {
-		ent := cur.Entity()
-		oa, ob, or := cur.A(), cur.B(), cur.R()
-		n++ // TODO: differetiate updated vs destroyed?
-		nr, na, nb := set(or, ent, oa, ob)
-		if nr == NoRelType || na == NilEntity || nb == NilEntity {
-			ent.Destroy()
-			continue
-		}
-		if ent.Type() == NoType {
-			continue
-		}
-		if nr != or {
-			ent.SetType(ComponentType(nr) | relType)
-		}
-		i := ent.ID() - 1
-		if na != oa {
-			rel.aids[i] = na.ID()
-		}
-		if nb != ob {
-			rel.bids[i] = nb.ID()
-		}
-	}
-	return n
+	return rel.update(tcl, where, set)
 }
 
 // Delete all relations matching the given type clause and optional where
@@ -268,4 +244,36 @@ func (rel *Relation) insert(r RelationType, a, b Entity) Entity {
 		rel.bix[i] = i
 	}
 	return ent
+}
+
+func (rel *Relation) update(
+	tcl TypeClause,
+	where func(r RelationType, ent, a, b Entity) bool,
+	set func(r RelationType, ent, a, b Entity) (RelationType, Entity, Entity),
+) int {
+	n := 0
+	for cur := rel.Cursor(tcl, where); cur.Scan(); {
+		ent := cur.Entity()
+		oa, ob, or := cur.A(), cur.B(), cur.R()
+		n++ // TODO: differetiate updated vs destroyed?
+		nr, na, nb := set(or, ent, oa, ob)
+		if nr == NoRelType || na == NilEntity || nb == NilEntity {
+			ent.Destroy()
+			continue
+		}
+		if ent.Type() == NoType {
+			continue
+		}
+		if nr != or {
+			ent.SetType(ComponentType(nr) | relType)
+		}
+		i := ent.ID() - 1
+		if na != oa {
+			rel.aids[i] = na.ID()
+		}
+		if nb != ob {
+			rel.bids[i] = nb.ID()
+		}
+	}
+	return n
 }
