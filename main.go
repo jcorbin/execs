@@ -969,15 +969,6 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 		w.getName(src, "!?!"), srcBo.DescribePart(aPart),
 	)
 
-	// TODO: drop armor scraps on the floor instead
-	// if imp := w.reclaimDestroyedPart(src, part); len(imp) > 0 {
-	// 	w.log("%s gained %v from %s's %s",
-	// 		w.getName(src, "!?!"),
-	// 		strings.Join(imp, " and "),
-	// 		w.getName(targ, "?!?"), part.Desc,
-	// 	)
-	// }
-
 	targID := targ.ID()
 
 	severed := targBo.sever(bPart.ID())
@@ -1060,22 +1051,6 @@ func (w *world) dirtyFloorTile(pos point.Point) (ecs.Entity, bool) {
 	}
 	return ecs.NilEntity, false
 }
-
-// func (w *world) reclaimDestroyedPart(ent ecs.Entity, part bodyPart) []string {
-// 	bo := w.bodies[ent.ID()]
-// 	imp := make([]string, 0, 2)
-// 	if part.Armor > 0 {
-// 		recv := w.chooseAttackedPart(ent)
-// 		bo.armor[recv.ID()] += part.Armor
-// 		imp = append(imp, fmt.Sprintf("%s armor +%v", bo.DescribePart(recv), part.Armor))
-// 	}
-// 	if part.Damage > 0 {
-// 		recv := w.chooseAttackerPart(ent)
-// 		bo.dmg[recv.ID()] += part.Damage
-// 		imp = append(imp, fmt.Sprintf("%s damage +%v", bo.DescribePart(recv), part.Damage))
-// 	}
-// 	return imp
-// }
 
 func (w *world) checkAttackHit(src, targ ecs.Entity) (ecs.Entity, ecs.Entity) {
 	aPart := w.chooseAttackerPart(src)
