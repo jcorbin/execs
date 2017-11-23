@@ -224,7 +224,7 @@ func (w *world) Render(ctx *view.Context) error {
 
 	it := w.Iter(ecs.All(wcSoul | wcBody))
 	promptLines := w.prompt.render("")
-	footParts := make([]string, 0, it.Count()*3+len(promptLines)+1)
+	footParts := make([]string, 0, it.Count()*4+len(promptLines)+1)
 
 	if len(promptLines) > 0 {
 		footParts = append(footParts, promptLines...)
@@ -253,6 +253,11 @@ func (w *world) Render(ctx *view.Context) error {
 			}
 		}
 
+		charge := 0
+		for cur := w.moves.LookupA(ecs.All(movPending), it.ID()); cur.Scan(); {
+			charge += w.moves.n[cur.Entity().ID()]
+		}
+
 		// TODO: render a doll like
 		//    _O_
 		//   / | \
@@ -262,6 +267,7 @@ func (w *world) Render(ctx *view.Context) error {
 
 		hp, maxHP := bo.HPRange()
 		footParts = append(footParts,
+			fmt.Sprintf("Charge: %v", charge),
 			fmt.Sprintf("HP(%v/%v): %s", hp, maxHP, strings.Join(hpParts, " ")),
 			fmt.Sprintf("Armor(%v): %s", armor, strings.Join(armorParts, " ")),
 			fmt.Sprintf("Damage(%v): %s", damage, strings.Join(damageParts, " ")),
