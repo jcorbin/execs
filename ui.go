@@ -71,6 +71,13 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) (rerr error) {
 	// special keys
 	if !handled {
 		switch k.Ch {
+		case ',':
+			if player != ecs.NilEntity {
+				if itemPrompt, haveItemsHere := w.itemPrompt(w.prompt, player); haveItemsHere {
+					w.prompt, _ = itemPrompt.activate(w.prompt.unwind())
+				}
+			}
+			proc, handled = false, true
 		case '_':
 			if player != ecs.NilEntity {
 				if player.Type().All(wcCollide) {
