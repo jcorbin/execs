@@ -9,15 +9,19 @@ import (
 // HUD provides an opinionated view system with a Header, Footer, and Logs on
 // top of a base grid (e.g world map).
 type HUD struct {
-	World  Grid
+	World    Grid
+	Logs     []string
+	LogAlign Align
+
 	Header []string
 	Footer []string
-	Logs   []string
 }
 
 // Render the context into the given terminal grid.
 func (hud HUD) Render(termGrid Grid) {
-	const logPlacement = AlignTop
+	if hud.LogAlign == 0 {
+		hud.LogAlign = AlignTop
+	}
 
 	// NOTE: intentionally not a layout item so that the UI elemenst overlay
 	// the world grid.
@@ -40,7 +44,7 @@ func (hud HUD) Render(termGrid Grid) {
 		lay.Place(renderLogs{
 			ss:  hud.Logs,
 			min: point.Point{X: 10, Y: 5},
-		}, logPlacement)
+		}, hud.LogAlign)
 	}
 }
 
