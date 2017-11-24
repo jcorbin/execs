@@ -635,8 +635,15 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 		// damage proc; requires damage/kill relations
 		w.moves.UpsertOne(
 			mrAgro, targ, src,
-			func(ent ecs.Entity) { w.moves.n[ent.ID()] += dmg },
-			func(accum, next ecs.Entity) { w.moves.n[accum.ID()] += w.moves.n[next.ID()] },
+			func(ent ecs.Entity) {
+				ent.Add(movN)
+				w.moves.n[ent.ID()] += dmg
+			},
+			func(accum, next ecs.Entity) {
+				if next.Type().All(movN) {
+					w.moves.n[accum.ID()] += w.moves.n[next.ID()]
+				}
+			},
 		)
 		return
 	}
