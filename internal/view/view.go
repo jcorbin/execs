@@ -128,8 +128,6 @@ func (v *View) render(client Client) error {
 }
 
 func (ctx *Context) render(termGrid Grid) {
-	const minLogLines = 5
-
 	header := ctx.Header
 	space := termGrid.Size.Sub(ctx.Grid.Size)
 	space.Y -= len(header)
@@ -137,9 +135,6 @@ func (ctx *Context) render(termGrid Grid) {
 
 	if len(ctx.Logs) > 0 {
 		nLogs := len(ctx.Logs)
-		// if nLogs > minLogLines {
-		// 	nLogs = minLogLines
-		// }
 		if n := nLogs + len(header); n > cap(header) {
 			nh := make([]string, len(header), n)
 			copy(nh, header)
