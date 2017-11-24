@@ -157,6 +157,7 @@ func (w *world) init(v *view.View) {
 	w.items = []worldItem{nil}
 
 	w.RegisterAllocator(wcName|wcPosition|wcGlyph|wcBG|wcFG|wcBody|wcItem|wcTimer, w.allocWorld)
+	w.RegisterCreator(wcInput, w.createInput)
 	w.RegisterCreator(wcBody, w.createBody)
 	w.RegisterDestroyer(wcTimer, w.destroyTimer)
 	w.RegisterDestroyer(wcBody, w.destroyBody)
@@ -175,6 +176,10 @@ func (w *world) allocWorld(id ecs.EntityID, t ecs.ComponentType) {
 	w.bodies = append(w.bodies, nil)
 	w.items = append(w.items, nil)
 	w.timers = append(w.timers, timer{})
+}
+
+func (w *world) createInput(id ecs.EntityID, t ecs.ComponentType) {
+	w.setMovementRange(w.Ref(id), 1)
 }
 
 func (w *world) createBody(id ecs.EntityID, t ecs.ComponentType) {
