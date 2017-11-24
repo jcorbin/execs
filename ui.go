@@ -30,6 +30,21 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 		return view.ErrStop
 	}
 
+	// special keys
+	switch k.Ch {
+	case '_':
+		if ent := w.findPlayer(); ent != ecs.NilEntity {
+			if ent.Type().All(wcCollide) {
+				ent.Delete(wcCollide)
+				w.Glyphs[ent.ID()] = '~'
+			} else {
+				ent.Add(wcCollide)
+				w.Glyphs[ent.ID()] = 'X'
+			}
+		}
+		return nil
+	}
+
 	// maybe run prompt
 	if w.prompt.handle(k.Ch) {
 		return nil
@@ -48,16 +63,6 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 		move = point.Point{X: 1, Y: 0}
 	default:
 		switch k.Ch {
-		case '_':
-			if ent := w.findPlayer(); ent != ecs.NilEntity {
-				if ent.Type().All(wcCollide) {
-					ent.Delete(wcCollide)
-					w.Glyphs[ent.ID()] = '~'
-				} else {
-					ent.Add(wcCollide)
-					w.Glyphs[ent.ID()] = 'X'
-				}
-			}
 		case 'y':
 			move = point.Point{X: -1, Y: -1}
 		case 'u':
