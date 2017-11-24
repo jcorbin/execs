@@ -22,32 +22,29 @@ func (ui *ui) init(v *view.View) {
 	ui.prompt.action = make([]promptAction, 0, 10)
 }
 
-func (ui *ui) handle(k view.KeyEvent) (bool, error) {
+func (ui *ui) handle(k view.KeyEvent) (proc, handled bool, err error) {
 	if k.Key == termbox.KeyEsc {
-		return true, view.ErrStop
+		return false, true, view.ErrStop
 	}
 
-	if _, ok := ui.prompt.handle(k.Ch); ok {
-		return true, nil
+	if prompting, ok := ui.prompt.handle(k.Ch); ok {
+		return !prompting, true, nil
 	}
 
-	if pr, _, ok := ui.bar.run(k.Ch); ok {
+	if pr, prompting, ok := ui.bar.run(k.Ch); ok {
 		ui.bar = pr
-		return true, nil
+		return !prompting, true, nil
 	}
 
-	return false, nil
+	return false, false, nil
 }
 
 func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 	w.ui.View.ClearLog()
 
-	handled, err := w.ui.handle(k)
+	proc, handled, err := w.ui.handle(k)
 	if err != nil {
 		return err
-	}
-	if handled {
-		return nil
 	}
 
 	// special keys
@@ -63,7 +60,7 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 					w.Glyphs[ent.ID()] = 'X'
 				}
 			}
-			handled = true
+			proc, handled = true, true
 		}
 	}
 
@@ -73,12 +70,14 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 			for it := w.Iter(ecs.All(playMoveMask)); it.Next(); {
 				w.addPendingMove(it.Entity(), move)
 			}
-			handled = true
+			proc, handled = true, true
 		}
 	}
 
-	w.ui.prompt.reset()
-	w.Process()
+	if proc {
+		w.ui.prompt.reset()
+		w.Process()
+	}
 
 	if w.over {
 		return view.ErrStop
