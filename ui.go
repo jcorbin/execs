@@ -56,13 +56,14 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) (rerr error) {
 
 	player := w.findPlayer()
 
-	if player != ecs.NilEntity && w.prompt.mess == "" {
+	if player != ecs.NilEntity && w.ui.bar.prior == nil {
 		defer func() {
 			if rerr != nil {
 				return
 			}
+			w.ui.bar.removeAction("Inspect")
 			if itemPrompt, haveItemsHere := w.itemPrompt(w.prompt, player); haveItemsHere {
-				w.prompt = itemPrompt
+				w.ui.bar.addAction(itemPrompt.activate, "Inspect")
 			}
 		}()
 	}
@@ -442,6 +443,14 @@ func (pr *prompt) reset() {
 	pr.action = pr.action[:0]
 }
 
+func (pr *prompt) activate(prior prompt) (prompt, bool) {
+	return prompt{
+		prior:  &prior,
+		mess:   pr.mess,
+		action: pr.action,
+	}, true
+}
+
 func (pr *prompt) addAction(
 	run func(prompt) (prompt, bool),
 	mess string, args ...interface{},
@@ -451,6 +460,15 @@ func (pr *prompt) addAction(
 		return true
 	}
 	return false
+}
+
+func (pr *prompt) removeAction(mess string) {
+	for i := range pr.action {
+		if pr.action[i].mess == mess {
+			pr.action = append(pr.action[:i], pr.action[i+1:]...)
+			break
+		}
+	}
 }
 
 func (pr prompt) run(ch rune) (_ prompt, prompting, ok bool) {
