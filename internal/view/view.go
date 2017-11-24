@@ -2,6 +2,7 @@ package view
 
 import (
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -81,7 +82,7 @@ func (v *View) runClient(client Client) (rerr error) {
 		select {
 
 		case <-v.done:
-			return client.Close()
+			return io.EOF
 
 		case <-v.redraw:
 

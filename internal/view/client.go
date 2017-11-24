@@ -2,6 +2,7 @@ package view
 
 import (
 	"errors"
+	"io"
 
 	termbox "github.com/nsf/termbox-go"
 )
@@ -31,9 +32,18 @@ func JustKeepRunning(factory func(v *View) (Client, error)) error {
 	var v View
 	return v.runWith(func() error {
 		for v.polling {
-			if client, err := factory(&v); err != nil {
+			client, err := factory(&v)
+			if err != nil {
 				return err
-			} else if err := v.runClient(client); err != nil && err != ErrStop {
+			}
+			err = v.runClient(client)
+			if err == ErrStop {
+				continue
+			}
+			if err == io.EOF {
+				return nil
+			}
+			if err != nil {
 				return err
 			}
 		}
