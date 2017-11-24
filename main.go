@@ -272,7 +272,6 @@ func (w *world) Process() {
 	w.prepareCollidables() // collect collidables
 	w.generateAIMoves()    // give AI a chance!
 	w.applyMoves()         // resolve moves
-	w.buildItemMenu()      // what items are here
 	w.processAIItems()     // nom nom
 	w.processCombat()      // e.g. deal damage
 	w.checkOver()          // no souls => done

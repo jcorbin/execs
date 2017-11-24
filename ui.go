@@ -47,17 +47,19 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 		return err
 	}
 
+	player := w.findPlayer()
+
 	// special keys
 	if !handled {
 		switch k.Ch {
 		case '_':
-			if ent := w.findPlayer(); ent != ecs.NilEntity {
-				if ent.Type().All(wcCollide) {
-					ent.Delete(wcCollide)
-					w.Glyphs[ent.ID()] = '~'
+			if player != ecs.NilEntity {
+				if player.Type().All(wcCollide) {
+					player.Delete(wcCollide)
+					w.Glyphs[player.ID()] = '~'
 				} else {
-					ent.Add(wcCollide)
-					w.Glyphs[ent.ID()] = 'X'
+					player.Add(wcCollide)
+					w.Glyphs[player.ID()] = 'X'
 				}
 			}
 			proc, handled = true, true
@@ -83,6 +85,15 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 	}
 
 	if proc {
+		if player != ecs.NilEntity {
+			w.log("wru?")
+			return
+		}
+		if pr, prompting := w.itemPrompt(w.prompt, player); prompting {
+			w.prompt = pr
+		} else if w.prompt.mess != "" {
+			w.prompt.reset()
+		}
 		w.Process()
 	}
 
@@ -326,19 +337,6 @@ func (w *world) Render(ctx *view.Context) error {
 	}
 
 	return nil
-}
-
-func (w *world) buildItemMenu() {
-	ent := w.findPlayer()
-	if ent == ecs.NilEntity {
-		w.log("wru?")
-		return
-	}
-	if pr, prompting := w.itemPrompt(w.prompt, ent); prompting {
-		w.prompt = pr
-	} else if w.prompt.mess != "" {
-		w.prompt.reset()
-	}
 }
 
 func (w *world) itemPrompt(pr prompt, ent ecs.Entity) (prompt, bool) {
