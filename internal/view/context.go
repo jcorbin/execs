@@ -2,7 +2,6 @@ package view
 
 import (
 	"fmt"
-	"strings"
 	"unicode/utf8"
 
 	"github.com/jcorbin/execs/internal/point"
@@ -18,24 +17,32 @@ type Context struct {
 }
 
 // Render the context into the given terminal grid.
-func (ctx Context) Render(termGrid Grid) error {
-	header := layoutLines(ctx.Header, termGrid.Size)
-	footer := layoutLines(ctx.Footer, termGrid.Size)
-	// TODO: prior footer default was right-aligned; restore that once
-	// naturalized to Grid; also restore the bottom-aligned footer property to
-	// both right/left side independently
+func (ctx Context) Render(termGrid Grid) {
+	const logPlacement = AlignTop
+
+	// NOTE: intentionally not a layout item so that the UI elemenst overlay
+	// the world grid.
+	termGrid.Copy(ctx.Grid)
+
+	lay := Layout{Grid: termGrid}
+
+	for _, part := range ctx.Header {
+		align, n := readLayoutOpts(part)
+		lay.Place(renderString(part[n:]), align|AlignTop)
+	}
+
+	for _, part := range ctx.Footer {
+		align, n := readLayoutOpts(part)
+		lay.Place(renderString(part[n:]), align|AlignBottom)
+	}
 
 	if len(ctx.Logs) > 0 {
-		header = append(header[:len(header):len(header)], ctx.Logs...)
+		lay.Place(renderStrings{
+			off: 0, // TODO: scrolling
+			ss:  ctx.Logs,
+			min: point.Point{X: 10, Y: 5},
+		}, logPlacement)
 	}
-	termGrid.Copy(ctx.Grid)
-	for i := 0; i < len(header); i++ {
-		termGrid.WriteString(i, AlignLeft, header[i])
-	}
-	for i, j := len(footer)-1, 1; i >= 0; i, j = i-1, j+1 {
-		termGrid.WriteString(termGrid.Size.Y-j, AlignLeft, footer[i])
-	}
-	return nil
 }
 
 // Log adds a line to the internal log buffer. As much tail of the log buffer
@@ -69,116 +76,71 @@ func (ctx *Context) SetFooter(lines ...string) {
 	copy(ctx.Footer, lines)
 }
 
-func layoutLines(parts []string, size point.Point) []string {
-	// TODO: first-pass, reify this into some sort of `type lineLayer struct`
-	// before adding centering
-	// TODO: naturalize this onto Grid for less copies
-
-	lparts := layoutParts(parts, layoutAlignLeft, size)
-	rparts := layoutParts(parts, layoutAlignRight, size)
-
-	// combine left and right parts
-	n := len(lparts)
-	if cap(rparts) > n {
-		n = len(rparts)
-	}
-	lines := make([]string, 0, n)
-	i := 0
-	for ; i < len(lparts) && i < len(rparts); i++ {
-		rem := size.X
-		part := lparts[i]
-		rem -= len(part)
-		if gap := rem - len(rparts[i]); gap > 0 {
-			part += strings.Repeat(" ", gap)
-			part += rparts[i]
-		} else if gap < 0 {
-			part += rparts[i][:len(rparts[i])+gap]
-		} else {
-			part += rparts[i]
-		}
-		lines = append(lines, part)
-	}
-	for ; i < len(lparts); i++ {
-		lines = append(lines, lparts[i])
-	}
-	for ; i < len(rparts); i++ {
-		lines = append(lines,
-			strings.Repeat(" ", size.X-len(rparts[i]))+rparts[i])
-	}
-
-	// XXX
-	for j := range parts {
-		part, opts := scanLayoutOpts(parts[j])
-		if opts&(layoutAlignLeft|layoutAlignRight) == 0 {
-			lines = append(lines, fmt.Sprintf("[%d] %04x %q", j, opts, part))
-			i++
-		}
-	}
-
-	return lines[:i]
-}
-
-func layoutParts(in []string, mask layoutOption, size point.Point) []string {
-	out := make([]string, 1, len(in))
-	for i := range in {
-		part, opts := scanLayoutOpts(in[i])
-		if opts&mask == 0 {
-			continue
-		}
-		if opts&layoutClear != 0 {
-			out = append(out, "")
-		}
-		prior := len(out[len(out)-1])
-		rem := size.X - prior - len(part)
-		if prior > 0 {
-			rem--
-		}
-		if rem < 0 && prior > 0 {
-			rem += prior
-			prior, out = 0, append(out, "")
-		}
-		if rem < 0 {
-			part = part[:len(part)+rem]
-		}
-		if j := len(out) - 1; prior > 0 {
-			out[j] = out[j] + " " + part
-		} else {
-			out[j] = part
-		}
-	}
-	return out
-}
-
-type layoutOption uint16
-
-const (
-	layoutClear layoutOption = 1 << iota
-	layoutAlignLeft
-	layoutAlignRight
-	// layoutAlignCenter // TODO
-)
-
-func scanLayoutOpts(s string) (rest string, opts layoutOption) {
+func readLayoutOpts(s string) (opts Align, n int) {
 	for len(s) > 0 {
-		switch r, n := utf8.DecodeRuneInString(s); r {
+		switch r, m := utf8.DecodeRuneInString(s[n:]); r {
 		case '.':
-			opts |= layoutClear
-			s = s[n:]
+			opts |= AlignHFlush
+			n += m
 			continue
 		case '<':
-			opts |= layoutAlignLeft
-			s = s[n:]
+			opts |= AlignLeft
+			n += m
 		case '>':
-			opts |= layoutAlignRight
-			s = s[n:]
+			opts |= AlignRight
+			n += m
+		case '^':
+			opts |= AlignCenter
+			n += m
 		}
 		break
 	}
-	if opts == 0 {
-		opts = layoutAlignLeft | layoutClear
+	return opts, n
+}
+
+// TODO: export for re-use
+type renderString string
+
+func (s renderString) RenderSize() (wanted, needed point.Point) {
+	needed.X = utf8.RuneCountInString(string(s))
+	needed.Y = 1
+	return needed, needed
+}
+
+func (s renderString) Render(g Grid) {
+	i := 0
+	for _, r := range s {
+		g.Data[i].Ch = r
+		i++
 	}
-	if opts&(layoutAlignLeft|layoutAlignRight) == 0 {
-		opts |= layoutAlignLeft
+}
+
+// TODO: probably also export for re-use
+type renderStrings struct {
+	ss  []string
+	off int
+	min point.Point
+}
+
+func (rss renderStrings) RenderSize() (wanted, needed point.Point) {
+	wanted.X = 1
+	for i := range rss.ss {
+		if n := utf8.RuneCountInString(rss.ss[i]); n > wanted.X {
+			wanted.X = n
+		}
 	}
-	return s, opts
+	wanted.Y = len(rss.ss)
+	return wanted, rss.min
+}
+
+func (rss renderStrings) Render(g Grid) {
+	for y := rss.off; y < g.Size.Y; y++ {
+		s := rss.ss[y]
+		i := y * g.Size.X
+		for x := 0; len(s) > 0 && x < g.Size.X; x++ {
+			r, n := utf8.DecodeRuneInString(s)
+			s = s[n:]
+			g.Data[i+x].Ch = r
+		}
+	}
 }
