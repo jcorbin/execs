@@ -2,8 +2,10 @@ package view
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	termbox "github.com/nsf/termbox-go"
 
@@ -110,7 +112,7 @@ func (v *View) render(client Client) error {
 		return fmt.Errorf("bogus terminal size %v", v.size)
 	}
 
-	v.ctx.Avail = v.size.Sub(point.Point{Y: len(v.ctx.Footer) + len(v.ctx.Header)})
+	v.ctx.Avail = v.size
 	if err := client.Render(&v.ctx); err != nil {
 		return err
 	}
@@ -128,8 +130,8 @@ func (v *View) render(client Client) error {
 }
 
 func (ctx Context) render(termGrid Grid) {
-	header := ctx.Header
-	footer := ctx.Footer
+	header := layoutLines(ctx.Header, termGrid.Size)
+	footer := layoutLines(ctx.Footer, termGrid.Size)
 	if len(ctx.Logs) > 0 {
 		header = append(header[:len(header):len(header)], ctx.Logs...)
 	}
@@ -184,6 +186,117 @@ func (v *View) pollEvents() {
 		}
 		return nil
 	}()
+}
+
+type layoutOption uint16
+
+const (
+	layoutClear layoutOption = 1 << iota
+	layoutAlignLeft
+	layoutAlignRight
+	// layoutAlignCenter // TODO
+)
+
+func layoutLines(parts []string, size point.Point) []string {
+	// TODO: first-pass, reify this into some sort of `type lineLayer struct`
+	// before adding centering
+	// TODO: naturalize this onto Grid for less copies
+
+	lparts := layoutParts(parts, layoutAlignLeft, size)
+	rparts := layoutParts(parts, layoutAlignRight, size)
+
+	// combine left and right parts
+	n := len(lparts)
+	if cap(rparts) > n {
+		n = len(rparts)
+	}
+	lines := make([]string, 0, n)
+	i := 0
+	for ; i < len(lparts) && i < len(rparts); i++ {
+		rem := size.X
+		part := lparts[i]
+		rem -= len(part)
+		if gap := rem - len(rparts[i]); gap > 0 {
+			part += strings.Repeat(" ", gap)
+			part += rparts[i]
+		} else if gap < 0 {
+			part += rparts[i][:len(rparts[i])+gap]
+		} else {
+			part += rparts[i]
+		}
+		lines = append(lines, part)
+	}
+	for ; i < len(lparts); i++ {
+		lines = append(lines, lparts[i])
+	}
+	for ; i < len(rparts); i++ {
+		lines = append(lines,
+			strings.Repeat(" ", size.X-len(rparts[i]))+rparts[i])
+	}
+
+	// XXX
+	for j := range parts {
+		part, opts := scanLayoutOpts(parts[j])
+		if opts&(layoutAlignLeft|layoutAlignRight) == 0 {
+			lines = append(lines, fmt.Sprintf("[%d] %04x %q", j, opts, part))
+			i++
+		}
+	}
+
+	return lines[:i]
+}
+
+func layoutParts(in []string, mask layoutOption, size point.Point) []string {
+	out := make([]string, 1, len(in))
+	for i := range in {
+		part, opts := scanLayoutOpts(in[i])
+		if opts&mask == 0 {
+			continue
+		}
+		if opts&layoutClear != 0 {
+			out = append(out, "")
+		}
+		prior := len(out[len(out)-1])
+		rem := size.X - prior - len(part)
+		if prior > 0 {
+			rem--
+		}
+		if rem < 0 && prior > 0 {
+			rem += prior
+			prior, out = 0, append(out, "")
+		}
+		if rem < 0 {
+			part = part[:len(part)+rem]
+		}
+		if j := len(out) - 1; prior > 0 {
+			out[j] = out[j] + " " + part
+		} else {
+			out[j] = part
+		}
+	}
+	return out
+}
+
+func scanLayoutOpts(s string) (rest string, opts layoutOption) {
+	for len(s) > 0 {
+		switch r, n := utf8.DecodeRuneInString(s); r {
+		case '.':
+			opts |= layoutClear
+			s = s[n:]
+			continue
+		case '<':
+			opts |= layoutAlignLeft
+			s = s[n:]
+		case '>':
+			opts |= layoutAlignRight
+			s = s[n:]
+		}
+		break
+	}
+	if opts&(layoutAlignLeft|layoutAlignRight) == 0 {
+		opts |= layoutAlignLeft
+	}
+	return s, opts
 }
 
 func termboxSize() point.Point {
