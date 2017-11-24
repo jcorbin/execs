@@ -18,7 +18,6 @@ type ui struct {
 
 func (ui *ui) init(v *view.View) {
 	ui.View = v
-	ui.bar.mess = "<DUMMY:action bar>"
 	ui.bar.action = make([]promptAction, 0, 5)
 	ui.prompt.action = make([]promptAction, 0, 10)
 }
@@ -37,7 +36,8 @@ func (ui *ui) handle(k view.KeyEvent) (bool, error) {
 		return true, nil
 	}
 
-	if ui.bar.handle(k.Ch) {
+	if pr, ok := ui.bar.run(k.Ch); ok {
+		ui.bar = pr
 		return true, nil
 	}
 
