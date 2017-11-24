@@ -26,6 +26,7 @@ func (ui *ui) handle(k view.KeyEvent) (proc, handled bool, err error) {
 	defer func() {
 		if !handled {
 			ui.prompt.reset()
+			ui.bar = ui.bar.unwind()
 		}
 	}()
 
