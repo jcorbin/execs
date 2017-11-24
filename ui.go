@@ -42,29 +42,38 @@ func (ui *ui) handle(k view.KeyEvent) (bool, error) {
 func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 	w.ui.View.ClearLog()
 
-	if handled, err := w.ui.handle(k); handled || err != nil {
+	handled, err := w.ui.handle(k)
+	if err != nil {
 		return err
 	}
-
-	// special keys
-	switch k.Ch {
-	case '_':
-		if ent := w.findPlayer(); ent != ecs.NilEntity {
-			if ent.Type().All(wcCollide) {
-				ent.Delete(wcCollide)
-				w.Glyphs[ent.ID()] = '~'
-			} else {
-				ent.Add(wcCollide)
-				w.Glyphs[ent.ID()] = 'X'
-			}
-		}
+	if handled {
 		return nil
 	}
 
+	// special keys
+	if !handled {
+		switch k.Ch {
+		case '_':
+			if ent := w.findPlayer(); ent != ecs.NilEntity {
+				if ent.Type().All(wcCollide) {
+					ent.Delete(wcCollide)
+					w.Glyphs[ent.ID()] = '~'
+				} else {
+					ent.Add(wcCollide)
+					w.Glyphs[ent.ID()] = 'X'
+				}
+			}
+			handled = true
+		}
+	}
+
 	// parse player move
-	if move, ok := parseMove(k); ok {
-		for it := w.Iter(ecs.All(playMoveMask)); it.Next(); {
-			w.addPendingMove(it.Entity(), move)
+	if !handled {
+		if move, ok := parseMove(k); ok {
+			for it := w.Iter(ecs.All(playMoveMask)); it.Next(); {
+				w.addPendingMove(it.Entity(), move)
+			}
+			handled = true
 		}
 	}
 
