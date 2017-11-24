@@ -23,6 +23,12 @@ func (ui *ui) init(v *view.View) {
 }
 
 func (ui *ui) handle(k view.KeyEvent) (proc, handled bool, err error) {
+	defer func() {
+		if !handled {
+			ui.prompt.reset()
+		}
+	}()
+
 	if k.Key == termbox.KeyEsc {
 		return false, true, view.ErrStop
 	}
@@ -56,8 +62,6 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) (rerr error) {
 			}
 			if itemPrompt, haveItemsHere := w.itemPrompt(w.prompt, player); haveItemsHere {
 				w.prompt = itemPrompt
-			} else if w.prompt.mess != "" {
-				w.prompt.reset()
 			}
 		}()
 	}
