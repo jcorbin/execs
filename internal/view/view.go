@@ -127,23 +127,18 @@ func (v *View) render(client Client) error {
 	return nil
 }
 
-func (ctx *Context) render(termGrid Grid) {
+func (ctx Context) render(termGrid Grid) {
 	header := ctx.Header
-	space := termGrid.Size.Sub(ctx.Grid.Size)
-	space.Y -= len(header)
-	space.Y -= len(ctx.Footer)
-
+	footer := ctx.Footer
 	if len(ctx.Logs) > 0 {
 		header = append(header[:len(header):len(header)], ctx.Logs...)
-		space.Y -= len(ctx.Logs)
 	}
-
 	termGrid.Copy(ctx.Grid)
 	for i := 0; i < len(header); i++ {
 		termGrid.WriteString(i, AlignLeft, header[i])
 	}
-	for i, j := len(ctx.Footer)-1, 1; i >= 0; i, j = i-1, j+1 {
-		termGrid.WriteString(termGrid.Size.Y-j, AlignRight, ctx.Footer[i])
+	for i, j := len(footer)-1, 1; i >= 0; i, j = i-1, j+1 {
+		termGrid.WriteString(termGrid.Size.Y-j, AlignRight, footer[i])
 	}
 }
 
