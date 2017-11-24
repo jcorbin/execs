@@ -13,10 +13,13 @@ import (
 type ui struct {
 	View   *view.View
 	prompt prompt
+	bar    prompt
 }
 
 func (ui *ui) init(v *view.View) {
 	ui.View = v
+	ui.bar.mess = "<DUMMY:action bar>"
+	ui.bar.action = make([]promptAction, 0, 5)
 	ui.prompt.action = make([]promptAction, 0, 10)
 }
 
@@ -31,6 +34,10 @@ func (ui *ui) handle(k view.KeyEvent) (bool, error) {
 	}
 
 	if ui.prompt.handle(k.Ch) {
+		return true, nil
+	}
+
+	if ui.bar.handle(k.Ch) {
 		return true, nil
 	}
 
@@ -110,7 +117,31 @@ func (ui ui) promptParts() []string {
 	if parts := ui.prompt.render(""); len(parts) > 0 {
 		return parts
 	}
+	if ui.bar.prior != nil {
+		if parts := ui.bar.render(""); len(parts) > 0 {
+			return parts
+		}
+	}
 	return nil
+}
+
+func (ui ui) barParts() []string {
+	if ui.prompt.mess != "" {
+		return nil
+	}
+	if ui.bar.prior != nil {
+		return nil
+	}
+	if len(ui.bar.action) == 0 {
+		return nil
+	}
+	parts := make([]string, len(ui.bar.action))
+	i := 0
+	parts[i] = fmt.Sprintf(".<%s[%d]", ui.bar.action[i].mess, i+1)
+	for i++; i < len(ui.bar.action); i++ {
+		parts[i] = fmt.Sprintf("<%s[%d]", ui.bar.action[i].mess, i+1)
+	}
+	return parts
 }
 
 func (w *world) Render(ctx *view.Context) error {
@@ -168,6 +199,10 @@ func (w *world) Render(ctx *view.Context) error {
 			fmt.Sprintf(".>Armor(%v): %s", armor, strings.Join(armorParts, " ")),
 			fmt.Sprintf(".>Damage(%v): %s", damage, strings.Join(damageParts, " ")),
 		)
+	}
+
+	if parts := w.ui.barParts(); len(parts) > 0 {
+		footParts = append(footParts, parts...)
 	}
 
 	ctx.SetFooter(footParts...)
