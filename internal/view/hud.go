@@ -7,39 +7,39 @@ import (
 	"github.com/jcorbin/execs/internal/point"
 )
 
-// Context contains a convenience Header, Footer, and list of Log-ed messages
-// that can be rendered by a Client.
-type Context struct {
+// HUD provides an opinionated view system with a Header, Footer, and Logs on
+// top of a base grid (e.g world map).
+type HUD struct {
+	World  Grid
 	Header []string
 	Footer []string
 	Logs   []string
-	Grid   Grid
 }
 
 // Render the context into the given terminal grid.
-func (ctx Context) Render(termGrid Grid) {
+func (hud HUD) Render(termGrid Grid) {
 	const logPlacement = AlignTop
 
 	// NOTE: intentionally not a layout item so that the UI elemenst overlay
 	// the world grid.
-	termGrid.Copy(ctx.Grid)
+	termGrid.Copy(hud.World)
 
 	lay := Layout{Grid: termGrid}
 
-	for _, part := range ctx.Header {
+	for _, part := range hud.Header {
 		align, n := readLayoutOpts(part)
 		lay.Place(renderString(part[n:]), align|AlignTop)
 	}
 
-	for _, part := range ctx.Footer {
+	for _, part := range hud.Footer {
 		align, n := readLayoutOpts(part)
 		lay.Place(renderString(part[n:]), align|AlignBottom)
 	}
 
-	if len(ctx.Logs) > 0 {
+	if len(hud.Logs) > 0 {
 		// TODO: scrolling
 		lay.Place(renderStrings{
-			ss:  ctx.Logs,
+			ss:  hud.Logs,
 			min: point.Point{X: 10, Y: 5},
 		}, logPlacement)
 	}
@@ -47,33 +47,33 @@ func (ctx Context) Render(termGrid Grid) {
 
 // Log adds a line to the internal log buffer. As much tail of the log buffer
 // is displayed after the header as possible; at least 5 lines.
-func (ctx *Context) Log(mess string, args ...interface{}) {
-	ctx.Logs = append(ctx.Logs, fmt.Sprintf(mess, args...))
+func (hud *HUD) Log(mess string, args ...interface{}) {
+	hud.Logs = append(hud.Logs, fmt.Sprintf(mess, args...))
 }
 
 // ClearLog clears the internal log buffer.
-func (ctx *Context) ClearLog() { ctx.Logs = ctx.Logs[:0] }
+func (hud *HUD) ClearLog() { hud.Logs = hud.Logs[:0] }
 
 // SetHeader copies the given lines into the internal header buffer, replacing
 // any prior.
-func (ctx *Context) SetHeader(lines ...string) {
-	if cap(ctx.Header) < len(lines) {
-		ctx.Header = make([]string, len(lines))
+func (hud *HUD) SetHeader(lines ...string) {
+	if cap(hud.Header) < len(lines) {
+		hud.Header = make([]string, len(lines))
 	} else {
-		ctx.Header = ctx.Header[:len(lines)]
+		hud.Header = hud.Header[:len(lines)]
 	}
-	copy(ctx.Header, lines)
+	copy(hud.Header, lines)
 }
 
 // SetFooter copies the given lines into the internal footer buffer, replacing
 // any prior.
-func (ctx *Context) SetFooter(lines ...string) {
-	if cap(ctx.Footer) < len(lines) {
-		ctx.Footer = make([]string, len(lines))
+func (hud *HUD) SetFooter(lines ...string) {
+	if cap(hud.Footer) < len(lines) {
+		hud.Footer = make([]string, len(lines))
 	} else {
-		ctx.Footer = ctx.Footer[:len(lines)]
+		hud.Footer = hud.Footer[:len(lines)]
 	}
-	copy(ctx.Footer, lines)
+	copy(hud.Footer, lines)
 }
 
 func readLayoutOpts(s string) (opts Align, n int) {
