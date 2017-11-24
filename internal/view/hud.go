@@ -44,15 +44,6 @@ func (hud HUD) Render(termGrid Grid) {
 	}
 }
 
-// Log adds a line to the internal log buffer. As much tail of the log buffer
-// is displayed after the header as possible; at least 5 lines.
-func (hud *HUD) Log(mess string, args ...interface{}) {
-	hud.Logs = append(hud.Logs, fmt.Sprintf(mess, args...))
-}
-
-// ClearLog clears the internal log buffer.
-func (hud *HUD) ClearLog() { hud.Logs = hud.Logs[:0] }
-
 // SetHeader copies the given lines into the internal header buffer, replacing
 // any prior.
 func (hud *HUD) SetHeader(lines ...string) {
