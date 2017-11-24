@@ -1,6 +1,10 @@
 package view
 
-import "github.com/jcorbin/execs/internal/point"
+import (
+	"fmt"
+
+	"github.com/jcorbin/execs/internal/point"
+)
 
 // Layout places Renderables in a Grid, keeping track of used left/right/center
 // space to inform future placements.
@@ -38,6 +42,37 @@ const (
 	// AlignMiddle causes middle vertical alignment in a layout.
 	AlignMiddle = AlignTop | AlignBottom
 )
+
+func (a Align) String() string {
+	parts := make([]string, 0, 3)
+
+	if a&AlignHFlush != 0 {
+		parts = append(parts, "flush")
+	}
+	switch a & AlignCenter {
+	case AlignLeft:
+		parts = append(parts, "left")
+	case AlignRight:
+		parts = append(parts, "right")
+	case AlignCenter:
+		parts = append(parts, "center")
+	default:
+		parts = append(parts, "default")
+	}
+
+	switch a & AlignMiddle {
+	case AlignTop:
+		parts = append(parts, "top")
+	case AlignBottom:
+		parts = append(parts, "bottom")
+	case AlignMiddle:
+		parts = append(parts, "middle")
+	default:
+		parts = append(parts, "default")
+	}
+
+	return fmt.Sprintf("Align%s", parts)
+}
 
 // Renderable is an element for Layout to place and maybe render; if its Render
 // method is called, it will get a grid of at least the needed RenderSize.
