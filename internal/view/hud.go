@@ -37,7 +37,7 @@ func (hud HUD) Render(termGrid Grid) {
 
 	if len(hud.Logs) > 0 {
 		// TODO: scrolling
-		lay.Place(renderStrings{
+		lay.Place(renderLogs{
 			ss:  hud.Logs,
 			min: point.Point{X: 10, Y: 5},
 		}, logPlacement)
@@ -98,12 +98,12 @@ func readLayoutOpts(s string) (opts Align, n int) {
 }
 
 // TODO: probably also export for re-use
-type renderStrings struct {
+type renderLogs struct {
 	ss  []string
 	min point.Point
 }
 
-func (rss renderStrings) RenderSize() (wanted, needed point.Point) {
+func (rss renderLogs) RenderSize() (wanted, needed point.Point) {
 	wanted.X = 1
 	for i := range rss.ss {
 		if n := utf8.RuneCountInString(rss.ss[i]); n > wanted.X {
@@ -114,7 +114,7 @@ func (rss renderStrings) RenderSize() (wanted, needed point.Point) {
 	return wanted, rss.min
 }
 
-func (rss renderStrings) Render(g Grid) {
+func (rss renderLogs) Render(g Grid) {
 	off := len(rss.ss) - g.Size.Y
 	for y := off; y < g.Size.Y; y++ {
 		s := rss.ss[y]
