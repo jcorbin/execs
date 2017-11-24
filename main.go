@@ -168,6 +168,39 @@ func (w *world) init(v *view.View) {
 	w.moves.init(&w.Core)
 }
 
+var movementRangeLabels = []string{"Walk", "Lunge"}
+
+func (w *world) rangeChooserFor(ent ecs.Entity) (func(pr prompt) (prompt, bool), string) {
+	n := w.getMovementRange(ent)
+	return func(pr prompt) (prompt, bool) {
+		return w.chooseRange(pr, ent)
+	}, movementRangeLabels[n-1]
+}
+
+func (w *world) chooseRange(pr prompt, ent ecs.Entity) (prompt, bool) {
+	pr = pr.makeSub("Set Movement Range")
+	for i, label := range movementRangeLabels {
+		n := i + 1
+		var mess string
+		if n == 1 {
+			mess = fmt.Sprintf("%s (%d cell, consumes %d charge)", label, n, n)
+		} else {
+			mess = fmt.Sprintf("%s (%d cells, consumes %d charges)", label, n, n)
+		}
+		pr.addAction(func(pr prompt) (prompt, bool) { return w.chooseRangeN(pr, ent, n) }, mess)
+	}
+	return pr, true
+}
+
+func (w *world) chooseRangeN(pr prompt, ent ecs.Entity, n int) (prompt, bool) {
+	w.setMovementRange(ent, n)
+	pr = pr.unwind()
+	if len(pr.action) > 0 {
+		pr.action[0].mess = movementRangeLabels[n-1]
+	}
+	return pr, false
+}
+
 func (w *world) allocWorld(id ecs.EntityID, t ecs.ComponentType) {
 	w.Names = append(w.Names, "")
 	w.Positions = append(w.Positions, point.Point{})
@@ -954,6 +987,8 @@ func main() {
 		w.addBox(point.Box{TopLeft: pt.Neg(), BottomRight: pt}, '#')
 		player := w.newChar("you", 'X')
 		player.Add(wcPosition | wcCollide | wcInput | wcSoul)
+		w.ui.bar.addAction(w.rangeChooserFor(player))
+
 		w.log("%s enter the world @%v stats: %+v", w.Names[player.ID()], w.Positions[player.ID()], w.bodies[player.ID()].Stats())
 
 		return w, nil
