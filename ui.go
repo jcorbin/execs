@@ -109,8 +109,9 @@ func (w *world) Render(ctx *view.Context) error {
 	footParts := make([]string, 0, it.Count()*4+len(promptLines)+1)
 
 	if len(promptLines) > 0 {
-		footParts = append(footParts, promptLines...)
-		footParts = append(footParts, "")
+		for i := range promptLines {
+			footParts = append(footParts, ".>"+promptLines[i])
+		}
 	}
 
 	for it.Next() {
@@ -149,10 +150,10 @@ func (w *world) Render(ctx *view.Context) error {
 
 		hp, maxHP := bo.HPRange()
 		footParts = append(footParts,
-			fmt.Sprintf("Charge: %v", charge),
-			fmt.Sprintf("HP(%v/%v): %s", hp, maxHP, strings.Join(hpParts, " ")),
-			fmt.Sprintf("Armor(%v): %s", armor, strings.Join(armorParts, " ")),
-			fmt.Sprintf("Damage(%v): %s", damage, strings.Join(damageParts, " ")),
+			fmt.Sprintf(".>Charge: %v", charge),
+			fmt.Sprintf(".>HP(%v/%v): %s", hp, maxHP, strings.Join(hpParts, " ")),
+			fmt.Sprintf(".>Armor(%v): %s", armor, strings.Join(armorParts, " ")),
+			fmt.Sprintf(".>Damage(%v): %s", damage, strings.Join(damageParts, " ")),
 		)
 	}
 
