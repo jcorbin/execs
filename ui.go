@@ -195,64 +195,65 @@ func (w *world) Render(ctx *view.Context) error {
 
 	for it := w.Iter(ecs.Clause(wcPosition, wcGlyph|wcBG)); it.Next(); {
 		pos := w.Positions[it.ID()].Add(offset)
-		if !pos.Less(point.Zero) && !ctx.Grid.Size.Less(pos) {
-			var (
-				ch     rune
-				fg, bg termbox.Attribute
-			)
+		if pos.Less(point.Zero) || !pos.Less(ctx.Grid.Size) {
+			continue
+		}
+		var (
+			ch     rune
+			fg, bg termbox.Attribute
+		)
 
-			var zVal uint8
+		var zVal uint8
 
-			if it.Type().All(wcGlyph) {
-				ch = w.Glyphs[it.ID()]
-				zVal = 1
-			}
+		if it.Type().All(wcGlyph) {
+			ch = w.Glyphs[it.ID()]
+			zVal = 1
+		}
 
-			// TODO: move to hp update
-			if it.Type().All(wcBody) && it.Type().Any(wcSoul|wcAI) {
-				zVal = 255
-				hp, maxHP := w.bodies[it.ID()].HPRange()
-				if !it.Type().All(wcSoul) {
-					zVal--
-					fg = safeColorsIX(aiColors, 1+(len(aiColors)-2)*hp/maxHP)
-				} else {
-					fg = safeColorsIX(soulColors, 1+(len(soulColors)-2)*hp/maxHP)
-				}
-			} else if it.Type().All(wcSoul) {
-				zVal = 127
-				fg = soulColors[0]
-			} else if it.Type().All(wcAI) {
-				zVal = 126
-				fg = aiColors[0]
-			} else if it.Type().All(wcItem) {
-				zVal = 10
-				fg = itemColors[len(itemColors)-1]
-				if dur, ok := w.items[it.ID()].(durableItem); ok {
-					fg = itemColors[0]
-					if hp, maxHP := dur.HPRange(); maxHP > 0 {
-						fg = safeColorsIX(itemColors, (len(itemColors)-1)*hp/maxHP)
-					}
-				}
+		// TODO: move to hp update
+		if it.Type().All(wcBody) && it.Type().Any(wcSoul|wcAI) {
+			zVal = 255
+			hp, maxHP := w.bodies[it.ID()].HPRange()
+			if !it.Type().All(wcSoul) {
+				zVal--
+				fg = safeColorsIX(aiColors, 1+(len(aiColors)-2)*hp/maxHP)
 			} else {
-				zVal = 2
-				if it.Type().All(wcFG) {
-					fg = w.FG[it.ID()]
+				fg = safeColorsIX(soulColors, 1+(len(soulColors)-2)*hp/maxHP)
+			}
+		} else if it.Type().All(wcSoul) {
+			zVal = 127
+			fg = soulColors[0]
+		} else if it.Type().All(wcAI) {
+			zVal = 126
+			fg = aiColors[0]
+		} else if it.Type().All(wcItem) {
+			zVal = 10
+			fg = itemColors[len(itemColors)-1]
+			if dur, ok := w.items[it.ID()].(durableItem); ok {
+				fg = itemColors[0]
+				if hp, maxHP := dur.HPRange(); maxHP > 0 {
+					fg = safeColorsIX(itemColors, (len(itemColors)-1)*hp/maxHP)
 				}
 			}
+		} else {
+			zVal = 2
+			if it.Type().All(wcFG) {
+				fg = w.FG[it.ID()]
+			}
+		}
 
-			if i := pos.Y*ctx.Grid.Size.X + pos.X; zVals[i] < zVal {
-				zVals[i] = zVal
-				if it.Type().All(wcBG) {
-					bg = w.BG[it.ID()]
-				}
-				if fg != 0 {
-					fg++
-				}
-				if bg != 0 {
-					bg++
-				}
-				ctx.Grid.Merge(pos.X, pos.Y, ch, fg, bg)
+		if i := pos.Y*ctx.Grid.Size.X + pos.X; zVals[i] < zVal {
+			zVals[i] = zVal
+			if it.Type().All(wcBG) {
+				bg = w.BG[it.ID()]
 			}
+			if fg != 0 {
+				fg++
+			}
+			if bg != 0 {
+				bg++
+			}
+			ctx.Grid.Merge(pos.X, pos.Y, ch, fg, bg)
 		}
 	}
 
