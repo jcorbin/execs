@@ -110,7 +110,7 @@ func (w *world) Render(ctx *view.Context) error {
 
 	if len(promptLines) > 0 {
 		for i := range promptLines {
-			footParts = append(footParts, ".>"+promptLines[i])
+			footParts = append(footParts, ".<"+promptLines[i])
 		}
 	}
 
