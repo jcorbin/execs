@@ -1,7 +1,6 @@
 package view
 
 import (
-	"fmt"
 	"unicode/utf8"
 
 	"github.com/jcorbin/execs/internal/point"
@@ -28,12 +27,12 @@ func (hud HUD) Render(termGrid Grid) {
 
 	for _, part := range hud.Header {
 		align, n := readLayoutOpts(part)
-		lay.Place(renderString(part[n:]), align|AlignTop)
+		lay.Place(RenderString(part[n:]), align|AlignTop)
 	}
 
 	for _, part := range hud.Footer {
 		align, n := readLayoutOpts(part)
-		lay.Place(renderString(part[n:]), align|AlignBottom)
+		lay.Place(RenderString(part[n:]), align|AlignBottom)
 	}
 
 	if len(hud.Logs) > 0 {
@@ -96,23 +95,6 @@ func readLayoutOpts(s string) (opts Align, n int) {
 		break
 	}
 	return opts, n
-}
-
-// TODO: export for re-use
-type renderString string
-
-func (s renderString) RenderSize() (wanted, needed point.Point) {
-	needed.X = utf8.RuneCountInString(string(s))
-	needed.Y = 1
-	return needed, needed
-}
-
-func (s renderString) Render(g Grid) {
-	i := 0
-	for _, r := range s {
-		g.Data[i].Ch = r
-		i++
-	}
 }
 
 // TODO: probably also export for re-use
