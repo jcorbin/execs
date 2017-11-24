@@ -522,7 +522,7 @@ func (w *world) processAIItems() {
 }
 
 func (w *world) runAIInteraction(pr prompt, ai ecs.Entity) {
-	for ok := true; ok && len(pr.action) > 0; {
+	for prompting := true; prompting && len(pr.action) > 0; {
 		sum, i := 0, 0
 		for j := range pr.action {
 			rate := 1 // TODO: action rating
@@ -533,7 +533,7 @@ func (w *world) runAIInteraction(pr prompt, ai ecs.Entity) {
 		}
 
 		act := pr.action[i]
-		pr, ok = act.run(pr)
+		pr, prompting = act.run(pr)
 	}
 }
 

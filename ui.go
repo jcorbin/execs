@@ -27,11 +27,11 @@ func (ui *ui) handle(k view.KeyEvent) (bool, error) {
 		return true, view.ErrStop
 	}
 
-	if ui.prompt.handle(k.Ch) {
+	if _, ok := ui.prompt.handle(k.Ch); ok {
 		return true, nil
 	}
 
-	if pr, ok := ui.bar.run(k.Ch); ok {
+	if pr, _, ok := ui.bar.run(k.Ch); ok {
 		ui.bar = pr
 		return true, nil
 	}
@@ -328,7 +328,7 @@ func (w *world) buildItemMenu() {
 		w.log("wru?")
 		return
 	}
-	if pr, ok := w.itemPrompt(w.prompt, ent); ok {
+	if pr, prompting := w.itemPrompt(w.prompt, ent); prompting {
 		w.prompt = pr
 	} else if w.prompt.mess != "" {
 		w.prompt.reset()
@@ -411,16 +411,16 @@ func (pr prompt) render(prefix string) []string {
 	return lines
 }
 
-func (pr *prompt) handle(ch rune) bool {
+func (pr *prompt) handle(ch rune) (prompting, ok bool) {
 	if pr.mess == "" {
-		return false
+		return false, false
 	}
-	if new, ok := pr.run(ch); ok {
+	if new, prompting, ok := pr.run(ch); ok {
 		*pr = new
-		return true
+		return prompting, ok
 	}
 	pr.reset()
-	return false
+	return false, false
 }
 
 func (pr *prompt) reset() {
@@ -440,17 +440,18 @@ func (pr *prompt) addAction(
 	return false
 }
 
-func (pr prompt) run(ch rune) (prompt, bool) {
+func (pr prompt) run(ch rune) (_ prompt, prompting, ok bool) {
 	n := int(ch - '0')
 	if n < 0 || n > 9 {
-		return pr, false
+		return pr, false, false
 	}
 	if i := n - 1; i < 0 {
-		return pr.pop(), true
+		return pr.pop(), false, true
 	} else if i < len(pr.action) {
-		return pr.action[i].run(pr)
+		pr, prompting := pr.action[i].run(pr)
+		return pr, prompting, true
 	}
-	return pr, true
+	return pr, false, true
 }
 
 func (pr prompt) pop() prompt {
