@@ -269,6 +269,8 @@ func (w *world) tick() {
 	}
 }
 
+const maxChargeFromResting = 4
+
 func (w *world) addPendingMove(ent ecs.Entity, move point.Point) {
 	if !ent.Type().All(wcInput) {
 		return // who asked you
@@ -277,7 +279,9 @@ func (w *world) addPendingMove(ent ecs.Entity, move point.Point) {
 		id := rel.ID()
 		rel.Add(movP | movN)
 		w.moves.p[id] = w.moves.p[id].Add(move)
-		w.moves.n[id]++
+		if n := w.moves.n[id]; n < maxChargeFromResting {
+			w.moves.n[id] = n + 1
+		}
 	}, nil)
 }
 
@@ -298,10 +302,7 @@ func (w *world) generateAIMoves() {
 }
 
 func (w *world) applyMoves() {
-	const (
-		maxLunge  = 2
-		maxCharge = 4
-	)
+	const maxLunge = 2
 
 	// TODO: better resolution strategy based on connected components
 	w.moves.UpsertMany(ecs.All(movPending), func(
@@ -319,10 +320,6 @@ func (w *world) applyMoves() {
 
 		id := ent.ID()
 		pend, n := w.moves.p[id], w.moves.n[id]
-		if n > maxCharge {
-			n = maxCharge
-			w.moves.n[id] = n
-		}
 		if a.Type().All(wcBody) {
 			rating := w.bodies[a.ID()].movementRating()
 			pend = pend.Mul(int(moremath.Round(rating * float64(n))))
