@@ -242,7 +242,13 @@ func (w *world) Render(ctx *view.Context) error {
 			}
 		}
 
-		if i := pos.Y*ctx.Grid.Size.X + pos.X; zVals[i] < zVal {
+		i := pos.Y*ctx.Grid.Size.X + pos.X
+		if i < 0 || i >= len(zVals) {
+			// TODO: debug
+			continue
+		}
+
+		if zVals[i] < zVal {
 			zVals[i] = zVal
 			if it.Type().All(wcBG) {
 				bg = w.BG[it.ID()]
