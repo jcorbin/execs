@@ -134,16 +134,7 @@ func (ctx *Context) render(termGrid Grid) {
 	space.Y -= len(ctx.Footer)
 
 	if len(ctx.Logs) > 0 {
-		nLogs := len(ctx.Logs)
-		if n := nLogs + len(header); n > cap(header) {
-			nh := make([]string, len(header), n)
-			copy(nh, header)
-			ctx.Header = nh
-			header = nh[:n]
-		} else {
-			header = header[:n]
-		}
-		copy(header[len(ctx.Header):], ctx.Logs[len(ctx.Logs)-nLogs:])
+		header = append(header[:len(header):len(header)], ctx.Logs...)
 		space.Y -= len(ctx.Logs)
 	}
 
