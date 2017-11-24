@@ -108,7 +108,7 @@ func parseMove(k view.KeyEvent) (point.Point, bool) {
 
 func (w *world) Render(ctx *view.Context) error {
 	ctx.SetHeader(
-		fmt.Sprintf("%v souls v %v demons", w.Iter(ecs.All(wcSoul)).Count(), w.Iter(ecs.All(wcAI)).Count()),
+		fmt.Sprintf(">%v souls v %v demons", w.Iter(ecs.All(wcSoul)).Count(), w.Iter(ecs.All(wcAI)).Count()),
 	)
 
 	it := w.Iter(ecs.All(wcSoul | wcBody))
