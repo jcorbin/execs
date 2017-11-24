@@ -112,17 +112,18 @@ func (v *View) render(client Client) error {
 		return fmt.Errorf("bogus terminal size %v", v.size)
 	}
 
+	termGrid := MakeGrid(v.size)
+
 	v.ctx.Avail = v.size
 	if err := client.Render(&v.ctx); err != nil {
 		return err
 	}
 
-	buf := make([]termbox.Cell, v.size.X*v.size.Y)
-	v.ctx.render(Grid{Size: v.size, Data: buf})
+	v.ctx.render(termGrid)
 	if err := termbox.Clear(termbox.ColorDefault, termbox.ColorDefault); err != nil {
 		return fmt.Errorf("termbox.Clear failed: %v", err)
 	}
-	copy(termbox.CellBuffer(), buf)
+	copy(termbox.CellBuffer(), termGrid.Data)
 	if err := termbox.Flush(); err != nil {
 		return fmt.Errorf("termbox.Flush failed: %v", err)
 	}
