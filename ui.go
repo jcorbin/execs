@@ -74,6 +74,14 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 		}
 	}
 
+	// default to resting
+	if !handled {
+		for it := w.Iter(ecs.All(playMoveMask)); it.Next(); {
+			w.addCharge(it.Entity())
+		}
+		proc, handled = true, true
+	}
+
 	if proc {
 		w.Process()
 	}
@@ -186,7 +194,7 @@ func (w *world) Render(ctx *view.Context) error {
 		}
 
 		charge := 0
-		for cur := w.moves.LookupA(ecs.All(movPending), it.ID()); cur.Scan(); {
+		for cur := w.moves.LookupA(ecs.All(movCharge), it.ID()); cur.Scan(); {
 			charge += w.moves.n[cur.Entity().ID()]
 		}
 
