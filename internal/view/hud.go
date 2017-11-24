@@ -13,9 +13,6 @@ type HUD struct {
 	Logs     []string
 	LogAlign Align
 
-	Header []string
-	Footer []string
-
 	parts []Renderable
 	align []Align
 }
@@ -29,16 +26,6 @@ func (hud HUD) Render(termGrid Grid) {
 	// NOTE: intentionally not a layout item so that the UI elemenst overlay
 	// the world grid.
 	termGrid.Copy(hud.World)
-
-	for _, part := range hud.Header {
-		align, n := readLayoutOpts(part)
-		lay.AddRenderable(RenderString(part[n:]), align|AlignTop)
-	}
-
-	for _, part := range hud.Footer {
-		align, n := readLayoutOpts(part)
-		lay.AddRenderable(RenderString(part[n:]), align|AlignBottom)
-	}
 
 	if len(hud.Logs) > 0 {
 		// TODO: scrolling
@@ -54,26 +41,21 @@ func (hud HUD) Render(termGrid Grid) {
 	}
 }
 
-// SetHeader copies the given lines into the internal header buffer, replacing
-// any prior.
-func (hud *HUD) SetHeader(lines ...string) {
-	if cap(hud.Header) < len(lines) {
-		hud.Header = make([]string, len(lines))
-	} else {
-		hud.Header = hud.Header[:len(lines)]
-	}
-	copy(hud.Header, lines)
+// AddHeaderF adds a static string part to the header; the mess string may
+// begin with layout markers such as "<^>" to cause left, center, right
+// alignment; mess may also start with "." to cause an alignment flush
+// (otherwise the layout tries to pack as many parts onto one line as
+// possible).
+func (hud *HUD) AddHeaderF(mess string, args ...interface{}) {
+	align, n := readLayoutOpts(mess)
+	hud.AddRenderable(RenderString(mess[n:], args...), align|AlignTop)
 }
 
-// SetFooter copies the given lines into the internal footer buffer, replacing
-// any prior.
-func (hud *HUD) SetFooter(lines ...string) {
-	if cap(hud.Footer) < len(lines) {
-		hud.Footer = make([]string, len(lines))
-	} else {
-		hud.Footer = hud.Footer[:len(lines)]
-	}
-	copy(hud.Footer, lines)
+// AddFooterF adds a static string to the header; the same alignment marks are
+// available as to AddHeader.
+func (hud *HUD) AddFooterF(mess string, args ...interface{}) {
+	align, n := readLayoutOpts(mess)
+	hud.AddRenderable(RenderString(mess[n:], args...), align|AlignBottom)
 }
 
 // AddRenderable adds an aligned Renderable to the hud.
