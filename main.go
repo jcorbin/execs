@@ -102,6 +102,7 @@ const (
 	mrGoal
 	mrAgro
 	mrPending
+	mrMoveRange
 
 	movPending = ecs.ComponentType(mrPending) | movN | movP
 )
@@ -301,9 +302,30 @@ func (w *world) generateAIMoves() {
 	}
 }
 
-func (w *world) applyMoves() {
-	const maxLunge = 2
+const maxMovementRange = 2
 
+func (w *world) setMovementRange(a ecs.Entity, n int) {
+	if n > maxMovementRange {
+		n = maxMovementRange
+	}
+	w.moves.UpsertOne(mrMoveRange, a, a, func(ent ecs.Entity) {
+		ent.Add(movN)
+		w.moves.n[ent.ID()] = n
+	}, nil)
+}
+
+func (w *world) getMovementRange(a ecs.Entity) int {
+	for cur := w.moves.LookupA(ecs.AllRel(mrMoveRange), a.ID()); cur.Scan(); {
+		if ent := cur.Entity(); ent.Type().All(movN) {
+			if n := w.moves.n[ent.ID()]; n <= maxMovementRange {
+				return n
+			}
+		}
+	}
+	return maxMovementRange
+}
+
+func (w *world) applyMoves() {
 	// TODO: better resolution strategy based on connected components
 	w.moves.UpsertMany(ecs.All(movPending), func(
 		r ecs.RelationType, ent, a, b ecs.Entity,
@@ -330,9 +352,10 @@ func (w *world) applyMoves() {
 		}
 
 		// move until we collide or exceeding lunging distance
+		limit := w.getMovementRange(a)
 		pos := w.Positions[a.ID()]
 		i := 0
-		for ; i < n && i < maxLunge; i++ {
+		for ; i < n && i < limit; i++ {
 			new := pos.Add(pend.Sign())
 			if hit := w.collides(a, new); len(hit) > 0 {
 				for _, b := range hit {
