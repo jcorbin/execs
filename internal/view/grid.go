@@ -75,30 +75,3 @@ func (g Grid) Copy(og Grid) {
 	}
 
 }
-
-// WriteString writes and aligns a string into a grid row.
-func (g Grid) WriteString(y int, align Align, s string) {
-	var x int
-	switch align {
-	case AlignLeft:
-		x = 0
-	case AlignCenter:
-		x = g.Size.X - len(s)/2
-		if x < 0 {
-			x = 0
-		}
-	case AlignRight:
-		x = g.Size.X - len(s)
-		if x < 0 {
-			x = 0
-		}
-	}
-	off := y*g.Size.X + x
-	for _, r := range s {
-		if off >= len(g.Data) {
-			break
-		}
-		g.Data[off].Ch = r
-		off++
-	}
-}
