@@ -132,6 +132,10 @@ func (v *View) render(client Client) error {
 func (ctx Context) render(termGrid Grid) {
 	header := layoutLines(ctx.Header, termGrid.Size)
 	footer := layoutLines(ctx.Footer, termGrid.Size)
+	// TODO: prior footer default was right-aligned; restore that once
+	// naturalized to Grid; also restore the bottom-aligned footer property to
+	// both right/left side independently
+
 	if len(ctx.Logs) > 0 {
 		header = append(header[:len(header):len(header)], ctx.Logs...)
 	}
@@ -140,7 +144,7 @@ func (ctx Context) render(termGrid Grid) {
 		termGrid.WriteString(i, AlignLeft, header[i])
 	}
 	for i, j := len(footer)-1, 1; i >= 0; i, j = i-1, j+1 {
-		termGrid.WriteString(termGrid.Size.Y-j, AlignRight, footer[i])
+		termGrid.WriteString(termGrid.Size.Y-j, AlignLeft, footer[i])
 	}
 }
 
@@ -292,6 +296,9 @@ func scanLayoutOpts(s string) (rest string, opts layoutOption) {
 			s = s[n:]
 		}
 		break
+	}
+	if opts == 0 {
+		opts = layoutAlignLeft | layoutClear
 	}
 	if opts&(layoutAlignLeft|layoutAlignRight) == 0 {
 		opts |= layoutAlignLeft
