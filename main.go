@@ -155,14 +155,14 @@ func (w *world) init(v *view.View) {
 	w.bodies = []*body{nil}
 	w.items = []worldItem{nil}
 
-	w.moves.init(&w.Core)
-
 	w.RegisterAllocator(wcName|wcPosition|wcGlyph|wcBG|wcFG|wcBody|wcItem|wcTimer, w.allocWorld)
 	w.RegisterCreator(wcBody, w.createBody)
 	w.RegisterDestroyer(wcTimer, w.destroyTimer)
 	w.RegisterDestroyer(wcBody, w.destroyBody)
 	w.RegisterDestroyer(wcItem, w.destroyItem)
 	w.RegisterDestroyer(wcInput, w.destroyInput)
+
+	w.moves.init(&w.Core)
 }
 
 func (w *world) allocWorld(id ecs.EntityID, t ecs.ComponentType) {
