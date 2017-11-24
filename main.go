@@ -318,8 +318,8 @@ func (w *world) applyMoves() {
 			}
 		}()
 
-		id := ent.ID()
-		pend, n := w.moves.p[id], w.moves.n[id]
+		// can we actually affect a move?
+		pend, n := w.moves.p[ent.ID()], w.moves.n[ent.ID()]
 		if a.Type().All(wcBody) {
 			rating := w.bodies[a.ID()].movementRating()
 			pend = pend.Mul(int(moremath.Round(rating * float64(n))))
@@ -329,9 +329,10 @@ func (w *world) applyMoves() {
 			}
 		}
 
+		// move until we collide or exceeding lunging distance
 		pos := w.Positions[a.ID()]
-	candidates:
-		for i := 0; i < n && i < maxLunge; i++ {
+		i := 0
+		for ; i < n && i < maxLunge; i++ {
 			new := pos.Add(pend.Sign())
 			if hit := w.collides(a, new); len(hit) > 0 {
 				for _, b := range hit {
@@ -341,13 +342,19 @@ func (w *world) applyMoves() {
 							hitRel.Add(movN)
 							w.moves.n[hitRel.ID()] = m
 						}
-						break candidates
+						w.Positions[a.ID()] = pos
+						return
 					}
 				}
 			}
 			pos = new
 		}
+		n -= i
 		w.Positions[a.ID()] = pos
+
+		// moved without hitting anything
+		ent = emit(r, a, b)
+		w.moves.p[ent.ID()], w.moves.n[ent.ID()] = point.Zero, n
 	})
 }
 
