@@ -262,4 +262,51 @@ itself:
   because this aids developing since I can just "phase out, and let the enemies
   have at it" for a while to see how things play out
 
+### [Twelve](../../tree/twelve)
+
+I'm really starting to get a charge out of this!
+
+So I started out "just" wanting to make movement scale with leg health.  Well
+as soon as I had that, the immediate next was "okay, so how could you still
+move 'slower' when your leg system <50%?"  The 'obvious' answer was "well, you
+just have to keep trying, and maybe you'll move every-other-turn if you do!"
+
+So I re-purposed the mechanism that the AI uses to unstick itself: increment a
+counter on the pending moves relation each time, so that if a move stays
+pending, it accumulates a higher count.  The move application logic just takes
+that count into effect as a multiplier.  Well the immediate side-effect of this
+was: "cool story, so now when you're at 100%, you can move N squares at a time
+by just staying in place for N turns."
+
+This obviously needed to be made A Thing, so I called it `Charge`:
+- for now the maximum `Charge` that you can accumulate is `4`
+- you can only apply up to two `Charge` points each turn to a move (so you
+  can't jump arbitrarily far)
+- furthermore, when you attack with `Charge`, it also serves as a damage
+  multiplier (for now all `Charge` is absorbed by combat)
+
+Changes:
+  - Game Mechanics:
+    - made spirits not collide
+    - made AI prefer closer items
+    - the floor now starts out much cleaner, but decayed remains will leave marks!
+    - movement now becomes difficult to impossible when your legs are damaged...
+    - ...to help compensate, there is now a new Charge mechanic: with Charge you
+      can move faster when healthy, and at all when damaged; Charge also
+      increases damage dealt.
+    - fixed items-here collision logic
+    - fixed rare AI goal choice bug
+  - Game UI:
+    - dropped quite a bit of log spam
+    - fixed an uncommon crash when resizing the terminal
+    - the header and footer now have fancy left/right alignment support
+    - key handling got way better to support the new action bar
+    - the "Items Here" prompt is now a dynamic action bar item...
+    - ...for the purists, there's now a `","` binding to inspect items.
+  - Library Progress:
+    - `point.Point` grew a SumSQ method
+    - improved `view` rendering, now supports left/right alignment and floating in
+      header/footer lines
+    - `ecs.Relation` finally got `UpsertOne` and `UpsertMany` methods
+
 [es-beta]: http://entity-systems.wikidot.com/rdbms-beta
