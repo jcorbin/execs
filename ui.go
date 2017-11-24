@@ -51,39 +51,10 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 	}
 
 	// parse player move
-	var move point.Point
-	switch k.Key {
-	case termbox.KeyArrowDown:
-		move = point.Point{X: 0, Y: 1}
-	case termbox.KeyArrowUp:
-		move = point.Point{X: 0, Y: -1}
-	case termbox.KeyArrowLeft:
-		move = point.Point{X: -1, Y: 0}
-	case termbox.KeyArrowRight:
-		move = point.Point{X: 1, Y: 0}
-	default:
-		switch k.Ch {
-		case 'y':
-			move = point.Point{X: -1, Y: -1}
-		case 'u':
-			move = point.Point{X: 1, Y: -1}
-		case 'n':
-			move = point.Point{X: 1, Y: 1}
-		case 'b':
-			move = point.Point{X: -1, Y: 1}
-		case 'h':
-			move = point.Point{X: -1, Y: 0}
-		case 'j':
-			move = point.Point{X: 0, Y: 1}
-		case 'k':
-			move = point.Point{X: 0, Y: -1}
-		case 'l':
-			move = point.Point{X: 1, Y: 0}
+	if move, ok := parseMove(k); ok {
+		for it := w.Iter(ecs.All(playMoveMask)); it.Next(); {
+			w.addPendingMove(it.Entity(), move)
 		}
-	}
-
-	for it := w.Iter(ecs.All(playMoveMask)); it.Next(); {
-		w.addPendingMove(it.Entity(), move)
 	}
 
 	w.Process()
@@ -92,6 +63,40 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 		return view.ErrStop
 	}
 	return nil
+}
+
+func parseMove(k view.KeyEvent) (point.Point, bool) {
+	switch k.Key {
+	case termbox.KeyArrowDown:
+		return point.Point{X: 0, Y: 1}, true
+	case termbox.KeyArrowUp:
+		return point.Point{X: 0, Y: -1}, true
+	case termbox.KeyArrowLeft:
+		return point.Point{X: -1, Y: 0}, true
+	case termbox.KeyArrowRight:
+		return point.Point{X: 1, Y: 0}, true
+	}
+	switch k.Ch {
+	case 'y':
+		return point.Point{X: -1, Y: -1}, true
+	case 'u':
+		return point.Point{X: 1, Y: -1}, true
+	case 'n':
+		return point.Point{X: 1, Y: 1}, true
+	case 'b':
+		return point.Point{X: -1, Y: 1}, true
+	case 'h':
+		return point.Point{X: -1, Y: 0}, true
+	case 'j':
+		return point.Point{X: 0, Y: 1}, true
+	case 'k':
+		return point.Point{X: 0, Y: -1}, true
+	case 'l':
+		return point.Point{X: 1, Y: 0}, true
+	case '.':
+		return point.Zero, true
+	}
+	return point.Zero, false
 }
 
 func (w *world) Render(ctx *view.Context) error {
