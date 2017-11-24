@@ -106,6 +106,13 @@ func parseMove(k view.KeyEvent) (point.Point, bool) {
 	return point.Zero, false
 }
 
+func (ui ui) promptParts() []string {
+	if parts := ui.prompt.render(""); len(parts) > 0 {
+		return parts
+	}
+	return nil
+}
+
 func (w *world) Render(ctx *view.Context) error {
 	ctx.SetHeader(
 		fmt.Sprintf(">%v souls v %v demons", w.Iter(ecs.All(wcSoul)).Count(), w.Iter(ecs.All(wcAI)).Count()),
@@ -114,9 +121,9 @@ func (w *world) Render(ctx *view.Context) error {
 	it := w.Iter(ecs.All(wcSoul | wcBody))
 	footParts := make([]string, 0, it.Count()+10)
 
-	if promptLines := w.prompt.render(""); len(promptLines) > 0 {
-		for i := range promptLines {
-			footParts = append(footParts, ".<"+promptLines[i])
+	if parts := w.ui.promptParts(); len(parts) > 0 {
+		for i := range parts {
+			footParts = append(footParts, ".<"+parts[i])
 		}
 	}
 
