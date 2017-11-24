@@ -112,10 +112,9 @@ func (w *world) Render(ctx *view.Context) error {
 	)
 
 	it := w.Iter(ecs.All(wcSoul | wcBody))
-	promptLines := w.prompt.render("")
-	footParts := make([]string, 0, it.Count()*4+len(promptLines)+1)
+	footParts := make([]string, 0, it.Count()+10)
 
-	if len(promptLines) > 0 {
+	if promptLines := w.prompt.render(""); len(promptLines) > 0 {
 		for i := range promptLines {
 			footParts = append(footParts, ".<"+promptLines[i])
 		}
