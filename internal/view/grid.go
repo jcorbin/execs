@@ -33,6 +33,11 @@ const (
 	AlignRight
 )
 
+// Get sets a cell in the grid.
+func (g Grid) Get(x, y int) termbox.Cell {
+	return g.Data[y*g.Size.X+x]
+}
+
 // Set sets a cell in the grid.
 func (g Grid) Set(x, y int, ch rune, fg, bg termbox.Attribute) {
 	g.Data[y*g.Size.X+x] = termbox.Cell{Ch: ch, Fg: fg, Bg: bg}
