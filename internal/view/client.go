@@ -15,7 +15,7 @@ var ErrStop = errors.New("client stop")
 // called in a loop that provides terminal orchestration.
 type Client interface {
 	Render(*Context) error
-	HandleKey(*View, KeyEvent) error
+	HandleKey(KeyEvent) error
 	Close() error
 }
 

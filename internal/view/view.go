@@ -89,7 +89,7 @@ func (v *View) runClient(client Client) (rerr error) {
 		case <-v.redraw:
 
 		case k := <-v.keys:
-			if err := client.HandleKey(v, k); err != nil {
+			if err := client.HandleKey(k); err != nil {
 				return err
 			}
 
