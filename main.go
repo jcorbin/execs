@@ -576,9 +576,11 @@ func (w *world) checkOver() {
 }
 
 func (w *world) maybeSpawn() {
-	// TODO: randomize position?
-	if len(w.collides(w.Ref(0), point.Zero)) > 0 {
-		return
+	pos := point.Zero // TODO: randomize?
+	for it := w.Iter(ecs.All(collMask)); it.Next(); {
+		if w.Positions[it.ID()].Equal(pos) {
+			return
+		}
 	}
 
 	var enemy ecs.Entity
