@@ -114,7 +114,6 @@ func (v *View) render(client Client) error {
 
 	termGrid := MakeGrid(v.size)
 
-	v.ctx.Avail = v.size
 	if err := client.Render(&v.ctx); err != nil {
 		return err
 	}

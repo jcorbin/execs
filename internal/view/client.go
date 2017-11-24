@@ -25,7 +25,6 @@ type Context struct {
 	Header []string
 	Footer []string
 	Logs   []string
-	Avail  point.Point
 	Grid   Grid
 }
 
