@@ -75,7 +75,6 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 	}
 
 	if proc {
-		w.ui.prompt.reset()
 		w.Process()
 	}
 
