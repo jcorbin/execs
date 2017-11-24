@@ -22,11 +22,6 @@ func (ui *ui) init(v *view.View) {
 	ui.prompt.action = make([]promptAction, 0, 10)
 }
 
-func (ui *ui) reset() {
-	ui.prompt.reset()
-	ui.View.ClearLog()
-}
-
 func (ui *ui) handle(k view.KeyEvent) (bool, error) {
 	if k.Key == termbox.KeyEsc {
 		return true, view.ErrStop
@@ -71,6 +66,8 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 		}
 	}
 
+	w.ui.prompt.reset()
+	w.ui.View.ClearLog()
 	w.Process()
 
 	if w.over {

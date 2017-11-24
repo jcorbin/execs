@@ -233,7 +233,7 @@ func (w *world) extent() point.Box {
 func (w *world) Close() error { return nil }
 
 func (w *world) Process() {
-	w.reset()              // reset state from last time
+	w.moves.Delete(ecs.AnyRel(mrCollide), nil)
 	w.tick()               // run timers
 	w.prepareCollidables() // collect collidables
 	w.generateAIMoves()    // give AI a chance!
@@ -243,11 +243,6 @@ func (w *world) Process() {
 	w.processCombat()      // e.g. deal damage
 	w.checkOver()          // no souls => done
 	w.maybeSpawn()         // spawn more demons
-}
-
-func (w *world) reset() {
-	w.ui.reset()
-	w.moves.Delete(ecs.AnyRel(mrCollide), nil)
 }
 
 func (w *world) tick() {
