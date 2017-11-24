@@ -39,7 +39,7 @@ func (ui *ui) handle(k view.KeyEvent) (proc, handled bool, err error) {
 	return false, false, nil
 }
 
-func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
+func (w *world) HandleKey(v *view.View, k view.KeyEvent) (rerr error) {
 	w.ui.View.ClearLog()
 
 	proc, handled, err := w.ui.handle(k)
@@ -48,6 +48,19 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 	}
 
 	player := w.findPlayer()
+
+	if player != ecs.NilEntity && w.prompt.mess == "" {
+		defer func() {
+			if rerr != nil {
+				return
+			}
+			if itemPrompt, haveItemsHere := w.itemPrompt(w.prompt, player); haveItemsHere {
+				w.prompt = itemPrompt
+			} else if w.prompt.mess != "" {
+				w.prompt.reset()
+			}
+		}()
+	}
 
 	// special keys
 	if !handled {
@@ -85,15 +98,6 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 	}
 
 	if proc {
-		if player != ecs.NilEntity {
-			w.log("wru?")
-			return
-		}
-		if pr, prompting := w.itemPrompt(w.prompt, player); prompting {
-			w.prompt = pr
-		} else if w.prompt.mess != "" {
-			w.prompt.reset()
-		}
 		w.Process()
 	}
 
