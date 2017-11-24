@@ -25,9 +25,21 @@ func (ui *ui) reset() {
 	ui.View.ClearLog()
 }
 
-func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
+func (ui *ui) handle(k view.KeyEvent) (bool, error) {
 	if k.Key == termbox.KeyEsc {
-		return view.ErrStop
+		return true, view.ErrStop
+	}
+
+	if ui.prompt.handle(k.Ch) {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
+	if handled, err := w.ui.handle(k); handled || err != nil {
+		return err
 	}
 
 	// special keys
@@ -42,11 +54,6 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 				w.Glyphs[ent.ID()] = 'X'
 			}
 		}
-		return nil
-	}
-
-	// maybe run prompt
-	if w.prompt.handle(k.Ch) {
 		return nil
 	}
 
