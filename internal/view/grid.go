@@ -19,20 +19,6 @@ func MakeGrid(sz point.Point) Grid {
 	return g
 }
 
-// Align serves to align text when laying it out in a grid row.
-type Align uint8
-
-const (
-	// AlignLeft aligns text to the left in a row.
-	AlignLeft Align = iota
-
-	// AlignCenter aligns text to the center in a row.
-	AlignCenter
-
-	// AlignRight aligns text to the right in a row.
-	AlignRight
-)
-
 // Get sets a cell in the grid.
 func (g Grid) Get(x, y int) termbox.Cell {
 	return g.Data[y*g.Size.X+x]
