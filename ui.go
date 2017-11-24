@@ -40,6 +40,8 @@ func (ui *ui) handle(k view.KeyEvent) (bool, error) {
 }
 
 func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
+	w.ui.View.ClearLog()
+
 	if handled, err := w.ui.handle(k); handled || err != nil {
 		return err
 	}
@@ -67,7 +69,6 @@ func (w *world) HandleKey(v *view.View, k view.KeyEvent) error {
 	}
 
 	w.ui.prompt.reset()
-	w.ui.View.ClearLog()
 	w.Process()
 
 	if w.over {
