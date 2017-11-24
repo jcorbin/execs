@@ -37,8 +37,8 @@ func (ctx Context) Render(termGrid Grid) {
 	}
 
 	if len(ctx.Logs) > 0 {
+		// TODO: scrolling
 		lay.Place(renderStrings{
-			off: 0, // TODO: scrolling
 			ss:  ctx.Logs,
 			min: point.Point{X: 10, Y: 5},
 		}, logPlacement)
@@ -118,7 +118,6 @@ func (s renderString) Render(g Grid) {
 // TODO: probably also export for re-use
 type renderStrings struct {
 	ss  []string
-	off int
 	min point.Point
 }
 
@@ -134,7 +133,8 @@ func (rss renderStrings) RenderSize() (wanted, needed point.Point) {
 }
 
 func (rss renderStrings) Render(g Grid) {
-	for y := rss.off; y < g.Size.Y; y++ {
+	off := len(rss.ss) - g.Size.Y
+	for y := off; y < g.Size.Y; y++ {
 		s := rss.ss[y]
 		i := y * g.Size.X
 		for x := 0; len(s) > 0 && x < g.Size.X; x++ {
