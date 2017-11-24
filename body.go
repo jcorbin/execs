@@ -423,5 +423,6 @@ func (rem bodyRemains) scavenge(pr prompt) (prompt, bool) {
 		defer rem.item.Destroy()
 	}
 
-	return pr.unwind(), false
+	pr, _ = rem.w.itemPrompt(pr.unwind(), rem.ent)
+	return pr, false
 }
