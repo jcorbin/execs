@@ -15,6 +15,9 @@ type HUD struct {
 
 	Header []string
 	Footer []string
+
+	parts []Renderable
+	align []Align
 }
 
 // Render the context into the given terminal grid.
@@ -27,24 +30,27 @@ func (hud HUD) Render(termGrid Grid) {
 	// the world grid.
 	termGrid.Copy(hud.World)
 
-	lay := Layout{Grid: termGrid}
-
 	for _, part := range hud.Header {
 		align, n := readLayoutOpts(part)
-		lay.Place(RenderString(part[n:]), align|AlignTop)
+		lay.AddRenderable(RenderString(part[n:]), align|AlignTop)
 	}
 
 	for _, part := range hud.Footer {
 		align, n := readLayoutOpts(part)
-		lay.Place(RenderString(part[n:]), align|AlignBottom)
+		lay.AddRenderable(RenderString(part[n:]), align|AlignBottom)
 	}
 
 	if len(hud.Logs) > 0 {
 		// TODO: scrolling
-		lay.Place(renderLogs{
+		hud.AddRenderable(renderLogs{
 			ss:  hud.Logs,
 			min: point.Point{X: 10, Y: 5},
 		}, hud.LogAlign)
+	}
+
+	lay := Layout{Grid: termGrid}
+	for i := range hud.parts {
+		lay.Place(hud.parts[i], hud.align[i])
 	}
 }
 
@@ -68,6 +74,12 @@ func (hud *HUD) SetFooter(lines ...string) {
 		hud.Footer = hud.Footer[:len(lines)]
 	}
 	copy(hud.Footer, lines)
+}
+
+// AddRenderable adds an aligned Renderable to the hud.
+func (hud *HUD) AddRenderable(ren Renderable, align Align) {
+	hud.parts = append(hud.parts, ren)
+	hud.align = append(hud.align, align)
 }
 
 func readLayoutOpts(s string) (opts Align, n int) {
