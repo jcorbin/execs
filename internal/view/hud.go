@@ -92,21 +92,28 @@ type renderLogs struct {
 	min point.Point
 }
 
-func (rss renderLogs) RenderSize() (wanted, needed point.Point) {
+func (rl renderLogs) RenderSize() (wanted, needed point.Point) {
+	needed = rl.min
 	wanted.X = 1
-	for i := range rss.ss {
-		if n := utf8.RuneCountInString(rss.ss[i]); n > wanted.X {
+	for i := range rl.ss {
+		if n := utf8.RuneCountInString(rl.ss[i]); n > wanted.X {
 			wanted.X = n
 		}
 	}
-	wanted.Y = len(rss.ss)
-	return wanted, rss.min
+	wanted.Y = len(rl.ss)
+	if needed.Y > wanted.Y {
+		needed.Y = wanted.Y
+	}
+	return wanted, needed
 }
 
-func (rss renderLogs) Render(g Grid, a Align) {
-	off := len(rss.ss) - g.Size.Y
+func (rl renderLogs) Render(g Grid, a Align) {
+	off := len(rl.ss) - g.Size.Y
+	if off < 0 {
+		off = 0
+	}
 	for y := off; y < g.Size.Y; y++ {
-		s := rss.ss[y]
+		s := rl.ss[y]
 		i := y * g.Size.X
 		for x := 0; len(s) > 0 && x < g.Size.X; x++ {
 			r, n := utf8.DecodeRuneInString(s)
