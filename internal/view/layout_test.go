@@ -9,47 +9,77 @@ import (
 )
 
 func TestLayout(t *testing.T) {
-	lay := Layout{
-		Grid: MakeGrid(point.Point{X: 25, Y: 10}),
+	type sa struct {
+		s string
+		a Align
 	}
+	for _, tc := range []struct {
+		name     string
+		init     func() Grid
+		sas      []sa
+		expected []string
+	}{
+		{
+			name: "basic",
+			init: func() Grid {
+				return MakeGrid(point.Point{X: 25, Y: 10})
+			},
+			sas: []sa{
+				{"left1", AlignTop | AlignLeft},
+				{"left2", AlignTop | AlignLeft},
+				{"left3", AlignTop | AlignLeft | AlignHFlush},
+				{"right1", AlignTop | AlignRight},
+				{"rrright4", AlignTop | AlignRight},
+				{"right2", AlignTop | AlignRight},
+				{"right3", AlignTop | AlignRight | AlignHFlush},
+				{"center1", AlignTop | AlignCenter},
+				{"left4", AlignBottom | AlignLeft},
+				{"left5", AlignBottom | AlignLeft},
+				{"left6", AlignBottom | AlignLeft | AlignHFlush},
+				{"right4", AlignBottom | AlignRight},
+				{"right5", AlignBottom | AlignRight},
+				{"right6", AlignBottom | AlignRight | AlignHFlush},
+				{"center2", AlignBottom | AlignCenter},
+				{"left7", AlignMiddle | AlignLeft},
+				{"left8", AlignMiddle | AlignLeft},
+				{"left9", AlignMiddle | AlignLeft | AlignHFlush},
+				{"right7", AlignMiddle | AlignRight},
+				{"right8", AlignMiddle | AlignRight},
+				{"right9", AlignMiddle | AlignRight | AlignHFlush},
+				{"center3", AlignMiddle | AlignCenter},
+			},
+			expected: []string{
+				"left1 left2 right2 right1",
+				"left3  center1   rrright4",
+				"                   right3",
+				"                         ",
+				"left9   center3    right9",
+				"left7 left8 right8 right7",
+				"                         ",
+				"                         ",
+				"left6   center2    right6",
+				"left4 left5 right5 right4",
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			lay := Layout{}
+			lay.Grid = tc.init()
+			for _, sa := range tc.sas {
+				lay.Render(RenderString(sa.s), sa.a)
+			}
+			assert.Equal(t, tc.expected, grid2lines(lay.Grid))
+		})
+	}
+}
 
-	lay.Place(RenderString("left1"), AlignTop|AlignLeft)
-	lay.Place(RenderString("left2"), AlignTop|AlignLeft)
-	lay.Place(RenderString("left3"), AlignTop|AlignLeft|AlignHFlush)
-
-	lay.Place(RenderString("right1"), AlignTop|AlignRight)
-	lay.Place(RenderString("rrright4"), AlignTop|AlignRight)
-	lay.Place(RenderString("right2"), AlignTop|AlignRight)
-	lay.Place(RenderString("right3"), AlignTop|AlignRight|AlignHFlush)
-
-	lay.Place(RenderString("center1"), AlignTop|AlignCenter)
-
-	lay.Place(RenderString("left4"), AlignBottom|AlignLeft)
-	lay.Place(RenderString("left5"), AlignBottom|AlignLeft)
-	lay.Place(RenderString("left6"), AlignBottom|AlignLeft|AlignHFlush)
-
-	lay.Place(RenderString("right4"), AlignBottom|AlignRight)
-	lay.Place(RenderString("right5"), AlignBottom|AlignRight)
-	lay.Place(RenderString("right6"), AlignBottom|AlignRight|AlignHFlush)
-
-	lay.Place(RenderString("center2"), AlignBottom|AlignCenter)
-
-	lay.Place(RenderString("left7"), AlignMiddle|AlignLeft)
-	lay.Place(RenderString("left8"), AlignMiddle|AlignLeft)
-	lay.Place(RenderString("left9"), AlignMiddle|AlignLeft|AlignHFlush)
-
-	lay.Place(RenderString("right7"), AlignMiddle|AlignRight)
-	lay.Place(RenderString("right8"), AlignMiddle|AlignRight)
-	lay.Place(RenderString("right9"), AlignMiddle|AlignRight|AlignHFlush)
-
-	lay.Place(RenderString("center3"), AlignMiddle|AlignCenter)
-
-	lines := make([]string, lay.Grid.Size.Y)
+func grid2lines(g Grid) []string {
+	lines := make([]string, g.Size.Y)
 	i := 0
-	for y := 0; y < lay.Grid.Size.Y; y++ {
-		line := make([]rune, lay.Grid.Size.X)
-		for x := 0; x < lay.Grid.Size.X; x++ {
-			if ch := lay.Grid.Data[i].Ch; ch != 0 {
+	for y := 0; y < g.Size.Y; y++ {
+		line := make([]rune, g.Size.X)
+		for x := 0; x < g.Size.X; x++ {
+			if ch := g.Data[i].Ch; ch != 0 {
 				line[x] = ch
 			} else {
 				line[x] = ' '
@@ -58,17 +88,5 @@ func TestLayout(t *testing.T) {
 		}
 		lines[y] = string(line)
 	}
-
-	assert.Equal(t, []string{
-		"left1 left2 right2 right1",
-		"left3  center1   rrright4",
-		"                   right3",
-		"                         ",
-		"left9   center3    right9",
-		"left7 left8 right8 right7",
-		"                         ",
-		"                         ",
-		"left6   center2    right6",
-		"left4 left5 right5 right4",
-	}, lines)
+	return lines
 }
