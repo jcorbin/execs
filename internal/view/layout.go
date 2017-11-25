@@ -181,7 +181,7 @@ func (lay Layout) render(start int, have point.Point, ren Renderable, align Alig
 
 	grid := MakeGrid(have)
 	ren.Render(grid)
-	lay.copy(grid, start, off)
+	have = lay.copy(grid, start, off, align)
 
 	for y, i := 0, start; y < grid.Size.Y; y, i = y+1, i+1 {
 		used[i] += have.X
@@ -189,8 +189,8 @@ func (lay Layout) render(start int, have point.Point, ren Renderable, align Alig
 	}
 }
 
-func (lay Layout) copy(g Grid, row, off int) {
-	ix := 0
+func (lay Layout) copy(g Grid, row, off int, align Align) point.Point {
+	off, ix, have := trim(g, off, align)
 	for y := 0; y < g.Size.Y; y, row = y+1, row+1 {
 		li := row*lay.Grid.Size.X + off
 		gi := y*g.Size.X + ix
@@ -200,6 +200,61 @@ func (lay Layout) copy(g Grid, row, off int) {
 			gi++
 		}
 	}
+	return have
+}
+
+func trim(g Grid, off int, align Align) (_, ix int, have point.Point) {
+	have = g.Size
+	any := usedColumns(g)
+
+	// trim left
+	actual := have.X
+	for ; ix < g.Size.X; ix++ {
+		if any[ix] {
+			break
+		}
+		actual--
+	}
+
+	// trim right
+	for x := g.Size.X - 1; x >= ix; x-- {
+		if any[x] {
+			break
+		}
+		actual--
+	}
+
+	if diff := have.X - actual; diff > 0 {
+		switch align & AlignCenter {
+		case AlignRight:
+			off += diff
+		case AlignCenter:
+			off += diff / 2
+		}
+	}
+
+	have.X = actual
+
+	return off, ix, have
+}
+
+func usedColumns(g Grid) []bool {
+	any := make([]bool, g.Size.X)
+	for gi := 0; gi < len(g.Data); {
+		for x := 0; x < g.Size.X; x++ {
+			if ch := g.Data[gi].Ch; ch != 0 {
+				any[x] = true
+			}
+			if fg := g.Data[gi].Fg; fg != 0 {
+				any[x] = true
+			}
+			if bg := g.Data[gi].Bg; bg != 0 {
+				any[x] = true
+			}
+			gi++
+		}
+	}
+	return any
 }
 
 func (lay Layout) findAvailRow(
