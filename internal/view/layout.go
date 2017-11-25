@@ -81,15 +81,31 @@ type Renderable interface {
 	Render(Grid)
 }
 
+func (lay *Layout) init() {
+	n := lay.Grid.Size.Y
+	if cap(lay.avail) < n {
+		lay.lused = make([]int, n)
+		lay.rused = make([]int, n)
+		lay.cused = make([]int, n)
+		lay.avail = make([]int, n)
+	} else {
+		lay.lused = lay.lused[:n]
+		lay.rused = lay.rused[:n]
+		lay.cused = lay.cused[:n]
+		lay.avail = lay.avail[:n]
+	}
+	n = lay.Grid.Size.X
+	for i := range lay.avail {
+		lay.avail[i] = n
+	}
+}
+
 // Place a Renderable into layout, returning false if the placement can't be
 // done. If the placement is done, then the Renderable is Render()ed into the
 // Grid.
-func (lay Layout) Place(ren Renderable, align Align) bool {
-	if lay.avail == nil {
-		lay.lused = make([]int, lay.Grid.Size.Y)
-		lay.rused = make([]int, lay.Grid.Size.Y)
-		lay.cused = make([]int, lay.Grid.Size.Y)
-		lay.avail = make([]int, lay.Grid.Size.Y)
+func (lay *Layout) Place(ren Renderable, align Align) bool {
+	if len(lay.avail) != lay.Grid.Size.Y {
+		lay.init()
 	}
 
 	// h-flush should default to left-align, not center
