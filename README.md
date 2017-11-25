@@ -309,4 +309,27 @@ Changes:
       header/footer lines
     - `ecs.Relation` finally got `UpsertOne` and `UpsertMany` methods
 
+### [Thirteen](../../tree/thirteen)
+
+I've got a Great View, and so can you!
+
+Today I focused completely on improving the view code, which has been limping
+along for some time. Adding the action bar in Twelve really tapped it out on
+complexity. So now I have a basic layout engine capable of placing boxes in any
+combination of top/bottom/middle, left/right/center (maybe flush-left/right)
+alignment. It works by way of a `Renderable` interface, which we'll see how
+long it lasts... (I'm not entirely happy with the interface shape...)
+
+Not only did I write a decent test for the layout engine (which turned out to
+be tricky to get right), but my [ECS skeleton
+app](../../tree/thirteen/internal/ecs/skeleton/main.go) now has much more
+fleshed out demo code around the view. I'm guardedly optimistic that this is
+starting to be something that someone other than myself might be able to use.
+
+The view layer itself became much more generic; you could use it with my layout
+engine, or with the stronger set of opinions called `view.HUD` (used to be
+called `view.Context`, so that's progress I guess). The `HUD` provides a
+conceit of a "header", "footer" and "scrolling capped log" on top of a world
+map.
+
 [es-beta]: http://entity-systems.wikidot.com/rdbms-beta
