@@ -120,11 +120,7 @@ func (lay *Layout) Place(ren Renderable, align Align) LayoutPlacement {
 	if len(lay.avail) != lay.Grid.Size.Y {
 		lay.init()
 	}
-	plc := LayoutPlacement{
-		lay: lay,
-		ren: ren,
-	}
-	plc.wanted, plc.needed = ren.RenderSize()
+	plc := MakeLayoutPlacement(lay, ren)
 	plc.Try(align)
 	return plc
 }
@@ -133,6 +129,18 @@ func (lay *Layout) Place(ren Renderable, align Align) LayoutPlacement {
 func (lay *Layout) Render(ren Renderable, align Align) LayoutPlacement {
 	plc := lay.Place(ren, align)
 	plc.Render()
+	return plc
+}
+
+// MakeLayoutPlacement makes a new placement for the given layout and
+// renderable; it records the wanted/needed render sizes, ready to attempt
+// placement.
+func MakeLayoutPlacement(lay *Layout, ren Renderable) LayoutPlacement {
+	plc := LayoutPlacement{
+		lay: lay,
+		ren: ren,
+	}
+	plc.wanted, plc.needed = ren.RenderSize()
 	return plc
 }
 
