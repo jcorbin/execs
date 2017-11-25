@@ -3,6 +3,8 @@ package view
 import (
 	"fmt"
 
+	termbox "github.com/nsf/termbox-go"
+
 	"github.com/jcorbin/execs/internal/point"
 )
 
@@ -108,6 +110,7 @@ type LayoutPlacement struct {
 	align  Align
 	wanted point.Point
 	needed point.Point
+	sep    termbox.Cell // TODO: give user an option
 
 	ok    bool
 	start int
@@ -142,6 +145,10 @@ func MakeLayoutPlacement(lay *Layout, ren Renderable) LayoutPlacement {
 	}
 	plc.wanted, plc.needed = ren.RenderSize()
 	return plc
+}
+
+func (plc *LayoutPlacement) setSep(ch rune) {
+	plc.sep = termbox.Cell{Ch: ch}
 }
 
 // Try attempts to (re)resolve the placement with an other alignment.
@@ -194,6 +201,10 @@ seekStart:
 	plc.have = point.Zero
 	for plc.start >= 0 && plc.start < len(plc.lay.avail) {
 		needed = plc.needed.X
+		if plc.sep.Ch != 0 && ((left && plc.lay.lused[plc.start] > 0) ||
+			(right && plc.lay.rused[plc.start] > 0)) {
+			needed++
+		}
 		if plc.lay.avail[plc.start] >= needed &&
 			!(center && plc.lay.cused[plc.start] > 0) &&
 			!(lflush && plc.lay.lused[plc.start] > 0) &&
@@ -289,7 +300,7 @@ func (plc *LayoutPlacement) copy(g Grid, off int) {
 
 	off, ix, plc.have = trim(g, off, plc.align)
 
-	if pad.Ch != 0 {
+	if pad = plc.sep; pad.Ch != 0 {
 		if lpad, rpad := left && !lflush, right && !rflush; lpad {
 			for y := 0; y < plc.have.Y; y, y = y+1, plc.start+1 {
 				li := plc.start*plc.lay.Grid.Size.X + off
