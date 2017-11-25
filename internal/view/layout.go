@@ -176,7 +176,7 @@ func (lay Layout) render(start int, have point.Point, ren Renderable, align Alig
 	ren.Render(grid)
 	lay.copy(grid, start, off)
 
-	for i := start; i < have.Y; i++ {
+	for y, i := 0, start; y < grid.Size.Y; y, i = y+1, i+1 {
 		used[i] += have.X
 		lay.avail[i] -= have.X
 	}
