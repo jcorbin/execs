@@ -161,14 +161,14 @@ func (lay Layout) render(start int, have point.Point, ren Renderable, align Alig
 		used = lay.lused
 
 	case AlignRight:
-		off = lay.Grid.Size.X - have.X - maxInt(lay.rused[start:start+have.Y]...)
+		off = maxInt(lay.rused[start : start+have.Y]...)
+		off = lay.Grid.Size.X - have.X - off
 		used = lay.rused
 
 	default: // NOTE: defaults to AlignCenter:
-		gap := lay.Grid.Size.X - have.X
-		gap -= maxInt(lay.lused[start : start+have.Y]...)
-		gap -= maxInt(lay.rused[start : start+have.Y]...)
-		off = gap / 2
+		lused := maxInt(lay.lused[start : start+have.Y]...)
+		rused := maxInt(lay.rused[start : start+have.Y]...)
+		off = lused + (lay.Grid.Size.X-have.X-lused-rused)/2
 		used = lay.cused
 	}
 
