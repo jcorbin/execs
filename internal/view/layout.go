@@ -267,9 +267,9 @@ func (plc *LayoutPlacement) copy(g Grid, off int) {
 
 	off, ix, plc.have = trim(g, off, plc.align)
 
-	for y := 0; y < g.Size.Y; y, plc.start = y+1, plc.start+1 {
+	for y := 0; y < plc.have.Y; y, y = y+1, plc.start+1 {
 		li := plc.start*plc.lay.Grid.Size.X + off
-		gi := y*g.Size.X + ix
+		gi := y*plc.have.X + ix
 		for x := ix; x < plc.have.X; x++ {
 			plc.lay.Grid.Data[li] = g.Data[gi]
 			li++
