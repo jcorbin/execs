@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"unicode/utf8"
 
+	"github.com/jcorbin/execs/internal/moremath"
 	"github.com/jcorbin/execs/internal/point"
 )
 
@@ -100,9 +101,9 @@ func (logs *Logs) Init(logCap int) {
 // RenderSize returns the desired and necessary sizes for rendering.
 func (logs Logs) RenderSize() (wanted, needed point.Point) {
 	needed.X = 1
-	needed.Y = minInt(len(logs.Buffer), logs.Min)
+	needed.Y = moremath.MinInt(len(logs.Buffer), logs.Min)
 	wanted.X = 1
-	wanted.Y = minInt(len(logs.Buffer), logs.Max)
+	wanted.Y = moremath.MinInt(len(logs.Buffer), logs.Max)
 	for i := range logs.Buffer {
 		if n := utf8.RuneCountInString(logs.Buffer[i]); n > wanted.X {
 			wanted.X = n

@@ -5,6 +5,7 @@ import (
 
 	termbox "github.com/nsf/termbox-go"
 
+	"github.com/jcorbin/execs/internal/moremath"
 	"github.com/jcorbin/execs/internal/point"
 )
 
@@ -210,7 +211,7 @@ seekStart:
 			!(center && plc.lay.cused[plc.start] > 0) &&
 			!(lflush && plc.lay.lused[plc.start] > 0) &&
 			!(rflush && plc.lay.rused[plc.start] > 0) {
-			plc.have.X = minInt(plc.wanted.X, plc.lay.avail[plc.start])
+			plc.have.X = moremath.MinInt(plc.wanted.X, plc.lay.avail[plc.start])
 			goto seekEnd
 		}
 		plc.start += dir
@@ -256,7 +257,7 @@ func (plc *LayoutPlacement) Render() {
 
 	switch plc.align & AlignCenter {
 	case AlignLeft:
-		off = maxInt(plc.lay.lused[plc.start : plc.start+plc.have.Y]...)
+		off = moremath.MaxInt(plc.lay.lused[plc.start : plc.start+plc.have.Y]...)
 		if off == 0 {
 			plc.align |= AlignHFlush
 		}
@@ -264,7 +265,7 @@ func (plc *LayoutPlacement) Render() {
 		delta = off
 
 	case AlignRight:
-		delta = maxInt(plc.lay.rused[plc.start : plc.start+plc.have.Y]...)
+		delta = moremath.MaxInt(plc.lay.rused[plc.start : plc.start+plc.have.Y]...)
 		if delta == 0 {
 			plc.align |= AlignHFlush
 		}
@@ -272,8 +273,8 @@ func (plc *LayoutPlacement) Render() {
 		used = plc.lay.rused
 
 	default: // NOTE: defaults to AlignCenter:
-		lused := maxInt(plc.lay.lused[plc.start : plc.start+plc.have.Y]...)
-		rused := maxInt(plc.lay.rused[plc.start : plc.start+plc.have.Y]...)
+		lused := moremath.MaxInt(plc.lay.lused[plc.start : plc.start+plc.have.Y]...)
+		rused := moremath.MaxInt(plc.lay.rused[plc.start : plc.start+plc.have.Y]...)
 		off = lused + (plc.lay.Grid.Size.X-plc.have.X-lused-rused)/2
 		used = plc.lay.cused
 	}
@@ -386,24 +387,4 @@ func usedColumns(g Grid) []bool {
 		}
 	}
 	return any
-}
-
-func minInt(ints ...int) int {
-	min := ints[0]
-	for i := 1; i < len(ints); i++ {
-		if n := ints[i]; n < min {
-			min = n
-		}
-	}
-	return min
-}
-
-func maxInt(ints ...int) int {
-	max := ints[0]
-	for i := 1; i < len(ints); i++ {
-		if n := ints[i]; n > max {
-			max = n
-		}
-	}
-	return max
 }
