@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/jcorbin/execs/internal/ecs"
@@ -18,15 +17,15 @@ import (
 
 type world struct {
 	ecs.Core
-	logs []string
+	view.Logs
 
 	// TODO: your state here
 }
 
 func (w *world) Render(termGrid view.Grid) error {
 	hud := view.HUD{
+		Logs: w.Logs,
 		// World: , // TODO: render your world grid and pass it here
-		Logs: w.logs,
 	}
 
 	// TODO: call hud methods to build a basic UI, e.g.:
@@ -60,15 +59,12 @@ func (w *world) HandleKey(k view.KeyEvent) error {
 	return nil
 }
 
-func (w *world) log(mess string, args ...interface{}) {
-	w.logs = append(w.logs, fmt.Sprintf(mess, args...))
-}
-
 func main() {
 	if err := view.JustKeepRunning(func(v *view.View) (view.Client, error) {
 		var w world
+		w.Logs.Init(1000)
 
-		w.log("Hello World Of Democraft!")
+		w.Log("Hello World Of Democraft!")
 
 		// TODO: something interesting
 
