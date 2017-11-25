@@ -121,13 +121,12 @@ func (logs Logs) Render(g Grid, a Align) {
 	if off < 0 {
 		off = 0
 	}
-	for y := off; y < g.Size.Y; y++ {
-		s := logs.Buffer[y]
-		i := y * g.Size.X
-		for x := 0; len(s) > 0 && x < g.Size.X; x++ {
+	for i, y := off, 0; i < len(logs.Buffer); i, y = i+1, y+1 {
+		gi := y * g.Size.X
+		for s, x := logs.Buffer[i], 0; len(s) > 0 && x < g.Size.X; x++ {
 			r, n := utf8.DecodeRuneInString(s)
 			s = s[n:]
-			g.Data[i+x].Ch = r
+			g.Data[gi+x].Ch = r
 		}
 	}
 }
