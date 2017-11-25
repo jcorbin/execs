@@ -117,69 +117,69 @@ func (lay *Layout) Place(ren Renderable, align Align) bool {
 
 	switch align & AlignMiddle {
 	case AlignTop:
-		row, have, found := lay.findAvailRow(align, 0, 1, wanted, needed)
+		start, have, found := lay.findAvailRow(align, 0, 1, wanted, needed)
 		if !found {
 			return false
 		}
-		lay.render(row, have, ren, align)
+		lay.render(start, have, ren, align)
 		return true
 
 	case AlignBottom:
-		row, have, found := lay.findAvailRow(align, len(lay.avail)-1, -1, wanted, needed)
+		start, have, found := lay.findAvailRow(align, len(lay.avail)-1, -1, wanted, needed)
 		if !found {
 			return false
 		}
-		lay.render(row, have, ren, align)
+		lay.render(start, have, ren, align)
 		return true
 
 	default: // NOTE: defaults to AlignMiddle:
 		mid := len(lay.avail) / 2
-		ur, uh, uf := lay.findAvailRow(align, mid, -1, wanted, needed)
-		lr, lh, lf := lay.findAvailRow(align, mid, 1, wanted, needed)
+		us, uh, uf := lay.findAvailRow(align, mid, -1, wanted, needed)
+		ls, lh, lf := lay.findAvailRow(align, mid, 1, wanted, needed)
 		if !uf && !lf {
 			return false
 		}
 		if !lf {
-			lay.render(ur, uh, ren, align)
+			lay.render(us, uh, ren, align)
 		} else if !uf {
-			lay.render(lr, lh, ren, align)
-		} else if ud, ld := ur-mid, mid-lr; ud <= ld {
-			lay.render(ur, uh, ren, align)
+			lay.render(ls, lh, ren, align)
+		} else if ud, ld := us-mid, mid-ls; ud <= ld {
+			lay.render(us, uh, ren, align)
 		} else {
-			lay.render(lr, lh, ren, align)
+			lay.render(ls, lh, ren, align)
 		}
 		return true
 	}
 }
 
-func (lay Layout) render(row int, have point.Point, ren Renderable, align Align) {
+func (lay Layout) render(start int, have point.Point, ren Renderable, align Align) {
 	grid := MakeGrid(have)
 	ren.Render(grid)
 
 	switch align & AlignCenter {
 	case AlignLeft:
-		off := maxInt(lay.lused[row : row+have.Y])
-		lay.copy(grid, row, off)
-		for i := row; i < have.Y; i++ {
+		off := maxInt(lay.lused[start : start+have.Y]...)
+		lay.copy(grid, start, off)
+		for i := start; i < have.Y; i++ {
 			lay.lused[i] += have.X
 			lay.avail[i] -= have.X
 		}
 
 	case AlignRight:
-		off := lay.Grid.Size.X - have.X - maxInt(lay.rused[row:row+have.Y])
-		lay.copy(grid, row, off)
-		for i := row; i < have.Y; i++ {
+		off := lay.Grid.Size.X - have.X - maxInt(lay.rused[start:start+have.Y]...)
+		lay.copy(grid, start, off)
+		for i := start; i < have.Y; i++ {
 			lay.rused[i] += have.X
 			lay.avail[i] -= have.X
 		}
 
 	default: // NOTE: defaults to AlignCenter:
 		gap := lay.Grid.Size.X - have.X
-		gap -= maxInt(lay.lused[row : row+have.Y])
-		gap -= maxInt(lay.rused[row : row+have.Y])
+		gap -= maxInt(lay.lused[start : start+have.Y]...)
+		gap -= maxInt(lay.rused[start : start+have.Y]...)
 		off := gap / 2
-		lay.copy(grid, row, off)
-		for i := row; i < have.Y; i++ {
+		lay.copy(grid, start, off)
+		for i := start; i < have.Y; i++ {
 			lay.cused[i] += have.X
 			lay.avail[i] -= have.X
 		}
@@ -203,14 +203,14 @@ func (lay Layout) findAvailRow(
 	align Align,
 	init, dir int,
 	wanted, needed point.Point,
-) (row int, have point.Point, found bool) {
+) (start int, have point.Point, found bool) {
 	cused := align&AlignCenter != 0
 	lflush := align&AlignHFlush != 0 && align&AlignCenter == AlignLeft
 	rflush := align&AlignHFlush != 0 && align&AlignCenter == AlignRight
-	for row, end := init, 0; row >= 0 && end >= 0 && row < len(lay.avail) && end < len(lay.avail); {
+	for start, end := init, 0; start >= 0 && end >= 0 && start < len(lay.avail) && end < len(lay.avail); {
 		if lay.avail[end] < needed.X || (cused && lay.cused[end] != 0) {
 			end += dir
-			row, have = end, point.Zero
+			start, have = end, point.Zero
 			continue
 		}
 		if have.X == 0 {
@@ -220,18 +220,18 @@ func (lay Layout) findAvailRow(
 		} else if lay.avail[end] < have.X {
 			have.X = lay.avail[end]
 		}
-		if have.Y = end - row + 1; have.Y >= needed.Y {
-			return row, have, true
+		if have.Y = end - start + 1; have.Y >= needed.Y {
+			return start, have, true
 		}
 		end += dir
 	}
 	return 0, point.Zero, false
 }
 
-func maxInt(ints []int) int {
-	max := 0
-	for _, n := range ints {
-		if n > max {
+func maxInt(ints ...int) int {
+	max := ints[0]
+	for i := 1; i < len(ints); i++ {
+		if n := ints[i]; n > max {
 			max = n
 		}
 	}
