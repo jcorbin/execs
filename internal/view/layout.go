@@ -232,6 +232,7 @@ func (plc *LayoutPlacement) Render() {
 
 	plc.align &= ^AlignHFlush
 	off, used := 0, []int(nil)
+	delta := 0
 
 	switch plc.align & AlignCenter {
 	case AlignLeft:
@@ -240,13 +241,14 @@ func (plc *LayoutPlacement) Render() {
 			plc.align |= AlignHFlush
 		}
 		used = plc.lay.lused
+		delta = off
 
 	case AlignRight:
-		off = maxInt(plc.lay.rused[plc.start : plc.start+plc.have.Y]...)
-		if off == 0 {
+		delta = maxInt(plc.lay.rused[plc.start : plc.start+plc.have.Y]...)
+		if delta == 0 {
 			plc.align |= AlignHFlush
 		}
-		off = plc.lay.Grid.Size.X - plc.have.X - off
+		off = plc.lay.Grid.Size.X - plc.have.X - delta
 		used = plc.lay.rused
 
 	default: // NOTE: defaults to AlignCenter:
@@ -259,9 +261,10 @@ func (plc *LayoutPlacement) Render() {
 	grid := MakeGrid(plc.have)
 	plc.ren.Render(grid, plc.align)
 	plc.copy(grid, off)
+	delta += plc.have.X
 
 	for y, i := 0, plc.start; y < grid.Size.Y; y, i = y+1, i+1 {
-		used[i] += plc.have.X
+		used[i] = delta
 		plc.lay.avail[i] -= plc.have.X
 	}
 }
