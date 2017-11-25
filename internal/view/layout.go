@@ -80,7 +80,7 @@ func (a Align) String() string {
 // method is called, it will get a grid of at least the needed RenderSize.
 type Renderable interface {
 	RenderSize() (wanted, needed point.Point)
-	Render(Grid, Align)
+	Render(Grid)
 }
 
 func (lay *Layout) init() {
@@ -144,6 +144,7 @@ func MakeLayoutPlacement(lay *Layout, ren Renderable) LayoutPlacement {
 		ren: ren,
 	}
 	plc.wanted, plc.needed = ren.RenderSize()
+	plc.setSep(' ')
 	return plc
 }
 
@@ -278,7 +279,7 @@ func (plc *LayoutPlacement) Render() {
 	}
 
 	grid := MakeGrid(plc.have)
-	plc.ren.Render(grid, plc.align)
+	plc.ren.Render(grid)
 	plc.copy(grid, off)
 	delta += plc.have.X
 
