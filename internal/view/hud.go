@@ -115,7 +115,7 @@ func (logs Logs) RenderSize() (wanted, needed point.Point) {
 }
 
 // Render renders the log buffer.
-func (logs Logs) Render(g Grid, a Align) {
+func (logs Logs) Render(g Grid) {
 	off := len(logs.Buffer) - g.Size.Y
 	if off < 0 {
 		off = 0

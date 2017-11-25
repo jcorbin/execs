@@ -27,21 +27,10 @@ func (rs renderStringT) RenderSize() (wanted, needed point.Point) {
 	return needed, needed
 }
 
-func (rs renderStringT) Render(g Grid, a Align) {
-	ss := []string{rs.s}
-	if a&AlignHFlush == 0 {
-		switch a & AlignCenter {
-		case AlignLeft:
-			ss = []string{rs.sep, rs.s}
-		case AlignRight:
-			ss = []string{rs.s, rs.sep}
-		}
-	}
+func (rs renderStringT) Render(g Grid) {
 	i := 0
-	for _, s := range ss {
-		for _, r := range s {
-			g.Data[i].Ch = r
-			i++
-		}
+	for _, r := range rs.s {
+		g.Data[i].Ch = r
+		i++
 	}
 }

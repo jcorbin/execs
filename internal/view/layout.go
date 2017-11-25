@@ -3,6 +3,8 @@ package view
 import (
 	"fmt"
 
+	termbox "github.com/nsf/termbox-go"
+
 	"github.com/jcorbin/execs/internal/point"
 )
 
@@ -78,7 +80,7 @@ func (a Align) String() string {
 // method is called, it will get a grid of at least the needed RenderSize.
 type Renderable interface {
 	RenderSize() (wanted, needed point.Point)
-	Render(Grid, Align)
+	Render(Grid)
 }
 
 func (lay *Layout) init() {
@@ -108,6 +110,7 @@ type LayoutPlacement struct {
 	align  Align
 	wanted point.Point
 	needed point.Point
+	sep    termbox.Cell // TODO: give user an option
 
 	ok    bool
 	start int
@@ -120,11 +123,7 @@ func (lay *Layout) Place(ren Renderable, align Align) LayoutPlacement {
 	if len(lay.avail) != lay.Grid.Size.Y {
 		lay.init()
 	}
-	plc := LayoutPlacement{
-		lay: lay,
-		ren: ren,
-	}
-	plc.wanted, plc.needed = ren.RenderSize()
+	plc := MakeLayoutPlacement(lay, ren)
 	plc.Try(align)
 	return plc
 }
@@ -134,6 +133,23 @@ func (lay *Layout) Render(ren Renderable, align Align) LayoutPlacement {
 	plc := lay.Place(ren, align)
 	plc.Render()
 	return plc
+}
+
+// MakeLayoutPlacement makes a new placement for the given layout and
+// renderable; it records the wanted/needed render sizes, ready to attempt
+// placement.
+func MakeLayoutPlacement(lay *Layout, ren Renderable) LayoutPlacement {
+	plc := LayoutPlacement{
+		lay: lay,
+		ren: ren,
+	}
+	plc.wanted, plc.needed = ren.RenderSize()
+	plc.setSep(' ')
+	return plc
+}
+
+func (plc *LayoutPlacement) setSep(ch rune) {
+	plc.sep = termbox.Cell{Ch: ch}
 }
 
 // Try attempts to (re)resolve the placement with an other alignment.
@@ -171,17 +187,27 @@ func (plc *LayoutPlacement) Try(align Align) bool {
 }
 
 func (plc *LayoutPlacement) find(init, dir int) {
-	cused := plc.align&AlignCenter != 0
-	lflush := plc.align&AlignHFlush != 0 && plc.align&AlignCenter == AlignLeft
-	rflush := plc.align&AlignHFlush != 0 && plc.align&AlignCenter == AlignRight
+	var (
+		left   = plc.align&AlignCenter == AlignLeft
+		right  = plc.align&AlignCenter == AlignRight
+		center = plc.align&AlignCenter == AlignCenter
+		lflush = plc.align&AlignHFlush != 0 && left
+		rflush = plc.align&AlignHFlush != 0 && right
+	)
 
 	plc.ok = false
 	plc.start = init
 seekStart:
+	needed := 0
 	plc.have = point.Zero
 	for plc.start >= 0 && plc.start < len(plc.lay.avail) {
-		if plc.lay.avail[plc.start] >= plc.needed.X &&
-			!(cused && plc.lay.cused[plc.start] > 0) &&
+		needed = plc.needed.X
+		if plc.sep.Ch != 0 && ((left && plc.lay.lused[plc.start] > 0) ||
+			(right && plc.lay.rused[plc.start] > 0)) {
+			needed++
+		}
+		if plc.lay.avail[plc.start] >= needed &&
+			!(center && plc.lay.cused[plc.start] > 0) &&
 			!(lflush && plc.lay.lused[plc.start] > 0) &&
 			!(rflush && plc.lay.rused[plc.start] > 0) {
 			plc.have.X = minInt(plc.wanted.X, plc.lay.avail[plc.start])
@@ -198,8 +224,8 @@ seekEnd:
 		if plc.have.Y >= plc.wanted.Y {
 			break
 		}
-		if plc.lay.avail[end] < plc.needed.X ||
-			(cused && plc.lay.cused[end] > 0) ||
+		if plc.lay.avail[end] < needed ||
+			(center && plc.lay.cused[end] > 0) ||
 			(lflush && plc.lay.lused[end] > 0) ||
 			(rflush && plc.lay.rused[end] > 0) {
 			if plc.have.Y >= plc.needed.Y {
@@ -226,6 +252,7 @@ func (plc *LayoutPlacement) Render() {
 
 	plc.align &= ^AlignHFlush
 	off, used := 0, []int(nil)
+	delta := 0
 
 	switch plc.align & AlignCenter {
 	case AlignLeft:
@@ -234,13 +261,14 @@ func (plc *LayoutPlacement) Render() {
 			plc.align |= AlignHFlush
 		}
 		used = plc.lay.lused
+		delta = off
 
 	case AlignRight:
-		off = maxInt(plc.lay.rused[plc.start : plc.start+plc.have.Y]...)
-		if off == 0 {
+		delta = maxInt(plc.lay.rused[plc.start : plc.start+plc.have.Y]...)
+		if delta == 0 {
 			plc.align |= AlignHFlush
 		}
-		off = plc.lay.Grid.Size.X - plc.have.X - off
+		off = plc.lay.Grid.Size.X - plc.have.X - delta
 		used = plc.lay.rused
 
 	default: // NOTE: defaults to AlignCenter:
@@ -251,27 +279,59 @@ func (plc *LayoutPlacement) Render() {
 	}
 
 	grid := MakeGrid(plc.have)
-	plc.ren.Render(grid, plc.align)
-	plc.have = plc.lay.copy(grid, plc.start, off, plc.align)
+	plc.ren.Render(grid)
+	plc.copy(grid, off)
+	delta += plc.have.X
 
 	for y, i := 0, plc.start; y < grid.Size.Y; y, i = y+1, i+1 {
-		used[i] += plc.have.X
+		used[i] = delta
 		plc.lay.avail[i] -= plc.have.X
 	}
 }
 
-func (lay Layout) copy(g Grid, row, off int, align Align) point.Point {
-	off, ix, have := trim(g, off, align)
-	for y := 0; y < g.Size.Y; y, row = y+1, row+1 {
-		li := row*lay.Grid.Size.X + off
-		gi := y*g.Size.X + ix
-		for x := ix; x < have.X; x++ {
-			lay.Grid.Data[li] = g.Data[gi]
+func (plc *LayoutPlacement) copy(g Grid, off int) {
+	var (
+		left   = plc.align&AlignCenter == AlignLeft
+		right  = plc.align&AlignCenter == AlignRight
+		lflush = plc.align&AlignHFlush != 0 && left
+		rflush = plc.align&AlignHFlush != 0 && right
+		pad    termbox.Cell
+		ix     int
+	)
+
+	off, ix, plc.have = trim(g, off, plc.align)
+
+	if pad = plc.sep; pad.Ch != 0 {
+		if lpad, rpad := left && !lflush, right && !rflush; lpad {
+			for y := 0; y < plc.have.Y; y, y = y+1, plc.start+1 {
+				li := plc.start*plc.lay.Grid.Size.X + off
+				plc.lay.Grid.Data[li] = pad
+			}
+			off++
+		} else if rpad {
+			off--
+		} else {
+			pad.Ch = 0
+		}
+	}
+
+	for y := 0; y < plc.have.Y; y, y = y+1, plc.start+1 {
+		li := plc.start*plc.lay.Grid.Size.X + off
+		gi := y*plc.have.X + ix
+		for x := ix; x < plc.have.X; x++ {
+			plc.lay.Grid.Data[li] = g.Data[gi]
 			li++
 			gi++
 		}
 	}
-	return have
+
+	if pad.Ch != 0 {
+		off += plc.have.X
+		for y := 0; y < plc.have.Y; y, y = y+1, plc.start+1 {
+			li := plc.start*plc.lay.Grid.Size.X + off
+			plc.lay.Grid.Data[li] = pad
+		}
+	}
 }
 
 func trim(g Grid, off int, align Align) (_, ix int, have point.Point) {
