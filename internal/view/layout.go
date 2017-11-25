@@ -153,15 +153,22 @@ func (lay *Layout) Place(ren Renderable, align Align) bool {
 }
 
 func (lay Layout) render(start int, have point.Point, ren Renderable, align Align) {
+	align &= ^AlignHFlush
 	off, used := 0, []int(nil)
 
 	switch align & AlignCenter {
 	case AlignLeft:
 		off = maxInt(lay.lused[start : start+have.Y]...)
+		if off == 0 {
+			align |= AlignHFlush
+		}
 		used = lay.lused
 
 	case AlignRight:
 		off = maxInt(lay.rused[start : start+have.Y]...)
+		if off == 0 {
+			align |= AlignHFlush
+		}
 		off = lay.Grid.Size.X - have.X - off
 		used = lay.rused
 
