@@ -10,21 +10,38 @@ import (
 // RenderString constructs a static string Renderable; either the entire string
 // is rendered, or not; no truncation is supported.
 func RenderString(mess string, args ...interface{}) Renderable {
-	return renderStringT(fmt.Sprintf(mess, args...))
+	return renderStringT{
+		s:   fmt.Sprintf(mess, args...),
+		sep: " ",
+	}
 }
 
-type renderStringT string
+type renderStringT struct {
+	s   string
+	sep string
+}
 
-func (s renderStringT) RenderSize() (wanted, needed point.Point) {
-	needed.X = utf8.RuneCountInString(string(s))
+func (rs renderStringT) RenderSize() (wanted, needed point.Point) {
+	needed.X = utf8.RuneCountInString(rs.s) + utf8.RuneCountInString(rs.sep)
 	needed.Y = 1
 	return needed, needed
 }
 
-func (s renderStringT) Render(g Grid, a Align) {
+func (rs renderStringT) Render(g Grid, a Align) {
+	ss := []string{rs.s}
+	if a&AlignHFlush == 0 {
+		switch a & AlignCenter {
+		case AlignLeft:
+			ss = []string{rs.sep, rs.s}
+		case AlignRight:
+			ss = []string{rs.s, rs.sep}
+		}
+	}
 	i := 0
-	for _, r := range s {
-		g.Data[i].Ch = r
-		i++
+	for _, s := range ss {
+		for _, r := range s {
+			g.Data[i].Ch = r
+			i++
+		}
 	}
 }
