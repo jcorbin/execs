@@ -279,10 +279,29 @@ func (plc *LayoutPlacement) Render() {
 
 func (plc *LayoutPlacement) copy(g Grid, off int) {
 	var (
-		ix int
+		left   = plc.align&AlignCenter == AlignLeft
+		right  = plc.align&AlignCenter == AlignRight
+		lflush = plc.align&AlignHFlush != 0 && left
+		rflush = plc.align&AlignHFlush != 0 && right
+		pad    termbox.Cell
+		ix     int
 	)
 
 	off, ix, plc.have = trim(g, off, plc.align)
+
+	if pad.Ch != 0 {
+		if lpad, rpad := left && !lflush, right && !rflush; lpad {
+			for y := 0; y < plc.have.Y; y, y = y+1, plc.start+1 {
+				li := plc.start*plc.lay.Grid.Size.X + off
+				plc.lay.Grid.Data[li] = pad
+			}
+			off++
+		} else if rpad {
+			off--
+		} else {
+			pad.Ch = 0
+		}
+	}
 
 	for y := 0; y < plc.have.Y; y, y = y+1, plc.start+1 {
 		li := plc.start*plc.lay.Grid.Size.X + off
@@ -291,6 +310,14 @@ func (plc *LayoutPlacement) copy(g Grid, off int) {
 			plc.lay.Grid.Data[li] = g.Data[gi]
 			li++
 			gi++
+		}
+	}
+
+	if pad.Ch != 0 {
+		off += plc.have.X
+		for y := 0; y < plc.have.Y; y, y = y+1, plc.start+1 {
+			li := plc.start*plc.lay.Grid.Size.X + off
+			plc.lay.Grid.Data[li] = pad
 		}
 	}
 }
