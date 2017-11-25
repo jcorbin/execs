@@ -252,7 +252,7 @@ func (plc *LayoutPlacement) Render() {
 
 	grid := MakeGrid(plc.have)
 	plc.ren.Render(grid, plc.align)
-	plc.have = plc.lay.copy(grid, plc.start, off, plc.align)
+	plc.copy(grid, off)
 
 	for y, i := 0, plc.start; y < grid.Size.Y; y, i = y+1, i+1 {
 		used[i] += plc.have.X
@@ -260,18 +260,22 @@ func (plc *LayoutPlacement) Render() {
 	}
 }
 
-func (lay Layout) copy(g Grid, row, off int, align Align) point.Point {
-	off, ix, have := trim(g, off, align)
-	for y := 0; y < g.Size.Y; y, row = y+1, row+1 {
-		li := row*lay.Grid.Size.X + off
+func (plc *LayoutPlacement) copy(g Grid, off int) {
+	var (
+		ix int
+	)
+
+	off, ix, plc.have = trim(g, off, plc.align)
+
+	for y := 0; y < g.Size.Y; y, plc.start = y+1, plc.start+1 {
+		li := plc.start*plc.lay.Grid.Size.X + off
 		gi := y*g.Size.X + ix
-		for x := ix; x < have.X; x++ {
-			lay.Grid.Data[li] = g.Data[gi]
+		for x := ix; x < plc.have.X; x++ {
+			plc.lay.Grid.Data[li] = g.Data[gi]
 			li++
 			gi++
 		}
 	}
-	return have
 }
 
 func trim(g Grid, off int, align Align) (_, ix int, have point.Point) {
