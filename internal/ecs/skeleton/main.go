@@ -32,16 +32,16 @@ func (w *world) Render(termGrid view.Grid) error {
 	}
 
 	// TODO: call hud methods to build a basic UI, e.g.:
-	hud.AddHeaderF("<left1")
-	hud.AddHeaderF("<left2")
-	hud.AddHeaderF(">right1")
-	hud.AddHeaderF(">right2")
-	hud.AddHeaderF("center by default")
+	hud.HeaderF("<left1")
+	hud.HeaderF("<left2")
+	hud.HeaderF(">right1")
+	hud.HeaderF(">right2")
+	hud.HeaderF("center by default")
 
-	hud.AddFooterF("footer has the same stuff")
-	hud.AddFooterF(">one")
-	hud.AddFooterF(">two")
-	hud.AddFooterF(".>three") // the "." forces a new line
+	hud.FooterF("footer has the same stuff")
+	hud.FooterF(">one")
+	hud.FooterF(">two")
+	hud.FooterF(".>three") // the "." forces a new line
 
 	// NOTE: more advanced UI components may use:
 	// hud.AddRenderable(ren view.Renderable, align view.Align)
