@@ -182,9 +182,11 @@ func (plc *LayoutPlacement) find(init, dir int) {
 	plc.ok = false
 	plc.start = init
 seekStart:
+	needed := 0
 	plc.have = point.Zero
 	for plc.start >= 0 && plc.start < len(plc.lay.avail) {
-		if plc.lay.avail[plc.start] >= plc.needed.X &&
+		needed = plc.needed.X
+		if plc.lay.avail[plc.start] >= needed &&
 			!(center && plc.lay.cused[plc.start] > 0) &&
 			!(lflush && plc.lay.lused[plc.start] > 0) &&
 			!(rflush && plc.lay.rused[plc.start] > 0) {
@@ -202,7 +204,7 @@ seekEnd:
 		if plc.have.Y >= plc.wanted.Y {
 			break
 		}
-		if plc.lay.avail[end] < plc.needed.X ||
+		if plc.lay.avail[end] < needed ||
 			(center && plc.lay.cused[end] > 0) ||
 			(lflush && plc.lay.lused[end] > 0) ||
 			(rflush && plc.lay.rused[end] > 0) {
