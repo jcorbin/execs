@@ -103,7 +103,7 @@ func (rss renderLogs) RenderSize() (wanted, needed point.Point) {
 	return wanted, rss.min
 }
 
-func (rss renderLogs) Render(g Grid) {
+func (rss renderLogs) Render(g Grid, a Align) {
 	off := len(rss.ss) - g.Size.Y
 	for y := off; y < g.Size.Y; y++ {
 		s := rss.ss[y]

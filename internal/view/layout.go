@@ -78,7 +78,7 @@ func (a Align) String() string {
 // method is called, it will get a grid of at least the needed RenderSize.
 type Renderable interface {
 	RenderSize() (wanted, needed point.Point)
-	Render(Grid)
+	Render(Grid, Align)
 }
 
 func (lay *Layout) init() {
@@ -180,7 +180,7 @@ func (lay Layout) render(start int, have point.Point, ren Renderable, align Alig
 	}
 
 	grid := MakeGrid(have)
-	ren.Render(grid)
+	ren.Render(grid, align)
 	have = lay.copy(grid, start, off, align)
 
 	for y, i := 0, start; y < grid.Size.Y; y, i = y+1, i+1 {

@@ -21,7 +21,7 @@ func (s renderStringT) RenderSize() (wanted, needed point.Point) {
 	return needed, needed
 }
 
-func (s renderStringT) Render(g Grid) {
+func (s renderStringT) Render(g Grid, a Align) {
 	i := 0
 	for _, r := range s {
 		g.Data[i].Ch = r
