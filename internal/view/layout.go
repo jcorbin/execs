@@ -171,9 +171,13 @@ func (plc *LayoutPlacement) Try(align Align) bool {
 }
 
 func (plc *LayoutPlacement) find(init, dir int) {
-	cused := plc.align&AlignCenter != 0
-	lflush := plc.align&AlignHFlush != 0 && plc.align&AlignCenter == AlignLeft
-	rflush := plc.align&AlignHFlush != 0 && plc.align&AlignCenter == AlignRight
+	var (
+		left   = plc.align&AlignCenter == AlignLeft
+		right  = plc.align&AlignCenter == AlignRight
+		center = plc.align&AlignCenter == AlignCenter
+		lflush = plc.align&AlignHFlush != 0 && left
+		rflush = plc.align&AlignHFlush != 0 && right
+	)
 
 	plc.ok = false
 	plc.start = init
@@ -181,7 +185,7 @@ seekStart:
 	plc.have = point.Zero
 	for plc.start >= 0 && plc.start < len(plc.lay.avail) {
 		if plc.lay.avail[plc.start] >= plc.needed.X &&
-			!(cused && plc.lay.cused[plc.start] > 0) &&
+			!(center && plc.lay.cused[plc.start] > 0) &&
 			!(lflush && plc.lay.lused[plc.start] > 0) &&
 			!(rflush && plc.lay.rused[plc.start] > 0) {
 			plc.have.X = minInt(plc.wanted.X, plc.lay.avail[plc.start])
@@ -199,7 +203,7 @@ seekEnd:
 			break
 		}
 		if plc.lay.avail[end] < plc.needed.X ||
-			(cused && plc.lay.cused[end] > 0) ||
+			(center && plc.lay.cused[end] > 0) ||
 			(lflush && plc.lay.lused[end] > 0) ||
 			(rflush && plc.lay.rused[end] > 0) {
 			if plc.have.Y >= plc.needed.Y {
