@@ -34,7 +34,7 @@ func (hud HUD) Render(termGrid Grid) {
 
 	lay := Layout{Grid: termGrid}
 	for i := range hud.parts {
-		lay.Place(hud.parts[i], hud.align[i])
+		lay.Render(hud.parts[i], hud.align[i])
 	}
 }
 
