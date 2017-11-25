@@ -19,19 +19,10 @@ func MakeGrid(sz point.Point) Grid {
 	return g
 }
 
-// Align serves to align text when laying it out in a grid row.
-type Align uint8
-
-const (
-	// AlignLeft aligns text to the left in a row.
-	AlignLeft Align = iota
-
-	// AlignCenter aligns text to the center in a row.
-	AlignCenter
-
-	// AlignRight aligns text to the right in a row.
-	AlignRight
-)
+// Get sets a cell in the grid.
+func (g Grid) Get(x, y int) termbox.Cell {
+	return g.Data[y*g.Size.X+x]
+}
 
 // Set sets a cell in the grid.
 func (g Grid) Set(x, y int, ch rune, fg, bg termbox.Attribute) {
@@ -83,31 +74,4 @@ func (g Grid) Copy(og Grid) {
 		}
 	}
 
-}
-
-// WriteString writes and aligns a string into a grid row.
-func (g Grid) WriteString(y int, align Align, s string) {
-	var x int
-	switch align {
-	case AlignLeft:
-		x = 0
-	case AlignCenter:
-		x = g.Size.X - len(s)/2
-		if x < 0 {
-			x = 0
-		}
-	case AlignRight:
-		x = g.Size.X - len(s)
-		if x < 0 {
-			x = 0
-		}
-	}
-	off := y*g.Size.X + x
-	for _, r := range s {
-		if off >= len(g.Data) {
-			break
-		}
-		g.Data[off].Ch = r
-		off++
-	}
 }
