@@ -2,8 +2,10 @@ package main
 
 import (
 	"log"
+	"math/rand"
 
 	"github.com/jcorbin/execs/internal/ecs"
+	"github.com/jcorbin/execs/internal/point"
 	"github.com/jcorbin/execs/internal/view"
 )
 
@@ -20,12 +22,13 @@ type world struct {
 	view.Logs
 
 	// TODO: your state here
+	grid view.Grid
 }
 
 func (w *world) Render(termGrid view.Grid) error {
 	hud := view.HUD{
-		Logs: w.Logs,
-		// World: , // TODO: render your world grid and pass it here
+		Logs:  w.Logs,
+		World: w.grid, // TODO: render your world grid and pass it here
 	}
 
 	// TODO: call hud methods to build a basic UI, e.g.:
@@ -66,7 +69,26 @@ func main() {
 
 		w.Log("Hello World Of Democraft!")
 
-		// TODO: something interesting
+		// TODO: this is just here for demonstration; replace it with something
+		// interesting!
+		w.grid = view.MakeGrid(point.Point{X: 64, Y: 32})
+		for chs, i := []rune{
+			'_', '-',
+			'=', '+',
+			'/', '?',
+			'\\', '|',
+			',', '.',
+			':', ';',
+			'"', '\'',
+			'<', '>',
+			'[', ']',
+			'{', '}',
+			'(', ')',
+			'!', '@', '#', '$',
+			'%', '^', '&', '*',
+		}, 0; i < len(w.grid.Data); i++ {
+			w.grid.Data[i].Ch = chs[rand.Intn(len(chs))]
+		}
 
 		return &w, nil
 	}); err != nil {
