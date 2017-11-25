@@ -155,6 +155,11 @@ func (plc *LayoutPlacement) setSep(ch rune) {
 
 // Try attempts to (re)resolve the placement with an other alignment.
 func (plc *LayoutPlacement) Try(align Align) bool {
+	if plc.wanted.X == 0 || plc.wanted.Y == 0 {
+		plc.ok = false
+		return false
+	}
+
 	// h-flush should default to left-align, not center
 	if align&AlignCenter == 0 && align&AlignHFlush != 0 {
 		align |= AlignLeft
