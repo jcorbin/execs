@@ -62,16 +62,16 @@ type destroyableItem interface {
 }
 
 type world struct {
-	ecs.Core
+	ui
 
 	logFile *os.File
 	logger  *log.Logger
 	rng     *rand.Rand
 
-	ui
-
 	over         bool
 	enemyCounter int
+
+	ecs.Core
 
 	Names     []string
 	Positions []point.Point
@@ -919,8 +919,8 @@ func (w *world) log(mess string, args ...interface{}) {
 	} {
 		s = strings.Replace(s, rule.old, rule.new, -1)
 	}
+	w.ui.Log(s)
 	w.logger.Printf(s)
-	w.View.Log(s)
 }
 
 func (w *world) getName(ent ecs.Entity, deflt string) string {

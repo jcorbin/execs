@@ -11,13 +11,16 @@ import (
 )
 
 type ui struct {
-	View   *view.View
+	View *view.View
+
+	view.Logs
 	prompt prompt
 	bar    prompt
 }
 
 func (ui *ui) init(v *view.View) {
 	ui.View = v
+	ui.Logs.Init(1000)
 	ui.bar.action = make([]promptAction, 0, 5)
 	ui.prompt.action = make([]promptAction, 0, 10)
 }
@@ -46,9 +49,7 @@ func (ui *ui) handle(k view.KeyEvent) (proc, handled bool, err error) {
 	return false, false, nil
 }
 
-func (w *world) HandleKey(v *view.View, k view.KeyEvent) (rerr error) {
-	w.ui.View.ClearLog()
-
+func (w *world) HandleKey(k view.KeyEvent) (rerr error) {
 	proc, handled, err := w.ui.handle(k)
 	if err != nil {
 		return err
@@ -185,22 +186,23 @@ func (ui ui) barParts() []string {
 	return parts
 }
 
-func (w *world) Render(ctx *view.Context) error {
-	ctx.SetHeader(
-		fmt.Sprintf(">%v souls v %v demons", w.Iter(ecs.All(wcSoul)).Count(), w.Iter(ecs.All(wcAI)).Count()),
-	)
-
-	it := w.Iter(ecs.All(wcSoul | wcBody))
-	footParts := make([]string, 0, it.Count()+10)
-
-	if parts := w.ui.promptParts(); len(parts) > 0 {
-		for i := range parts {
-			footParts = append(footParts, ".<"+parts[i])
-		}
+func (w *world) Render(termGrid view.Grid) error {
+	hud := view.HUD{
+		Logs:  w.ui.Logs,
+		World: w.renderViewport(termGrid.Size),
 	}
 
-	for it.Next() {
+	hud.Logs.Max = (termGrid.Size.Y - hud.World.Size.Y - 3) / 2
+	if hud.Logs.Max < hud.Logs.Min {
+		hud.Logs.Max = hud.Logs.Min
+	}
+
+	hud.HeaderF("^%v souls v %v demons", w.Iter(ecs.All(wcSoul)).Count(), w.Iter(ecs.All(wcAI)).Count())
+
+	for it := w.Iter(ecs.All(wcSoul | wcBody)); it.Next(); {
 		bo := w.bodies[it.ID()]
+
+		// TODO: a charSummary Renderable
 
 		armor, damage := 0, 0
 		hpParts := make([]string, 0, bo.Len())
@@ -234,20 +236,32 @@ func (w *world) Render(ctx *view.Context) error {
 		//  _/   \_
 
 		hp, maxHP := bo.HPRange()
-		footParts = append(footParts,
-			fmt.Sprintf(".>Charge: %v", charge),
-			fmt.Sprintf(".>HP(%v/%v): %s", hp, maxHP, strings.Join(hpParts, " ")),
-			fmt.Sprintf(".>Armor(%v): %s", armor, strings.Join(armorParts, " ")),
-			fmt.Sprintf(".>Damage(%v): %s", damage, strings.Join(damageParts, " ")),
-		)
+
+		hud.FooterF(".>Damage(%v): %s", damage, strings.Join(damageParts, " "))
+		hud.FooterF(".>Armor(%v): %s", armor, strings.Join(armorParts, " "))
+		hud.FooterF(".>HP(%v/%v): %s", hp, maxHP, strings.Join(hpParts, " "))
+		hud.FooterF(".>Charge: %v", charge)
 	}
 
+	// TODO: action bar Renderable
 	if parts := w.ui.barParts(); len(parts) > 0 {
-		footParts = append(footParts, parts...)
+		for i := 0; i < len(parts); i++ {
+			hud.FooterF(parts[i])
+		}
 	}
 
-	ctx.SetFooter(footParts...)
+	// TODO: prompt should be a Renderable
+	if parts := w.ui.promptParts(); len(parts) > 0 {
+		for i := len(parts) - 1; i >= 0; i-- {
+			hud.FooterF(".<" + parts[i])
+		}
+	}
 
+	hud.Render(termGrid)
+	return nil
+}
+
+func (w *world) renderViewport(max point.Point) view.Grid {
 	// collect world extent, and compute a viewport focus position
 	var (
 		bbox  point.Box
@@ -273,19 +287,13 @@ func (w *world) Render(ctx *view.Context) error {
 		offset.Y -= ofbox.TopLeft.Y
 	}
 
-	if sz := ofbox.Size().Min(ctx.Avail); !sz.Equal(ctx.Grid.Size) {
-		ctx.Grid = view.MakeGrid(sz)
-	} else {
-		for i := range ctx.Grid.Data {
-			ctx.Grid.Data[i] = termbox.Cell{}
-		}
-	}
-
-	zVals := make([]uint8, len(ctx.Grid.Data))
+	// TODO: re-use
+	grid := view.MakeGrid(ofbox.Size().Min(max))
+	zVals := make([]uint8, len(grid.Data))
 
 	for it := w.Iter(ecs.Clause(wcPosition, wcGlyph|wcBG)); it.Next(); {
 		pos := w.Positions[it.ID()].Add(offset)
-		if pos.Less(point.Zero) || !pos.Less(ctx.Grid.Size) {
+		if pos.Less(point.Zero) || !pos.Less(grid.Size) {
 			continue
 		}
 		var (
@@ -332,7 +340,7 @@ func (w *world) Render(ctx *view.Context) error {
 			}
 		}
 
-		i := pos.Y*ctx.Grid.Size.X + pos.X
+		i := pos.Y*grid.Size.X + pos.X
 		if i < 0 || i >= len(zVals) {
 			// TODO: debug
 			continue
@@ -349,11 +357,11 @@ func (w *world) Render(ctx *view.Context) error {
 			if bg != 0 {
 				bg++
 			}
-			ctx.Grid.Merge(pos.X, pos.Y, ch, fg, bg)
+			grid.Merge(pos.X, pos.Y, ch, fg, bg)
 		}
 	}
 
-	return nil
+	return grid
 }
 
 func (w *world) itemPrompt(pr prompt, ent ecs.Entity) (prompt, bool) {
