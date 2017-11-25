@@ -153,36 +153,32 @@ func (lay *Layout) Place(ren Renderable, align Align) bool {
 }
 
 func (lay Layout) render(start int, have point.Point, ren Renderable, align Align) {
-	grid := MakeGrid(have)
-	ren.Render(grid)
+	off, used := 0, []int(nil)
 
 	switch align & AlignCenter {
 	case AlignLeft:
-		off := maxInt(lay.lused[start : start+have.Y]...)
-		lay.copy(grid, start, off)
-		for i := start; i < have.Y; i++ {
-			lay.lused[i] += have.X
-			lay.avail[i] -= have.X
-		}
+		off = maxInt(lay.lused[start : start+have.Y]...)
+		used = lay.lused
 
 	case AlignRight:
-		off := lay.Grid.Size.X - have.X - maxInt(lay.rused[start:start+have.Y]...)
-		lay.copy(grid, start, off)
-		for i := start; i < have.Y; i++ {
-			lay.rused[i] += have.X
-			lay.avail[i] -= have.X
-		}
+		off = lay.Grid.Size.X - have.X - maxInt(lay.rused[start:start+have.Y]...)
+		used = lay.rused
 
 	default: // NOTE: defaults to AlignCenter:
 		gap := lay.Grid.Size.X - have.X
 		gap -= maxInt(lay.lused[start : start+have.Y]...)
 		gap -= maxInt(lay.rused[start : start+have.Y]...)
-		off := gap / 2
-		lay.copy(grid, start, off)
-		for i := start; i < have.Y; i++ {
-			lay.cused[i] += have.X
-			lay.avail[i] -= have.X
-		}
+		off = gap / 2
+		used = lay.cused
+	}
+
+	grid := MakeGrid(have)
+	ren.Render(grid)
+	lay.copy(grid, start, off)
+
+	for i := start; i < have.Y; i++ {
+		used[i] += have.X
+		lay.avail[i] -= have.X
 	}
 }
 
