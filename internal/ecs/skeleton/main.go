@@ -7,6 +7,7 @@ import (
 	"github.com/jcorbin/execs/internal/ecs"
 	"github.com/jcorbin/execs/internal/point"
 	"github.com/jcorbin/execs/internal/view"
+	"github.com/jcorbin/execs/internal/view/hud"
 )
 
 // const (
@@ -19,14 +20,14 @@ import (
 
 type world struct {
 	ecs.Core
-	view.Logs
+	hud.Logs
 
 	// TODO: your state here
 	grid view.Grid
 }
 
 func (w *world) Render(termGrid view.Grid) error {
-	hud := view.HUD{
+	hud := hud.HUD{
 		Logs:  w.Logs,
 		World: w.grid, // TODO: render your world grid and pass it here
 	}
