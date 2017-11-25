@@ -38,19 +38,18 @@ func (hud HUD) Render(termGrid Grid) {
 	}
 }
 
-// AddHeaderF adds a static string part to the header; the mess string may
-// begin with layout markers such as "<^>" to cause left, center, right
-// alignment; mess may also start with "." to cause an alignment flush
-// (otherwise the layout tries to pack as many parts onto one line as
-// possible).
-func (hud *HUD) AddHeaderF(mess string, args ...interface{}) {
+// HeaderF adds a static string part to the header; the mess string may begin
+// with layout markers such as "<^>" to cause left, center, right alignment;
+// mess may also start with "." to cause an alignment flush (otherwise the
+// layout tries to pack as many parts onto one line as possible).
+func (hud *HUD) HeaderF(mess string, args ...interface{}) {
 	align, n := readLayoutOpts(mess)
 	hud.AddRenderable(RenderString(mess[n:], args...), align|AlignTop)
 }
 
-// AddFooterF adds a static string to the header; the same alignment marks are
+// FooterF adds a static string to the header; the same alignment marks are
 // available as to AddHeader.
-func (hud *HUD) AddFooterF(mess string, args ...interface{}) {
+func (hud *HUD) FooterF(mess string, args ...interface{}) {
 	align, n := readLayoutOpts(mess)
 	hud.AddRenderable(RenderString(mess[n:], args...), align|AlignBottom)
 }
