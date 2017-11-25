@@ -189,16 +189,16 @@ func (lay Layout) render(start int, have point.Point, ren Renderable, align Alig
 	}
 }
 
-func (lay Layout) copy(grid Grid, row, off int) {
-	rem := lay.Grid.Size.X - grid.Size.X
-	li, gi := row*lay.Grid.Size.X+off, 0
-	for li < len(lay.Grid.Data) && gi < len(grid.Data) {
-		for x := 0; x < grid.Size.X; x++ {
-			lay.Grid.Data[li] = grid.Data[gi]
+func (lay Layout) copy(g Grid, row, off int) {
+	ix := 0
+	for y := 0; y < g.Size.Y; y, row = y+1, row+1 {
+		li := row*lay.Grid.Size.X + off
+		gi := y*g.Size.X + ix
+		for x := ix; x < have.X; x++ {
+			lay.Grid.Data[li] = g.Data[gi]
 			li++
 			gi++
 		}
-		li += rem
 	}
 }
 
