@@ -138,7 +138,8 @@ func (logs *Logs) Log(mess string, args ...interface{}) {
 	mess = fmt.Sprintf(mess, args...)
 	if len(logs.Buffer) < cap(logs.Buffer) {
 		logs.Buffer = append(logs.Buffer, mess)
+	} else {
+		copy(logs.Buffer, logs.Buffer[1:])
+		logs.Buffer[len(logs.Buffer)-1] = mess
 	}
-	copy(logs.Buffer, logs.Buffer[1:])
-	logs.Buffer[len(logs.Buffer)-1] = mess
 }
