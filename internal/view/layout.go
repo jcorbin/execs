@@ -265,25 +265,58 @@ func (lay Layout) findAvailRow(
 	cused := align&AlignCenter != 0
 	lflush := align&AlignHFlush != 0 && align&AlignCenter == AlignLeft
 	rflush := align&AlignHFlush != 0 && align&AlignCenter == AlignRight
-	for start, end := init, 0; start >= 0 && end >= 0 && start < len(lay.avail) && end < len(lay.avail); {
-		if lay.avail[end] < needed.X || (cused && lay.cused[end] != 0) {
-			end += dir
-			start, have = end, point.Zero
-			continue
+
+	start = init
+seekStart:
+	have = point.Zero
+	for start >= 0 && start < len(lay.avail) {
+		if lay.avail[start] >= needed.X &&
+			!(cused && lay.cused[start] > 0) &&
+			!(lflush && lay.lused[start] > 0) &&
+			!(rflush && lay.rused[start] > 0) {
+			have.X = minInt(wanted.X, lay.avail[start])
+			goto seekEnd
 		}
-		if have.X == 0 {
-			if (!lflush || lay.lused[end] == 0) && (!rflush || lay.rused[end] == 0) {
-				have.X = lay.avail[end]
+		start += dir
+	}
+	return start, have, false
+
+seekEnd:
+	end := start + dir
+	have.Y++
+	for end >= 0 && end < len(lay.avail) {
+		if have.Y >= wanted.Y {
+			break
+		}
+		if lay.avail[end] < needed.X ||
+			(cused && lay.cused[end] > 0) ||
+			(lflush && lay.lused[end] > 0) ||
+			(rflush && lay.rused[end] > 0) {
+			if have.Y >= needed.Y {
+				break
 			}
-		} else if lay.avail[end] < have.X {
+			start += dir
+			goto seekStart
+		}
+		if lay.avail[end] < have.X {
 			have.X = lay.avail[end]
 		}
-		if have.Y = end - start + 1; have.Y >= needed.Y {
-			return start, have, true
-		}
+		have.Y++
 		end += dir
 	}
-	return 0, point.Zero, false
+
+	found = have.Y >= needed.Y
+	return start, have, found
+}
+
+func minInt(ints ...int) int {
+	min := ints[0]
+	for i := 1; i < len(ints); i++ {
+		if n := ints[i]; n < min {
+			min = n
+		}
+	}
+	return min
 }
 
 func maxInt(ints ...int) int {
