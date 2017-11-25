@@ -26,7 +26,7 @@ func (hud HUD) Render(termGrid Grid) {
 	if len(hud.Logs.Buffer) > 0 {
 		// TODO: scrolling
 		if hud.Logs.Align == 0 {
-			hud.AddRenderable(hud.Logs, AlignTop)
+			hud.AddRenderable(hud.Logs, AlignTop|AlignCenter)
 		} else {
 			hud.AddRenderable(hud.Logs, hud.Logs.Align)
 		}
@@ -92,7 +92,7 @@ type Logs struct {
 
 // Init initializes the log buffer and metadata, allocating the given capacity.
 func (logs *Logs) Init(logCap int) {
-	logs.Align = AlignTop
+	logs.Align = AlignTop | AlignCenter
 	logs.Min = 5
 	logs.Max = 10
 	logs.Buffer = make([]string, 0, logCap)
