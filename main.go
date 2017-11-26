@@ -395,10 +395,14 @@ func (w *world) getCharge(ent ecs.Entity) (charge int) {
 
 func (w *world) applyMoves() {
 	// TODO: better resolution strategy based on connected components
-	w.moves.UpsertMany(ecs.All(movPending), func(
+	w.moves.UpsertMany(ecs.All(movPending), nil, func(
 		r ecs.RelationType, ent, a, b ecs.Entity,
 		emit func(r ecs.RelationType, a, b ecs.Entity) ecs.Entity,
 	) {
+		if ent == ecs.NilEntity {
+			return
+		}
+
 		defer func() {
 			pos := w.Positions[a.ID()]
 			for it := w.Iter(ecs.All(wcItem | wcPosition)); it.Next(); {
