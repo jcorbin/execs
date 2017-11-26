@@ -559,7 +559,7 @@ func TestLayout(t *testing.T) {
 					lay.Render(RenderString(v), sa.a)
 				}
 			}
-			assert.Equal(t, tc.expected, grid2lines(lay.Grid))
+			assert.Equal(t, tc.expected, lay.Grid.Lines(' '))
 		})
 	}
 }
@@ -593,22 +593,4 @@ func (sh shape) Render(g Grid) {
 			g.WriteString(0, y, s)
 		}
 	}
-}
-
-func grid2lines(g Grid) []string {
-	lines := make([]string, g.Size.Y)
-	i := 0
-	for y := 0; y < g.Size.Y; y++ {
-		line := make([]rune, g.Size.X)
-		for x := 0; x < g.Size.X; x++ {
-			if ch := g.Data[i].Ch; ch != 0 {
-				line[x] = ch
-			} else {
-				line[x] = ' '
-			}
-			i++
-		}
-		lines[y] = string(line)
-	}
-	return lines
 }

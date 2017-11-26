@@ -109,3 +109,22 @@ func (g Grid) WriteStringRTL(x, y int, mess string, args ...interface{}) int {
 	}
 	return j - i
 }
+
+// Lines returns a slice of row strings from the grid, filling in any
+// zero runes with the given one.
+func (g Grid) Lines(fillZero rune) []string {
+	lines := make([]string, g.Size.Y)
+	line := make([]rune, g.Size.X)
+	for y, i := 0, 0; y < g.Size.Y; y++ {
+		for x := 0; x < g.Size.X; x++ {
+			if ch := g.Data[i].Ch; ch != 0 {
+				line[x] = ch
+			} else {
+				line[x] = fillZero
+			}
+			i++
+		}
+		lines[y] = string(line)
+	}
+	return lines
+}
