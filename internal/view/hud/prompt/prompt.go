@@ -46,7 +46,7 @@ type promptAction struct {
 const (
 	headerOverhead = 1
 	headerFmt      = "%s:"
-	exitRune       = 0
+	exitRune       = '0'
 	exitLeftMess   = "0) Exit Menu"
 	exitRightMess  = "Exit Menu (0"
 	actionOverhead = 3
@@ -138,10 +138,12 @@ func (pr *Prompt) Handle(k view.KeyEvent) (handled, canceled, required bool) {
 
 	// TODO: pagination support
 
-	for i := range pr.action {
-		if k.Ch == pr.action[i].ch {
-			*pr, required = pr.action[i].run.RunPrompt(*pr)
-			return true, false, required
+	if k.Ch != 0 {
+		for i := range pr.action {
+			if k.Ch == pr.action[i].ch {
+				*pr, required = pr.action[i].run.RunPrompt(*pr)
+				return true, false, required
+			}
 		}
 	}
 
