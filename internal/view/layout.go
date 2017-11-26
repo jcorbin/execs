@@ -175,14 +175,14 @@ func (plc *LayoutPlacement) Try(align Align) bool {
 
 	default: // NOTE: defaults to AlignMiddle:
 		mid := len(plc.lay.avail) / 2
-		plc.find(mid, -1)
+		plc.find(mid, 1)
 		if !plc.ok {
-			plc.find(mid, 1)
+			plc.find(mid, -1)
 		} else {
 			alt := *plc
-			alt.find(mid, 1)
+			alt.find(mid, -1)
 			if alt.ok {
-				if ud, ld := plc.start-mid, mid-alt.start; ud > ld {
+				if ld, ud := mid-plc.start, alt.start-mid; ud < ld {
 					*plc = alt
 				}
 			}
@@ -247,6 +247,10 @@ seekEnd:
 		end += dir
 	}
 
+	if end < plc.start {
+		plc.start = end + 1
+	}
+
 	plc.ok = plc.have.Y >= plc.needed.Y
 }
 
@@ -286,16 +290,15 @@ func (plc *LayoutPlacement) Render() {
 
 	grid := MakeGrid(plc.have)
 	plc.ren.Render(grid)
-	plc.copy(grid, off)
-	delta += plc.have.X
+	delta += plc.have.X + plc.copy(grid, off)
 
-	for y, i := 0, plc.start; y < grid.Size.Y; y, i = y+1, i+1 {
-		used[i] = delta
-		plc.lay.avail[i] -= plc.have.X
+	for y, i := plc.start, 0; i < plc.have.Y; y, i = y+1, i+1 {
+		used[y] = delta
+		plc.lay.avail[y] -= plc.have.X
 	}
 }
 
-func (plc *LayoutPlacement) copy(g Grid, off int) {
+func (plc *LayoutPlacement) copy(g Grid, off int) (delta int) {
 	var (
 		left   = plc.align&AlignCenter == AlignLeft
 		right  = plc.align&AlignCenter == AlignRight
@@ -309,11 +312,12 @@ func (plc *LayoutPlacement) copy(g Grid, off int) {
 
 	if pad = plc.sep; pad.Ch != 0 {
 		if lpad, rpad := left && !lflush, right && !rflush; lpad {
-			for y := 0; y < plc.have.Y; y, y = y+1, plc.start+1 {
-				li := plc.start*plc.lay.Grid.Size.X + off
+			for y, i := plc.start, 0; i < plc.have.Y; y, i = y+1, i+1 {
+				li := y*plc.lay.Grid.Size.X + off
 				plc.lay.Grid.Data[li] = pad
 			}
 			off++
+			delta++
 		} else if rpad {
 			off--
 		} else {
@@ -321,9 +325,9 @@ func (plc *LayoutPlacement) copy(g Grid, off int) {
 		}
 	}
 
-	for y := 0; y < plc.have.Y; y = y + 1 {
-		li := plc.start*plc.lay.Grid.Size.X + off
-		gi := y*plc.have.X + ix
+	for y, i := plc.start, 0; i < plc.have.Y; y, i = y+1, i+1 {
+		li := y*plc.lay.Grid.Size.X + off
+		gi := i*plc.have.X + ix
 		for x := ix; x < plc.have.X; x++ {
 			plc.lay.Grid.Data[li] = g.Data[gi]
 			li++
@@ -333,11 +337,14 @@ func (plc *LayoutPlacement) copy(g Grid, off int) {
 
 	if pad.Ch != 0 {
 		off += plc.have.X
-		for y := 0; y < plc.have.Y; y, y = y+1, plc.start+1 {
-			li := plc.start*plc.lay.Grid.Size.X + off
+		for y, i := plc.start, 0; i < plc.have.Y; y, i = y+1, i+1 {
+			li := y*plc.lay.Grid.Size.X + off
 			plc.lay.Grid.Data[li] = pad
 		}
+		delta++
 	}
+
+	return delta
 }
 
 func trim(g Grid, off int, align Align) (_, ix int, have point.Point) {
