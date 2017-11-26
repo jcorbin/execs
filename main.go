@@ -540,20 +540,26 @@ func (w *world) aiTarget(ai ecs.Entity) (point.Point, bool) {
 	return goalPos, found
 }
 
+func (w *world) scoreAIGoal(ai, goal ecs.Entity) int {
+	const quadLimit = 64
+
+	myPos := w.Positions[ai.ID()]
+	goalPos := w.Positions[goal.ID()]
+	score := goalPos.Sub(myPos).SumSQ()
+	if goal.Type().All(wcItem) {
+		return (quadLimit - score) * quadLimit
+	}
+	return score
+}
+
 func (w *world) chooseAIGoal(ai ecs.Entity) ecs.Entity {
 	// TODO: doesn't always cause progress, get stuck on the edge sometimes
-	myPos := w.Positions[ai.ID()]
 	goal, sum := ecs.NilEntity, 0
 	for it := w.Iter(ecs.All(collMask)); it.Next(); {
 		if it.Type().All(combatMask) {
 			continue
 		}
-		pos := w.Positions[it.ID()]
-		score := pos.Sub(myPos).SumSQ()
-		if it.Type().All(wcItem) {
-			score = (64 - score) * 64
-		}
-		if score > 0 {
+		if score := w.scoreAIGoal(ai, it.Entity()); score > 0 {
 			sum += score
 			if sum <= 0 || w.rng.Intn(sum) < score {
 				goal = it.Entity()
