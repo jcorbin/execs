@@ -533,6 +533,14 @@ func (w *world) aiTarget(ai ecs.Entity) (point.Point, bool) {
 			}
 			found = true
 
+			// see if we can do better
+			alt := w.chooseAIGoal(ai)
+			score := w.scoreAIGoal(ai, goal)
+			altScore := w.scoreAIGoal(ai, alt)
+			if w.rng.Intn(score+altScore) < altScore {
+				goal, goalPos = alt, w.Positions[alt.ID()]
+			}
+
 			// keep or update
 			emit(mrGoal, ai, goal)
 		})
