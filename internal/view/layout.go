@@ -310,6 +310,7 @@ func (plc *LayoutPlacement) copy(g Grid, off int) (delta int) {
 
 	off, ix, plc.have = trim(g, off, plc.align)
 
+	// pad left
 	if pad = plc.sep; pad.Ch != 0 {
 		if lpad, rpad := left && !lflush, right && !rflush; lpad {
 			for y, i := plc.start, 0; i < plc.have.Y; y, i = y+1, i+1 {
@@ -325,6 +326,7 @@ func (plc *LayoutPlacement) copy(g Grid, off int) (delta int) {
 		}
 	}
 
+	// actual copy
 	for y, i := plc.start, 0; i < plc.have.Y; y, i = y+1, i+1 {
 		li := y*plc.lay.Grid.Size.X + off
 		gi := i*plc.have.X + ix
@@ -335,6 +337,7 @@ func (plc *LayoutPlacement) copy(g Grid, off int) (delta int) {
 		}
 	}
 
+	// pad right
 	if pad.Ch != 0 {
 		off += plc.have.X
 		for y, i := plc.start, 0; i < plc.have.Y; y, i = y+1, i+1 {
