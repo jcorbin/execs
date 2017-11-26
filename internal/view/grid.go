@@ -86,10 +86,10 @@ func (g Grid) WriteString(x, y int, mess string, args ...interface{}) int {
 	}
 	i := y*g.Size.X + x
 	j := i
-	for ; x < g.Size.X; x, j = x+1, j+1 {
+	for ; len(mess) > 0 && x < g.Size.X; x, j = x+1, j+1 {
 		r, n := utf8.DecodeRuneInString(mess)
 		mess = mess[n:]
-		g.Data[i].Ch = r
+		g.Data[j].Ch = r
 	}
 	return j - i
 }
@@ -102,10 +102,10 @@ func (g Grid) WriteStringRTL(x, y int, mess string, args ...interface{}) int {
 	}
 	i := y*g.Size.X + x
 	j := i
-	for ; x >= 0; x, j = x-1, j-1 {
+	for ; len(mess) > 0 && x >= 0; x, j = x-1, j-1 {
 		r, n := utf8.DecodeLastRuneInString(mess)
 		mess = mess[:len(mess)-n]
-		g.Data[i].Ch = r
+		g.Data[j].Ch = r
 	}
 	return j - i
 }
