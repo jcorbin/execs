@@ -711,10 +711,17 @@ func (w *world) maybeSpawn() {
 	}
 	bo := w.bodies[enemy.ID()]
 
+	totalAgro := 0
+	for cur := w.moves.Cursor(ecs.AllRel(mrAgro), nil); cur.Scan(); {
+		totalAgro += w.moves.n[cur.Entity().ID()]
+	}
+
 	totalHP := 0
 	totalDmg := 0
+	combatCount := 0
 	for it := w.Iter(ecs.All(combatMask | wcInput)); it.Next(); {
 		if !it.Type().All(wcWaiting) {
+			combatCount++
 			bo := w.bodies[it.ID()]
 			if it.Type().All(wcSoul) {
 				hp, maxHP := bo.HPRange()
@@ -727,7 +734,11 @@ func (w *world) maybeSpawn() {
 		}
 	}
 
-	sum := 10*totalHP + 100*totalDmg
+	agroDeficit := combatCount*30 - totalAgro
+	sum := totalHP + totalDmg - agroDeficit
+	if sum < 0 {
+		sum = 0
+	}
 	if hp := bo.HP(); w.rng.Intn(sum+hp) < hp {
 		enemy.Delete(wcWaiting)
 		enemy.Add(wcPosition | wcCollide | wcInput | wcAI)
