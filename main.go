@@ -546,6 +546,9 @@ func (w *world) scoreAIGoal(ai, goal ecs.Entity) int {
 	myPos := w.Positions[ai.ID()]
 	goalPos := w.Positions[goal.ID()]
 	score := goalPos.Sub(myPos).SumSQ()
+	if score > quadLimit {
+		return 0
+	}
 	if goal.Type().All(wcItem) {
 		return (quadLimit - score) * quadLimit
 	}
