@@ -332,4 +332,37 @@ called `view.Context`, so that's progress I guess). The `HUD` provides a
 conceit of a "header", "footer" and "scrolling capped log" on top of a world
 map.
 
+### [Fourteen](../../tree/fourteen)
+
+Render(ableing) the world!
+
+Today was mostly spent reworking the main game code in terms of the new
+hud-based view system; by which I mean, today was mostly spent writing tests
+for and debugging the new layout engine...
+
+- ECS progres:
+  - Relation.UpsertMany became more useful (where function, and ex-nihilo inserts)
+  - UpsertOne now derefs its args to verify them
+
+- View progress:
+  - ejected hud into its own package
+  - promoted main's prompt system into the internal hud package
+  - Grid regained WriteString methods
+  - many layout fixes, and many more test cases
+  - exported {Min,Max}Int through moremath
+  - the hud now trys to leave a gap between the world grid and the logs, rather
+    than gratuitously running over
+
+- Main Game Progress
+  - ported to the new hud system, made everything Renderable (action bar, new
+    shared prompt system, and body sumary)
+  - AIs now re-evaluate their goals every time (with a 16x inertia bonus for
+    the prior goal); this causes them to be much more aggressive about looting
+    corpses
+  - the spawn logic gained an "agro deficit" term, that discounts the
+    `hp+damage` if there's not enough hate in the world (making it more likely
+    that something will spawn if there's not enough unresolved conflict)
+  - unified goal setting under an `UpsertMany` from it's prior "lookup, maybe
+    delete, then insert if we didn't have one"
+
 [es-beta]: http://entity-systems.wikidot.com/rdbms-beta
