@@ -1,6 +1,9 @@
 package view
 
 import (
+	"fmt"
+	"unicode/utf8"
+
 	termbox "github.com/nsf/termbox-go"
 
 	"github.com/jcorbin/execs/internal/point"
@@ -73,5 +76,36 @@ func (g Grid) Copy(og Grid) {
 			j++
 		}
 	}
+}
 
+// WriteString writes a string into the grid at the given position, returning
+// how many cells were affected.
+func (g Grid) WriteString(x, y int, mess string, args ...interface{}) int {
+	if len(args) > 0 {
+		mess = fmt.Sprintf(mess, args...)
+	}
+	i := y*g.Size.X + x
+	j := i
+	for ; x < g.Size.X; x, j = x+1, j+1 {
+		r, n := utf8.DecodeRuneInString(mess)
+		mess = mess[n:]
+		g.Data[i].Ch = r
+	}
+	return j - i
+}
+
+// WriteStringRTL is like WriteString except it gose Right-To-Left (in both the
+// string and the grid).
+func (g Grid) WriteStringRTL(x, y int, mess string, args ...interface{}) int {
+	if len(args) > 0 {
+		mess = fmt.Sprintf(mess, args...)
+	}
+	i := y*g.Size.X + x
+	j := i
+	for ; x >= 0; x, j = x-1, j-1 {
+		r, n := utf8.DecodeLastRuneInString(mess)
+		mess = mess[:len(mess)-n]
+		g.Data[i].Ch = r
+	}
+	return j - i
 }
