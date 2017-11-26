@@ -225,6 +225,8 @@ func (rel *Relation) UpsertOne(
 	sert func(ent Entity),
 	reduce func(accum, next Entity),
 ) (updated, inserted, destroyed int) {
+	_ = rel.aCore.Deref(a)
+	_ = rel.bCore.Deref(b)
 	if fixIndex := rel.deferIndexing(); fixIndex != nil {
 		defer fixIndex()
 	}
