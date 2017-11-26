@@ -31,13 +31,14 @@ func (logs Logs) RenderSize() (wanted, needed point.Point) {
 	wanted.X = 1
 	wanted.Y = moremath.MinInt(len(logs.Buffer), logs.Max)
 	for i := range logs.Buffer {
-		if n := utf8.RuneCountInString(logs.Buffer[i]); n > wanted.X {
-			wanted.X = n
+		if n := utf8.RuneCountInString(logs.Buffer[i]); n > needed.X {
+			needed.X = n
 		}
 	}
 	if needed.Y > wanted.Y {
 		needed.Y = wanted.Y
 	}
+	wanted.X = needed.X
 	return wanted, needed
 }
 
