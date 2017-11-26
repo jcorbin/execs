@@ -277,24 +277,6 @@ func (bs bodySummary) Render(g view.Grid) {
 	}
 }
 
-func grid2lines(g view.Grid) []string {
-	lines := make([]string, g.Size.Y)
-	i := 0
-	for y := 0; y < g.Size.Y; y++ {
-		line := make([]rune, g.Size.X)
-		for x := 0; x < g.Size.X; x++ {
-			if ch := g.Data[i].Ch; ch != 0 {
-				line[x] = ch
-			} else {
-				line[x] = 'ø'
-			}
-			i++
-		}
-		lines[y] = string(line)
-	}
-	return lines
-}
-
 func (ui *ui) init(v *view.View) {
 	ui.View = v
 	ui.Logs.Init(1000)
