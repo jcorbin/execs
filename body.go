@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jcorbin/execs/internal/ecs"
+	"github.com/jcorbin/execs/internal/view/hud/prompt"
 )
 
 // TODO: more body parts: thigh/calf, forearm/upper, neck, fingers, toes, organs, joints, items
@@ -395,7 +396,7 @@ func (rem bodyRemains) describeScavenge() string {
 		rem.bo.dmg[rem.part.ID()])
 }
 
-func (rem bodyRemains) scavenge(pr prompt) (prompt, bool) {
+func (rem bodyRemains) scavenge(pr prompt.Prompt) (prompt.Prompt, bool) {
 	defer rem.part.Destroy()
 
 	entBo := rem.w.bodies[rem.ent.ID()]
@@ -423,6 +424,6 @@ func (rem bodyRemains) scavenge(pr prompt) (prompt, bool) {
 		defer rem.item.Destroy()
 	}
 
-	pr, _ = rem.w.itemPrompt(pr.unwind(), rem.ent)
+	pr, _ = rem.w.itemPrompt(pr.Unwind(), rem.ent)
 	return pr, false
 }

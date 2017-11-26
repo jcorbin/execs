@@ -2,34 +2,311 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/jcorbin/execs/internal/ecs"
+	"github.com/jcorbin/execs/internal/moremath"
 	"github.com/jcorbin/execs/internal/point"
 	"github.com/jcorbin/execs/internal/view"
+	"github.com/jcorbin/execs/internal/view/hud"
+	"github.com/jcorbin/execs/internal/view/hud/prompt"
 	termbox "github.com/nsf/termbox-go"
 )
+
+type actionItem interface {
+	prompt.Runner
+	label() string
+}
+
+type keyedActionItem interface {
+	actionItem
+	key() rune
+}
+
+type actionBar struct {
+	prompt.Prompt
+	items []actionItem
+	sep   string
+}
+
+type labeldRunner struct {
+	prompt.Runner
+	lb string
+}
+
+func (lr labeldRunner) label() string { return lr.lb }
+
+func labeled(run prompt.Runner, mess string, args ...interface{}) actionItem {
+	if len(args) > 0 {
+		mess = fmt.Sprintf(mess, args...)
+	}
+	return labeldRunner{run, mess}
+}
+
+func (ab *actionBar) reset() {
+	ab.Prompt = ab.Prompt.Unwind()
+}
+
+func (ab *actionBar) addAction(ai actionItem) {
+	ab.setAction(len(ab.items), ai)
+}
+
+func (ab *actionBar) removeLabel(mess string) {
+	for i := range ab.items {
+		if ab.items[i].label() == mess {
+			if j := i + 1; j < len(ab.items) {
+				copy(ab.items[i:], ab.items[j:])
+			}
+			ab.items = ab.items[:len(ab.items)-1]
+			return
+		}
+	}
+}
+
+func (ab *actionBar) replaceLabel(mess string, ai actionItem) {
+	for i := range ab.items {
+		if ab.items[i].label() == mess {
+			ab.setAction(i, ai)
+			return
+		}
+	}
+	ab.addAction(ai)
+}
+
+func (ab *actionBar) setAction(i int, ai actionItem) {
+	if i >= len(ab.items) {
+		items := make([]actionItem, i+1)
+		copy(items, ab.items)
+		ab.items = items
+	}
+
+	ab.items[i] = ai
+
+	ab.Prompt.Clear()
+	for i, ai := range ab.items {
+		if r := ab.rune(i); r != 0 {
+			ab.AddAction(r, ai, ai.label())
+		}
+	}
+}
+
+func (ab actionBar) rune(i int) rune {
+	ai := ab.items[i]
+	if ai == nil {
+		return 0
+	}
+	if kai, ok := ai.(keyedActionItem); ok {
+		return kai.key()
+	} else if i < 9 {
+		return '1' + rune(i)
+	}
+	return 0
+}
+
+func (ab actionBar) label(i int) string {
+	ai := ab.items[i]
+	if r := ab.rune(i); r != 0 {
+		return fmt.Sprintf("%s|%s", ai.label(), string(r))
+	}
+	return fmt.Sprintf("%s|Ø", ai.label())
+}
+
+func (ab *actionBar) RenderSize() (wanted, needed point.Point) {
+	if ab.Prompt.Len() == 0 {
+		return
+	}
+	if !ab.Prompt.IsRoot() {
+		return ab.Prompt.RenderSize()
+	}
+	if len(ab.items) == 0 {
+		return
+	}
+
+	i := 0
+	wanted.X = utf8.RuneCountInString(ab.label(i))
+	needed.X = wanted.X
+	wanted.Y = len(ab.items)
+	needed.Y = len(ab.items)
+	i++
+
+	nsep := utf8.RuneCountInString(ab.sep)
+	for ; i < len(ab.items); i++ {
+		n := utf8.RuneCountInString(ab.label(i))
+		wanted.X += nsep
+		wanted.X += n
+		if n > needed.X {
+			needed.X = n
+		}
+	}
+
+	return wanted, needed
+}
+
+func (ab *actionBar) Render(g view.Grid) {
+	if !ab.Prompt.IsRoot() {
+		ab.Prompt.Render(g)
+		return
+	}
+
+	// TODO: maybe use EITHER one row OR one column, not a mix (grid of action
+	// items)
+
+	x, y, i := 0, 0, 0
+	x += g.WriteString(x, y, ab.label(i))
+	i++
+	// TODO: missing seps
+	for ; i < len(ab.items); i++ {
+		lb := ab.label(i)
+		if rem := g.Size.X - x; rem >= utf8.RuneCountInString(ab.sep)+utf8.RuneCountInString(lb) {
+			x += g.WriteString(x, y, ab.sep)
+			x += g.WriteString(x, y, lb)
+		} else {
+			y++
+			x = g.WriteString(0, y, lb)
+		}
+	}
+}
+
+type worldItemAction struct {
+	w         *world
+	item, ent ecs.Entity
+}
+
+func (wia worldItemAction) addAction(pr *prompt.Prompt, ch rune) bool {
+	name := wia.w.getName(wia.item, "unknown item")
+	return pr.AddAction(ch, wia, name)
+}
+
+func (wia worldItemAction) RunPrompt(pr prompt.Prompt) (prompt.Prompt, bool) {
+	if item := wia.w.items[wia.item.ID()]; item != nil {
+		return item.interact(pr, wia.w, wia.item, wia.ent)
+	}
+	return pr.Unwind(), false
+}
 
 type ui struct {
 	View *view.View
 
-	view.Logs
-	prompt prompt
-	bar    prompt
+	hud.Logs
+	prompt prompt.Prompt
+	bar    actionBar
+}
+
+type bodySummary struct {
+	w   *world
+	bo  *body
+	ent ecs.Entity
+	a   view.Align
+
+	armor, damage, charge int
+	hp, maxHP             int
+	hpParts               []string
+	armorParts            []string
+	damageParts           []string
+	chargeParts           []string
+}
+
+func makeBodySummary(w *world, ent ecs.Entity) view.Renderable {
+	bs := bodySummary{
+		w:   w,
+		bo:  w.bodies[ent.ID()],
+		ent: ent,
+	}
+	bs.build()
+	return bs
+}
+
+func (bs *bodySummary) reset() {
+	n := bs.bo.Len() + 1
+	bs.armor, bs.damage, bs.charge = 0, 0, 0
+	bs.hpParts = nstrings(1, n, bs.hpParts)
+	bs.armorParts = nstrings(1, n, bs.armorParts)
+	bs.damageParts = nstrings(1, n, bs.damageParts)
+	bs.chargeParts = nstrings(1, 1, bs.chargeParts)
+}
+
+func (bs *bodySummary) build() {
+	bs.reset()
+
+	bs.charge = bs.w.getCharge(bs.ent)
+	for gt := bs.bo.rel.Traverse(ecs.AllRel(brControl), ecs.TraverseDFS); gt.Traverse(); {
+		id := gt.Node().ID()
+		hp := bs.bo.hp[id]
+		bs.hp += hp
+		bs.maxHP += bs.bo.maxHP[id]
+		bs.hpParts = append(bs.hpParts, strconv.Itoa(hp))
+		if n := bs.bo.armor[id]; n > 0 {
+			bs.armorParts = append(bs.armorParts, strconv.Itoa(n))
+			bs.armor += n
+		}
+		if n := bs.bo.dmg[id]; n > 0 {
+			bs.damageParts = append(bs.damageParts, strconv.Itoa(n))
+			bs.damage += n
+		}
+	}
+
+	bs.damageParts[0] = fmt.Sprintf("Damage(%v):", bs.damage)
+	bs.armorParts[0] = fmt.Sprintf("Armor(%v):", bs.armor)
+	bs.hpParts[0] = fmt.Sprintf("HP(%v/%v):", bs.hp, bs.maxHP)
+	bs.chargeParts[0] = fmt.Sprintf("Charge: %v", bs.charge)
+}
+
+func (bs bodySummary) RenderSize() (wanted, needed point.Point) {
+	needed.X = moremath.MaxInt(
+		stringsWidth(" ", bs.hpParts),
+		stringsWidth(" ", bs.damageParts),
+		stringsWidth(" ", bs.armorParts),
+		stringsWidth(" ", bs.chargeParts),
+	) - 1 // XXX wtf off by one ...
+	needed.Y = 4
+	return needed, needed
+}
+
+func (bs bodySummary) Render(g view.Grid) {
+	// TODO: render a doll like
+	//    _O_
+	//   / | \
+	//   = | =
+	//    / \
+	//  _/   \_
+
+	for y, parts := range [][]string{bs.damageParts, bs.armorParts, bs.hpParts, bs.chargeParts} {
+		g.WriteString(0, y, strings.Join(parts, " "))
+	}
+}
+
+func grid2lines(g view.Grid) []string {
+	lines := make([]string, g.Size.Y)
+	i := 0
+	for y := 0; y < g.Size.Y; y++ {
+		line := make([]rune, g.Size.X)
+		for x := 0; x < g.Size.X; x++ {
+			if ch := g.Data[i].Ch; ch != 0 {
+				line[x] = ch
+			} else {
+				line[x] = 'ø'
+			}
+			i++
+		}
+		lines[y] = string(line)
+	}
+	return lines
 }
 
 func (ui *ui) init(v *view.View) {
 	ui.View = v
 	ui.Logs.Init(1000)
-	ui.bar.action = make([]promptAction, 0, 5)
-	ui.prompt.action = make([]promptAction, 0, 10)
+	ui.Logs.Align = view.AlignLeft | view.AlignTop | view.AlignHFlush
+	ui.bar.sep = " "
 }
 
 func (ui *ui) handle(k view.KeyEvent) (proc, handled bool, err error) {
 	defer func() {
 		if !handled {
-			ui.prompt.reset()
-			ui.bar = ui.bar.unwind()
+			ui.prompt.Clear()
+			ui.bar.reset()
 		}
 	}()
 
@@ -37,13 +314,16 @@ func (ui *ui) handle(k view.KeyEvent) (proc, handled bool, err error) {
 		return false, true, view.ErrStop
 	}
 
-	if prompting, ok := ui.prompt.handle(k.Ch); ok {
-		return !prompting, true, nil
+	if handled, canceled, prompting := ui.prompt.Handle(k); handled {
+		proc = !prompting && !canceled
+		if proc {
+			ui.prompt.Clear()
+		}
+		return proc, true, nil
 	}
 
-	if pr, prompting, ok := ui.bar.run(k.Ch); ok {
-		ui.bar = pr
-		return !prompting, true, nil
+	if handled, canceled, prompting := ui.bar.Handle(k); handled {
+		return !prompting && !canceled, true, nil
 	}
 
 	return false, false, nil
@@ -57,14 +337,15 @@ func (w *world) HandleKey(k view.KeyEvent) (rerr error) {
 
 	player := w.findPlayer()
 
-	if player != ecs.NilEntity && w.ui.bar.prior == nil {
+	if player != ecs.NilEntity && w.ui.bar.IsRoot() {
 		defer func() {
 			if rerr != nil {
 				return
 			}
-			w.ui.bar.removeAction("Inspect")
 			if itemPrompt, haveItemsHere := w.itemPrompt(w.prompt, player); haveItemsHere {
-				w.ui.bar.addAction(itemPrompt.activate, "Inspect")
+				w.ui.bar.replaceLabel("Inspect", labeled(itemPrompt, "Inspect"))
+			} else {
+				w.ui.bar.removeLabel("Inspect")
 			}
 		}()
 	}
@@ -75,7 +356,7 @@ func (w *world) HandleKey(k view.KeyEvent) (rerr error) {
 		case ',':
 			if player != ecs.NilEntity {
 				if itemPrompt, haveItemsHere := w.itemPrompt(w.prompt, player); haveItemsHere {
-					w.prompt, _ = itemPrompt.activate(w.prompt.unwind())
+					w.prompt, _ = itemPrompt.RunPrompt(w.prompt.Unwind())
 				}
 			}
 			proc, handled = false, true
@@ -155,106 +436,20 @@ func parseMove(k view.KeyEvent) (point.Point, bool) {
 	return point.Zero, false
 }
 
-func (ui ui) promptParts() []string {
-	if parts := ui.prompt.render(""); len(parts) > 0 {
-		return parts
-	}
-	if ui.bar.prior != nil {
-		if parts := ui.bar.render(""); len(parts) > 0 {
-			return parts
-		}
-	}
-	return nil
-}
-
-func (ui ui) barParts() []string {
-	if ui.prompt.mess != "" {
-		return nil
-	}
-	if ui.bar.prior != nil {
-		return nil
-	}
-	if len(ui.bar.action) == 0 {
-		return nil
-	}
-	parts := make([]string, len(ui.bar.action))
-	i := 0
-	parts[i] = fmt.Sprintf(".<%s[%d]", ui.bar.action[i].mess, i+1)
-	for i++; i < len(ui.bar.action); i++ {
-		parts[i] = fmt.Sprintf("<%s[%d]", ui.bar.action[i].mess, i+1)
-	}
-	return parts
-}
-
 func (w *world) Render(termGrid view.Grid) error {
-	hud := view.HUD{
+	hud := hud.HUD{
 		Logs:  w.ui.Logs,
 		World: w.renderViewport(termGrid.Size),
 	}
 
-	hud.Logs.Max = (termGrid.Size.Y - hud.World.Size.Y - 3) / 2
-	if hud.Logs.Max < hud.Logs.Min {
-		hud.Logs.Max = hud.Logs.Min
-	}
+	hud.HeaderF(">%v souls v %v demons", w.Iter(ecs.All(wcSoul)).Count(), w.Iter(ecs.All(wcAI)).Count())
 
-	hud.HeaderF("^%v souls v %v demons", w.Iter(ecs.All(wcSoul)).Count(), w.Iter(ecs.All(wcAI)).Count())
+	hud.AddRenderable(&w.ui.bar, view.AlignLeft|view.AlignBottom)
+	hud.AddRenderable(&w.ui.prompt, view.AlignLeft|view.AlignBottom)
 
 	for it := w.Iter(ecs.All(wcSoul | wcBody)); it.Next(); {
-		bo := w.bodies[it.ID()]
-
-		// TODO: a charSummary Renderable
-
-		armor, damage := 0, 0
-		hpParts := make([]string, 0, bo.Len())
-		armorParts := make([]string, 0, bo.Len())
-		damageParts := make([]string, 0, bo.Len())
-		for gt := bo.rel.Traverse(ecs.AllRel(brControl), ecs.TraverseDFS); gt.Traverse(); {
-			ent := gt.Node()
-			id := ent.ID()
-			// desc := bo.DescribePart(ent)
-			hpParts = append(hpParts, fmt.Sprintf("%v", bo.hp[id]))
-			if n := bo.armor[id]; n > 0 {
-				armorParts = append(armorParts, fmt.Sprintf("%v", n))
-				armor += n
-			}
-			if n := bo.dmg[id]; n > 0 {
-				damageParts = append(damageParts, fmt.Sprintf("%v", n))
-				damage += n
-			}
-		}
-
-		charge := 0
-		for cur := w.moves.LookupA(ecs.All(movCharge), it.ID()); cur.Scan(); {
-			charge += w.moves.n[cur.Entity().ID()]
-		}
-
-		// TODO: render a doll like
-		//    _O_
-		//   / | \
-		//   = | =
-		//    / \
-		//  _/   \_
-
-		hp, maxHP := bo.HPRange()
-
-		hud.FooterF(".>Damage(%v): %s", damage, strings.Join(damageParts, " "))
-		hud.FooterF(".>Armor(%v): %s", armor, strings.Join(armorParts, " "))
-		hud.FooterF(".>HP(%v/%v): %s", hp, maxHP, strings.Join(hpParts, " "))
-		hud.FooterF(".>Charge: %v", charge)
-	}
-
-	// TODO: action bar Renderable
-	if parts := w.ui.barParts(); len(parts) > 0 {
-		for i := 0; i < len(parts); i++ {
-			hud.FooterF(parts[i])
-		}
-	}
-
-	// TODO: prompt should be a Renderable
-	if parts := w.ui.promptParts(); len(parts) > 0 {
-		for i := len(parts) - 1; i >= 0; i-- {
-			hud.FooterF(".<" + parts[i])
-		}
+		hud.AddRenderable(makeBodySummary(w, it.Entity()),
+			view.AlignBottom|view.AlignRight|view.AlignHFlush)
 	}
 
 	hud.Render(termGrid)
@@ -364,162 +559,41 @@ func (w *world) renderViewport(max point.Point) view.Grid {
 	return grid
 }
 
-func (w *world) itemPrompt(pr prompt, ent ecs.Entity) (prompt, bool) {
+func (w *world) itemPrompt(pr prompt.Prompt, ent ecs.Entity) (prompt.Prompt, bool) {
 	// TODO: once we have a proper spatial index, stop relying on
 	// collision relations for this
 	prompting := false
-	for cur := w.moves.Cursor(
+	for i, cur := 0, w.moves.Cursor(
 		ecs.RelClause(mrCollide, mrItem),
 		func(r ecs.RelationType, rel, a, b ecs.Entity) bool { return a == ent },
-	); cur.Scan(); {
+	); i < 9 && cur.Scan(); i++ {
 		if !prompting {
-			pr = pr.makeSub("Items Here")
+			pr = pr.Sub("Items Here")
 			prompting = true
 		}
-		item := cur.B()
-		if !pr.addAction(
-			func(pr prompt) (prompt, bool) { return w.interactWith(pr, ent, item) },
-			w.getName(item, "unknown item"),
-		) {
-			break
-		}
+		worldItemAction{w, cur.B(), ent}.addAction(&pr, '1'+rune(i))
 	}
 	return pr, prompting
 }
 
-func (w *world) interactWith(pr prompt, ent, item ecs.Entity) (prompt, bool) {
-	if it := w.items[item.ID()]; it != nil {
-		return w.items[item.ID()].interact(pr, w, item, ent)
-	}
-	return pr.unwind(), false
-}
-
-func (bo *body) interact(pr prompt, w *world, item, ent ecs.Entity) (prompt, bool) {
+func (bo *body) interact(pr prompt.Prompt, w *world, item, ent ecs.Entity) (prompt.Prompt, bool) {
 	if !ent.Type().All(wcBody) {
 		w.log("you have no body!")
 		return pr, false
 	}
 
-	pr = pr.makeSub(w.getName(item, "unknown item"))
+	pr = pr.Sub(w.getName(item, "unknown item"))
 
-	for it := bo.Iter(ecs.All(bcPart)); len(pr.action) < cap(pr.action) && it.Next(); {
+	for i, it := 0, bo.Iter(ecs.All(bcPart)); i < 9 && it.Next(); i++ {
 		part := it.Entity()
 		rem := bodyRemains{w, bo, part, item, ent}
 		// TODO: inspect menu when more than just scavengable
 
 		// any part can be scavenged
-		if !pr.addAction(rem.scavenge, rem.describeScavenge()) {
-			break
-		}
-
+		pr.AddAction('1'+rune(i), prompt.Func(rem.scavenge), rem.describeScavenge())
 	}
 
 	return pr, true
-}
-
-type prompt struct {
-	prior  *prompt
-	mess   string
-	action []promptAction
-}
-
-type promptAction struct {
-	mess string
-	run  func(prompt) (prompt, bool)
-}
-
-func (pr prompt) render(prefix string) []string {
-	if pr.mess == "" {
-		return nil
-	}
-	lines := make([]string, 0, 1+len(pr.action))
-	lines = append(lines, fmt.Sprintf("%s%s: (Press Number, 0 to exit menu)", prefix, pr.mess))
-	for i, act := range pr.action {
-		lines = append(lines, fmt.Sprintf("%s%d) %s", prefix, i+1, act.mess))
-	}
-	return lines
-}
-
-func (pr *prompt) handle(ch rune) (prompting, ok bool) {
-	if pr.mess == "" {
-		return false, false
-	}
-	if new, prompting, ok := pr.run(ch); ok {
-		*pr = new
-		return prompting, ok
-	}
-	pr.reset()
-	return false, false
-}
-
-func (pr *prompt) reset() {
-	*pr = pr.unwind()
-	pr.mess = ""
-	pr.action = pr.action[:0]
-}
-
-func (pr *prompt) activate(prior prompt) (prompt, bool) {
-	return prompt{
-		prior:  &prior,
-		mess:   pr.mess,
-		action: pr.action,
-	}, true
-}
-
-func (pr *prompt) addAction(
-	run func(prompt) (prompt, bool),
-	mess string, args ...interface{},
-) bool {
-	if len(pr.action) < cap(pr.action) {
-		pr.action = append(pr.action, promptAction{mess, run})
-		return true
-	}
-	return false
-}
-
-func (pr *prompt) removeAction(mess string) {
-	for i := range pr.action {
-		if pr.action[i].mess == mess {
-			pr.action = append(pr.action[:i], pr.action[i+1:]...)
-			break
-		}
-	}
-}
-
-func (pr prompt) run(ch rune) (_ prompt, prompting, ok bool) {
-	n := int(ch - '0')
-	if n < 0 || n > 9 {
-		return pr, false, false
-	}
-	if i := n - 1; i < 0 {
-		return pr.pop(), false, true
-	} else if i < len(pr.action) {
-		pr, prompting := pr.action[i].run(pr)
-		return pr, prompting, true
-	}
-	return pr, false, true
-}
-
-func (pr prompt) pop() prompt {
-	if pr.prior != nil {
-		return *pr.prior
-	}
-	return pr
-}
-
-func (pr prompt) unwind() prompt {
-	for pr.prior != nil {
-		pr = *pr.prior
-	}
-	return pr
-}
-
-func (pr prompt) makeSub(mess string, args ...interface{}) prompt {
-	return prompt{
-		prior:  &pr,
-		mess:   fmt.Sprintf(mess, args...),
-		action: make([]promptAction, 0, 10),
-	}
 }
 
 func safeColorsIX(colors []termbox.Attribute, i int) termbox.Attribute {
@@ -530,4 +604,19 @@ func safeColorsIX(colors []termbox.Attribute, i int) termbox.Attribute {
 		return colors[len(colors)-1]
 	}
 	return colors[i]
+}
+
+func nstrings(n, m int, ss []string) []string {
+	if m > cap(ss) {
+		return make([]string, n, m)
+	}
+	return ss[:n]
+}
+
+func stringsWidth(sep string, parts []string) int {
+	n := (len(parts) - 1) + utf8.RuneCountInString(sep)
+	for _, part := range parts {
+		n += utf8.RuneCountInString(part)
+	}
+	return n
 }

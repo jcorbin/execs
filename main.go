@@ -8,11 +8,13 @@ import (
 	"strings"
 	"time"
 
+	termbox "github.com/nsf/termbox-go"
+
 	"github.com/jcorbin/execs/internal/ecs"
 	"github.com/jcorbin/execs/internal/moremath"
 	"github.com/jcorbin/execs/internal/point"
 	"github.com/jcorbin/execs/internal/view"
-	termbox "github.com/nsf/termbox-go"
+	"github.com/jcorbin/execs/internal/view/hud/prompt"
 )
 
 // TODO: spirit possession
@@ -48,7 +50,7 @@ const (
 )
 
 type worldItem interface {
-	interact(pr prompt, w *world, item, ent ecs.Entity) (prompt, bool)
+	interact(pr prompt.Prompt, w *world, item, ent ecs.Entity) (prompt.Prompt, bool)
 }
 
 type durableItem interface {
@@ -170,35 +172,45 @@ func (w *world) init(v *view.View) {
 
 var movementRangeLabels = []string{"Walk", "Lunge"}
 
-func (w *world) rangeChooserFor(ent ecs.Entity) (func(pr prompt) (prompt, bool), string) {
-	n := w.getMovementRange(ent)
-	return func(pr prompt) (prompt, bool) {
-		return w.chooseRange(pr, ent)
-	}, movementRangeLabels[n-1]
+func newRangeChooser(w *world, ent ecs.Entity) *rangeChooser {
+	return &rangeChooser{
+		w:   w,
+		ent: ent,
+	}
 }
 
-func (w *world) chooseRange(pr prompt, ent ecs.Entity) (prompt, bool) {
-	pr = pr.makeSub("Set Movement Range")
+type rangeChooser struct {
+	w   *world
+	ent ecs.Entity
+}
+
+func (rc *rangeChooser) label() string {
+	n := rc.w.getMovementRange(rc.ent)
+	return movementRangeLabels[n-1]
+}
+
+func (rc *rangeChooser) RunPrompt(prior prompt.Prompt) (next prompt.Prompt, required bool) {
+	next = prior.Sub("Set Movement Range")
 	for i, label := range movementRangeLabels {
 		n := i + 1
-		var mess string
+		r := '0' + rune(n)
+		run := prompt.Func(func(prior prompt.Prompt) (next prompt.Prompt, required bool) {
+			return rc.chosen(prior, n)
+		})
 		if n == 1 {
-			mess = fmt.Sprintf("%s (%d cell, consumes %d charge)", label, n, n)
+			next.AddAction(r, run, "%s (%d cell, consumes %d charge)", label, n, n)
 		} else {
-			mess = fmt.Sprintf("%s (%d cells, consumes %d charges)", label, n, n)
+			next.AddAction(r, run, "%s (%d cells, consumes %d charges)", label, n, n)
 		}
-		pr.addAction(func(pr prompt) (prompt, bool) { return w.chooseRangeN(pr, ent, n) }, mess)
 	}
-	return pr, true
+	return next, true
 }
 
-func (w *world) chooseRangeN(pr prompt, ent ecs.Entity, n int) (prompt, bool) {
-	w.setMovementRange(ent, n)
-	pr = pr.unwind()
-	if len(pr.action) > 0 {
-		pr.action[0].mess = movementRangeLabels[n-1]
-	}
-	return pr, false
+func (rc *rangeChooser) chosen(prior prompt.Prompt, n int) (next prompt.Prompt, required bool) {
+	rc.w.setMovementRange(rc.ent, n)
+	next = prior.Unwind()
+	next.SetActionMess(0, rc, movementRangeLabels[n-1])
+	return next, false
 }
 
 func (w *world) allocWorld(id ecs.EntityID, t ecs.ComponentType) {
@@ -352,6 +364,7 @@ func (w *world) generateAIMoves() {
 const maxMovementRange = 2
 
 func (w *world) setMovementRange(a ecs.Entity, n int) {
+	_ = w.Deref(a)
 	if n > maxMovementRange {
 		n = maxMovementRange
 	}
@@ -362,7 +375,8 @@ func (w *world) setMovementRange(a ecs.Entity, n int) {
 }
 
 func (w *world) getMovementRange(a ecs.Entity) int {
-	for cur := w.moves.LookupA(ecs.AllRel(mrMoveRange), a.ID()); cur.Scan(); {
+	id := w.Deref(a)
+	for cur := w.moves.LookupA(ecs.AllRel(mrMoveRange), id); cur.Scan(); {
 		if ent := cur.Entity(); ent.Type().All(movN) {
 			if n := w.moves.n[ent.ID()]; n <= maxMovementRange {
 				return n
@@ -370,6 +384,13 @@ func (w *world) getMovementRange(a ecs.Entity) int {
 		}
 	}
 	return maxMovementRange
+}
+
+func (w *world) getCharge(ent ecs.Entity) (charge int) {
+	for cur := w.moves.LookupA(ecs.All(movCharge), w.Deref(ent)); cur.Scan(); {
+		charge += w.moves.n[cur.Entity().ID()]
+	}
+	return charge
 }
 
 func (w *world) applyMoves() {
@@ -549,11 +570,11 @@ func (w *world) processAIItems() {
 
 		if b.Type().All(wcItem) {
 			// can haz?
-			if pr, ok := w.itemPrompt(prompt{}, ai); ok {
+			if pr, ok := w.itemPrompt(prompt.Prompt{}, ai); ok {
 				w.runAIInteraction(pr, ai)
 			}
 			// can haz moar?
-			if pr, ok := w.itemPrompt(prompt{}, ai); !ok || len(pr.action) == 0 {
+			if pr, ok := w.itemPrompt(prompt.Prompt{}, ai); !ok || pr.Len() == 0 {
 				goals[ab{ai.ID(), b.ID()}].Destroy()
 			}
 		} else {
@@ -568,19 +589,13 @@ func (w *world) processAIItems() {
 	}
 }
 
-func (w *world) runAIInteraction(pr prompt, ai ecs.Entity) {
-	for prompting := true; prompting && len(pr.action) > 0; {
-		sum, i := 0, 0
-		for j := range pr.action {
-			rate := 1 // TODO: action rating
-			sum += rate
-			if w.rng.Intn(sum) < rate {
-				i = j
-			}
+func (w *world) runAIInteraction(pr prompt.Prompt, ai ecs.Entity) {
+	for n := pr.Len(); n > 0; n = pr.Len() {
+		next, prompting, valid := pr.Run(w.rng.Intn(n))
+		if !valid || !prompting {
+			return
 		}
-
-		act := pr.action[i]
-		pr, prompting = act.run(pr)
+		pr = next
 	}
 }
 
@@ -986,7 +1001,8 @@ func main() {
 		w.addBox(point.Box{TopLeft: pt.Neg(), BottomRight: pt}, '#')
 		player := w.newChar("you", 'X')
 		player.Add(wcPosition | wcCollide | wcInput | wcSoul)
-		w.ui.bar.addAction(w.rangeChooserFor(player))
+
+		w.ui.bar.addAction(newRangeChooser(w, player))
 
 		w.log("%s enter the world @%v stats: %+v", w.Names[player.ID()], w.Positions[player.ID()], w.bodies[player.ID()].Stats())
 
