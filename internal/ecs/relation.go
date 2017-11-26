@@ -274,6 +274,9 @@ func (rel *Relation) UpsertOne(
 //
 // If emit isn't called for an entity, then it is destroyed. The first time
 // `emit` is called the entity is updated; thereafter a new entity is inserted.
+//
+// If no relations matched, then the each function is called exactly once with
+// NilEntity for r, a, and b.
 func (rel *Relation) UpsertMany(
 	tcl TypeClause,
 	where func(r RelationType, ent, a, b Entity) bool,
@@ -301,6 +304,9 @@ func (rel *Relation) UpsertMany(
 		if !any {
 			ent.Destroy()
 		}
+	}
+	if n == 0 {
+		each(0, NilEntity, NilEntity, NilEntity, rel.insert)
 	}
 	return n
 }
