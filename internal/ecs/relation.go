@@ -276,6 +276,7 @@ func (rel *Relation) UpsertOne(
 // `emit` is called the entity is updated; thereafter a new entity is inserted.
 func (rel *Relation) UpsertMany(
 	tcl TypeClause,
+	where func(r RelationType, ent, a, b Entity) bool,
 	each func(
 		r RelationType, ent, a, b Entity,
 		emit func(r RelationType, a, b Entity) Entity,
@@ -285,7 +286,7 @@ func (rel *Relation) UpsertMany(
 		defer fixIndex()
 	}
 	n := 0
-	for cur := rel.Cursor(tcl, nil); cur.Scan(); {
+	for cur := rel.Cursor(tcl, where); cur.Scan(); {
 		ent, any := cur.Entity(), false
 		emit := func(er RelationType, ea, eb Entity) Entity {
 			n++
