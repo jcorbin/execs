@@ -99,21 +99,21 @@ func (pr *Prompt) RenderSize() (wanted, needed point.Point) {
 func (pr *Prompt) Render(g view.Grid) {
 	i, y := 0, 0
 	if pr.mess != "" {
-		writeString(g, 0, y, headerFmt, pr.mess)
+		g.WriteString(0, y, headerFmt, pr.mess)
 		y++
 	}
 	for ; y < g.Size.Y && i < len(pr.action); y, i = y+1, i+1 {
 		act := pr.action[i]
 		if pr.align&view.AlignCenter == view.AlignRight {
-			writeStringRTL(g, g.Size.X-1, y, act.renderActionRight())
+			g.WriteStringRTL(g.Size.X-1, y, act.renderActionRight())
 		} else {
-			writeString(g, 0, y, act.renderActionLeft())
+			g.WriteString(0, y, act.renderActionLeft())
 		}
 	}
 	if pr.align&view.AlignCenter == view.AlignRight {
-		writeStringRTL(g, g.Size.X-1, y, exitRightMess)
+		g.WriteStringRTL(g.Size.X-1, y, exitRightMess)
 	} else {
-		writeString(g, 0, y, exitLeftMess)
+		g.WriteString(0, y, exitLeftMess)
 	}
 	// if i < len(pr.action) TODO: paginate
 }
@@ -273,32 +273,4 @@ func (pr Prompt) RunPrompt(prior Prompt) (Prompt, bool) {
 		mess:   pr.mess,
 		action: pr.action,
 	}, true
-}
-
-func writeString(g view.Grid, x, y int, mess string, args ...interface{}) int {
-	if len(args) > 0 {
-		mess = fmt.Sprintf(mess, args...)
-	}
-	i := y*g.Size.X + x
-	j := i
-	for ; x < g.Size.X; x, j = x+1, j+1 {
-		r, n := utf8.DecodeRuneInString(mess)
-		mess = mess[n:]
-		g.Data[i].Ch = r
-	}
-	return j - i
-}
-
-func writeStringRTL(g view.Grid, x, y int, mess string, args ...interface{}) int {
-	if len(args) > 0 {
-		mess = fmt.Sprintf(mess, args...)
-	}
-	i := y*g.Size.X + x
-	j := i
-	for ; x >= 0; x, j = x-1, j-1 {
-		r, n := utf8.DecodeLastRuneInString(mess)
-		mess = mess[:len(mess)-n]
-		g.Data[i].Ch = r
-	}
-	return j - i
 }
