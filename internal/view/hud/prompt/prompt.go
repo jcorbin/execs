@@ -239,8 +239,8 @@ func (pr *Prompt) AddAction(ch rune, run Runner, mess string, args ...interface{
 func (pr *Prompt) RemoveAction(ch rune, run Runner, mess string) bool {
 	for i := range pr.action {
 		if (ch != 0 && pr.action[i].ch == ch) ||
-			(mess != "" && pr.action[i].mess == mess) ||
-			(run != nil && pr.action[i].run == run) {
+			(run != nil && pr.action[i].run == run) ||
+			(mess != "" && pr.action[i].mess == mess) {
 			pr.action = append(pr.action[:i], pr.action[i+1:]...)
 			return true
 		}
