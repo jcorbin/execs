@@ -578,7 +578,9 @@ func (w *world) itemPrompt(pr prompt.Prompt, ent ecs.Entity) (prompt.Prompt, boo
 
 func (bo *body) interact(pr prompt.Prompt, w *world, item, ent ecs.Entity) (prompt.Prompt, bool) {
 	if !ent.Type().All(wcBody) {
-		w.log("you have no body!")
+		if ent.Type().All(wcSoul) {
+			w.log("you have no body!")
+		}
 		return pr, false
 	}
 
