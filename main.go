@@ -541,7 +541,7 @@ func (w *world) aiTarget(ai ecs.Entity) (point.Point, bool) {
 }
 
 func (w *world) scoreAIGoal(ai, goal ecs.Entity) int {
-	const quadLimit = 64
+	const quadLimit = 144
 
 	myPos := w.Positions[ai.ID()]
 	goalPos := w.Positions[goal.ID()]
