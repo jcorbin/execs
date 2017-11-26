@@ -18,9 +18,16 @@ type HUD struct {
 
 // Render the context into the given terminal grid.
 func (hud HUD) Render(termGrid view.Grid) {
+	const logsGap = 3
+
 	// NOTE: intentionally not a layout item so that the UI elemenst overlay
 	// the world grid.
 	termGrid.Copy(hud.World)
+
+	hud.Logs.Max = (termGrid.Size.Y - hud.World.Size.Y - logsGap) / 2
+	if hud.Logs.Max < hud.Logs.Min {
+		hud.Logs.Max = hud.Logs.Min
+	}
 
 	if len(hud.Logs.Buffer) > 0 {
 		// TODO: scrolling
