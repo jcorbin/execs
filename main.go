@@ -494,38 +494,50 @@ func (w *world) aiTarget(ai ecs.Entity) (point.Point, bool) {
 	}
 
 	// revert to our goal...
-	for cur := w.moves.LookupA(ecs.AllRel(mrGoal), ai.ID()); cur.Scan(); {
-		rel, goal := cur.Entity(), cur.B()
-		if goal.Type().All(wcPosition) {
+	goalPos, found := point.Zero, false
+	w.moves.UpsertMany(
+		ecs.AllRel(mrGoal),
+		func(r ecs.RelationType, ent, a, b ecs.Entity) bool { return a == ai },
+		func(
+			r ecs.RelationType, rel, _, goal ecs.Entity,
+			emit func(r ecs.RelationType, a, b ecs.Entity,
+			) ecs.Entity) {
+			if goal == ecs.NilEntity {
+				// no goal, pick one!
+				if goal := w.chooseAIGoal(ai); goal != ecs.NilEntity {
+					emit(mrGoal, ai, goal)
+					goalPos, found = w.Positions[goal.ID()], true
+				}
+				return
+			}
+
+			if !goal.Type().All(wcPosition) {
+				// no position, drop it
+				return
+			}
+
 			myPos := w.Positions[ai.ID()]
-			goalPos := w.Positions[goal.ID()]
-			id := rel.ID()
-			if !rel.Type().All(movN | movP) {
+			goalPos = w.Positions[goal.ID()]
+			if id := rel.ID(); !rel.Type().All(movN | movP) {
 				rel.Add(movN | movP)
 				w.moves.p[id] = myPos
-				return goalPos, true
-			}
-			if lastPos := w.moves.p[id]; lastPos != myPos {
+			} else if lastPos := w.moves.p[id]; lastPos != myPos {
 				w.moves.n[id] = 0
 				w.moves.p[id] = myPos
-				return goalPos, true
+			} else {
+				w.moves.n[id]++
+				if w.moves.n[id] >= 3 {
+					// stuck trying to get that one, give up
+					return
+				}
 			}
-			w.moves.n[id]++
-			if w.moves.n[id] < 3 {
-				return goalPos, true
-			}
-		}
+			found = true
 
-		rel.Destroy() // bogus or stuck goal
-	}
+			// keep or update
+			emit(mrGoal, ai, goal)
+		})
 
-	// ... no goal, pick one!
-	if goal := w.chooseAIGoal(ai); goal != ecs.NilEntity {
-		w.moves.Insert(mrGoal, ai, goal)
-		return w.Positions[goal.ID()], true
-	}
-
-	return point.Zero, false
+	return goalPos, found
 }
 
 func (w *world) chooseAIGoal(ai ecs.Entity) ecs.Entity {
