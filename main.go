@@ -874,13 +874,7 @@ func (w *world) decayRemains(item ecs.Entity) {
 		id := it.ID()
 		rem.hp[id]--
 		if rem.hp[id] <= 0 {
-			part := it.Entity()
-			w.log(
-				"%s from %s has decayed away to nothing",
-				rem.DescribePart(part),
-				w.getName(item, "unknown item"),
-			)
-			part.Destroy()
+			it.Entity().Destroy()
 		}
 	}
 	if rem.Len() == 0 {
