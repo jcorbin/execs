@@ -18,7 +18,6 @@ import (
 
 // TODO: spirit possession
 // TODO: movement based on body status
-// TODO: factor out something like ecs.Relation
 
 const (
 	wcName ecs.ComponentType = 1 << iota
