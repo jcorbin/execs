@@ -330,6 +330,7 @@ func (plc *LayoutPlacement) copy(g Grid, off int) {
 			}
 			off++
 			paded.X++
+			pad.Ch = 0
 		} else if right && !rflush {
 			off--
 		} else {
