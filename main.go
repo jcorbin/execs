@@ -103,9 +103,11 @@ const (
 	mrAgro
 	mrPending
 	mrMoveRange
+	mrRest
 
 	movCharge  = ecs.ComponentType(mrPending) | movN
 	movPending = ecs.ComponentType(mrPending) | movN | movP
+	movResting = ecs.ComponentType(mrRest) | movN
 )
 
 func (mov *moves) init(core *ecs.Core) {
@@ -284,6 +286,7 @@ func (w *world) Process() {
 	w.applyMoves()         // resolve moves
 	w.processAIItems()     // nom nom
 	w.processCombat()      // e.g. deal damage
+	w.processRest()        // healing etc
 	w.checkOver()          // no souls => done
 	w.maybeSpawn()         // spawn more demons
 }
@@ -378,6 +381,23 @@ func (w *world) getCharge(ent ecs.Entity) (charge int) {
 	return charge
 }
 
+func (w *world) processRest() {
+	w.moves.UpsertMany(ecs.All(movResting), nil, func(
+		r ecs.RelationType, ent, a, b ecs.Entity,
+		emit func(r ecs.RelationType, a, b ecs.Entity) ecs.Entity,
+	) {
+		if ent == ecs.NilEntity {
+			return
+		}
+		n := w.moves.n[ent.ID()]
+		if n > 0 {
+			ent = emit(mrPending, a, b)
+			ent.Add(movN)
+			w.moves.n[ent.ID()] = n
+		}
+	})
+}
+
 func (w *world) applyMoves() {
 	// TODO: better resolution strategy based on connected components
 	w.moves.UpsertMany(ecs.All(movPending), nil, func(
@@ -404,7 +424,14 @@ func (w *world) applyMoves() {
 			rating := w.bodies[a.ID()].movementRating()
 			pend = pend.Mul(int(moremath.Round(rating * float64(n))))
 			if pend.SumSQ() == 0 {
-				emit(r, a, b)
+				if n > 1 {
+					ent = emit(mrRest, a, b)
+					ent.Add(movN)
+					ent.Delete(movP)
+					w.moves.n[ent.ID()] = n
+				} else {
+					emit(r, a, b)
+				}
 				return
 			}
 		}
