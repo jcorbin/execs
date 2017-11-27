@@ -304,14 +304,14 @@ func (plc *LayoutPlacement) copy(g Grid, off int) (delta int) {
 		right  = plc.align&AlignCenter == AlignRight
 		lflush = plc.align&AlignHFlush != 0 && left
 		rflush = plc.align&AlignHFlush != 0 && right
-		pad    termbox.Cell
+		pad    = plc.sep
 		ix     int
 	)
 
 	off, ix, plc.have = trim(g, off, plc.align)
 
 	// pad left
-	if pad = plc.sep; pad.Ch != 0 {
+	if pad.Ch != 0 {
 		if lpad, rpad := left && !lflush, right && !rflush; lpad {
 			for y, i := plc.start, 0; i < plc.have.Y; y, i = y+1, i+1 {
 				li := y*plc.lay.Grid.Size.X + off
