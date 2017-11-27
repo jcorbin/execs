@@ -72,7 +72,7 @@ type world struct {
 	over         bool
 	enemyCounter int
 
-	ecs.Core
+	ecs.System
 
 	timers    ecsTime.Timers
 	Names     []string
@@ -145,6 +145,21 @@ func newWorld(v *view.View) (*world, error) {
 func (w *world) init(v *view.View) {
 	w.ui.init(v)
 	w.timers.Init(&w.Core, wcTimer)
+
+	w.Procs = append(w.Procs,
+		ecs.ProcFunc(func() {
+			w.moves.Delete(ecs.AnyRel(mrCollide), nil)
+		}),
+		&w.timers,
+		ecs.ProcFunc(w.prepareCollidables), // collect collidables
+		ecs.ProcFunc(w.generateAIMoves),    // give AI a chance!
+		ecs.ProcFunc(w.applyMoves),         // resolve moves
+		ecs.ProcFunc(w.processAIItems),     // nom nom
+		ecs.ProcFunc(w.processCombat),      // e.g. deal damage
+		ecs.ProcFunc(w.processRest),        // healing etc
+		ecs.ProcFunc(w.checkOver),          // no souls => done
+		ecs.ProcFunc(w.maybeSpawn),         // spawn more demons
+	)
 
 	// TODO: consider eliminating the padding for EntityID(0)
 	w.Names = []string{""}
@@ -267,19 +282,6 @@ func (w *world) extent() point.Box {
 }
 
 func (w *world) Close() error { return nil }
-
-func (w *world) Process() {
-	w.moves.Delete(ecs.AnyRel(mrCollide), nil)
-	w.timers.Process()     // run timers
-	w.prepareCollidables() // collect collidables
-	w.generateAIMoves()    // give AI a chance!
-	w.applyMoves()         // resolve moves
-	w.processAIItems()     // nom nom
-	w.processCombat()      // e.g. deal damage
-	w.processRest()        // healing etc
-	w.checkOver()          // no souls => done
-	w.maybeSpawn()         // spawn more demons
-}
 
 const maxChargeFromResting = 4
 
