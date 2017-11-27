@@ -544,9 +544,9 @@ func TestLayout(t *testing.T) {
 				"cc                                d",
 				"c                               ddd",
 			},
-
-			// TODO: center first, then big left occludes the prior center
 		},
+
+		// TODO: center first, then big left occludes the prior center
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			lay := Layout{}
