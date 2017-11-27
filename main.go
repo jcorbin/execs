@@ -744,10 +744,6 @@ func (w *world) maybeSpawn() {
 	if hp := bo.HP(); w.rng.Intn(sum+hp) < hp {
 		enemy.Delete(wcWaiting)
 		enemy.Add(wcPosition | wcCollide | wcInput | wcAI)
-		w.log("%s enters the world @%v stats: %+v",
-			w.Names[enemy.ID()],
-			w.Positions[enemy.ID()],
-			bo.Stats())
 	}
 }
 
@@ -1067,8 +1063,6 @@ func main() {
 		player.Add(wcPosition | wcCollide | wcInput | wcSoul)
 
 		w.ui.bar.addAction(newRangeChooser(w, player))
-
-		w.log("%s enter the world @%v stats: %+v", w.Names[player.ID()], w.Positions[player.ID()], w.bodies[player.ID()].Stats())
 
 		return w, nil
 	}); err != nil {
