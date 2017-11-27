@@ -311,9 +311,8 @@ func (plc *LayoutPlacement) copy(g Grid, off int) {
 	)
 
 	bound := trim(g)
-	plc.have = bound.Size()
 
-	if dx := g.Size.X - plc.have.X; dx > 0 {
+	if dx := moremath.MaxInt(0, g.Size.X-bound.BottomRight.X) + bound.TopLeft.X; dx > 0 {
 		if right {
 			off += dx
 		} else if center {
@@ -324,7 +323,7 @@ func (plc *LayoutPlacement) copy(g Grid, off int) {
 	// pad left
 	if pad.Ch != 0 {
 		if left && !lflush {
-			for ly, gy := plc.start, 0; gy < plc.have.Y; ly, gy = ly+1, gy+1 {
+			for ly, gy := plc.start, bound.TopLeft.Y; gy < bound.BottomRight.Y; ly, gy = ly+1, gy+1 {
 				li := ly*plc.lay.Grid.Size.X + off
 				plc.lay.Grid.Data[li] = pad
 			}
@@ -339,10 +338,10 @@ func (plc *LayoutPlacement) copy(g Grid, off int) {
 	}
 
 	// actual copy
-	for ly, gy := plc.start, 0; gy < plc.have.Y; ly, gy = ly+1, gy+1 {
+	for ly, gy := plc.start, bound.TopLeft.Y; gy < bound.BottomRight.Y; ly, gy = ly+1, gy+1 {
 		li := ly*plc.lay.Grid.Size.X + off
-		gi := gy*plc.have.X + bound.TopLeft.X
-		for gx := bound.TopLeft.X; gx < plc.have.X; gx++ {
+		gi := gy*g.Size.X + bound.TopLeft.X
+		for gx := bound.TopLeft.X; gx < bound.BottomRight.X; gx++ {
 			plc.lay.Grid.Data[li] = g.Data[gi]
 			li++
 			gi++
@@ -351,15 +350,15 @@ func (plc *LayoutPlacement) copy(g Grid, off int) {
 
 	// pad right
 	if pad.Ch != 0 {
-		off += plc.have.X
-		for ly, gy := plc.start, 0; gy < plc.have.Y; ly, gy = ly+1, gy+1 {
+		off += bound.BottomRight.X - bound.TopLeft.X
+		for ly, gy := plc.start, bound.TopLeft.Y; gy < bound.BottomRight.Y; ly, gy = ly+1, gy+1 {
 			li := ly*plc.lay.Grid.Size.X + off
 			plc.lay.Grid.Data[li] = pad
 		}
 		paded.X++
 	}
 
-	plc.have = plc.have.Add(paded)
+	plc.have = bound.Size().Add(paded)
 }
 
 func trim(g Grid) (bound point.Box) {
