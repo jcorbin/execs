@@ -313,14 +313,14 @@ func (plc *LayoutPlacement) copy(g Grid, off int) int {
 
 	// pad left
 	if pad.Ch != 0 {
-		if lpad, rpad := left && !lflush, right && !rflush; lpad {
+		if left && !lflush {
 			for ly, gy := plc.start, 0; gy < plc.have.Y; ly, gy = ly+1, gy+1 {
 				li := ly*plc.lay.Grid.Size.X + off
 				plc.lay.Grid.Data[li] = pad
 			}
 			off++
 			paded.X++
-		} else if rpad {
+		} else if right && !rflush {
 			off--
 		} else {
 			pad.Ch = 0
