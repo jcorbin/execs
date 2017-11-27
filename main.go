@@ -341,6 +341,7 @@ func (w *world) addPendingMove(ent ecs.Entity, move point.Point) {
 func (w *world) generateAIMoves() {
 	for it := w.Iter(ecs.All(aiMoveMask)); it.Next(); {
 		ai := it.Entity()
+		// TODO: if too damaged, rest
 		var move point.Point
 		if target, found := w.aiTarget(ai); found {
 			move = target.Sub(w.Positions[ai.ID()]).Sign()
@@ -390,12 +391,40 @@ func (w *world) processRest() {
 			return
 		}
 		n := w.moves.n[ent.ID()]
+		if a.Type().All(wcBody) && n == maxChargeFromResting {
+			n = w.heal(a, n)
+		}
 		if n > 0 {
 			ent = emit(mrPending, a, b)
 			ent.Add(movN)
 			w.moves.n[ent.ID()] = n
 		}
 	})
+}
+
+func (w *world) heal(ent ecs.Entity, n int) int {
+	sum, sel := 0, ecs.NilEntity
+	bo := w.bodies[ent.ID()]
+	for it := bo.Iter(ecs.All(bcPart | bcHP)); it.Next(); {
+		id := it.ID()
+		if dmg := bo.maxHP[id] - bo.hp[id]; dmg > 0 {
+			sum += dmg
+			if w.rng.Intn(sum) < dmg {
+				sel = it.Entity()
+			}
+		}
+	}
+	if sel != ecs.NilEntity {
+		id := sel.ID()
+		heal := bo.maxHP[id] - bo.hp[id]
+		if heal > n {
+			heal = n
+		}
+		bo.hp[id] += heal
+		n -= heal
+		w.log("%s's %s healed for %v HP", w.getName(ent, "???"), bo.DescribePart(sel), heal)
+	}
+	return n
 }
 
 func (w *world) applyMoves() {
