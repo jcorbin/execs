@@ -8,10 +8,7 @@ type Box struct {
 
 // Size returns the width and height of the box as a point.
 func (b Box) Size() Point {
-	pt := b.BottomRight.Sub(b.TopLeft).Abs()
-	pt.X++
-	pt.Y++
-	return pt
+	return b.BottomRight.Sub(b.TopLeft).Abs()
 }
 
 // ExpandTo expands a copy of the box to include the given point, returning the
@@ -23,11 +20,11 @@ func (b Box) ExpandTo(pt Point) Box {
 	if pt.Y < b.TopLeft.Y {
 		b.TopLeft.Y = pt.Y
 	}
-	if pt.X > b.BottomRight.X {
-		b.BottomRight.X = pt.X
+	if pt.X >= b.BottomRight.X {
+		b.BottomRight.X = pt.X + 1
 	}
-	if pt.Y > b.BottomRight.Y {
-		b.BottomRight.Y = pt.Y
+	if pt.Y >= b.BottomRight.Y {
+		b.BottomRight.Y = pt.Y + 1
 	}
 	return b
 }
