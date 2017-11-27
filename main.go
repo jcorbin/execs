@@ -10,6 +10,7 @@ import (
 	termbox "github.com/nsf/termbox-go"
 
 	"github.com/jcorbin/execs/internal/ecs"
+	"github.com/jcorbin/execs/internal/ecs/time"
 	"github.com/jcorbin/execs/internal/moremath"
 	"github.com/jcorbin/execs/internal/point"
 	"github.com/jcorbin/execs/internal/view"
@@ -73,12 +74,12 @@ type world struct {
 
 	ecs.Core
 
+	timers    ecsTime.Timers
 	Names     []string
 	Positions []point.Point
 	Glyphs    []rune
 	BG        []termbox.Attribute
 	FG        []termbox.Attribute
-	timers    []timer
 	bodies    []*body
 	items     []worldItem
 
@@ -127,11 +128,6 @@ func (mov *moves) allocData(id ecs.EntityID, t ecs.ComponentType) {
 func (mov *moves) deleteN(id ecs.EntityID, t ecs.ComponentType) { mov.n[id] = 0 }
 func (mov *moves) deleteP(id ecs.EntityID, t ecs.ComponentType) { mov.p[id] = point.Zero }
 
-type timer struct {
-	n, m int
-	f    func(ecs.Entity)
-}
-
 func newWorld(v *view.View) (*world, error) {
 	// f, err := os.Create(fmt.Sprintf("%v.log", time.Now().Format(time.RFC3339)))
 	// if err != nil {
@@ -148,6 +144,7 @@ func newWorld(v *view.View) (*world, error) {
 
 func (w *world) init(v *view.View) {
 	w.ui.init(v)
+	w.timers.Init(&w.Core, wcTimer)
 
 	// TODO: consider eliminating the padding for EntityID(0)
 	w.Names = []string{""}
@@ -155,14 +152,12 @@ func (w *world) init(v *view.View) {
 	w.Glyphs = []rune{0}
 	w.BG = []termbox.Attribute{0}
 	w.FG = []termbox.Attribute{0}
-	w.timers = []timer{timer{}}
 	w.bodies = []*body{nil}
 	w.items = []worldItem{nil}
 
-	w.RegisterAllocator(wcName|wcPosition|wcGlyph|wcBG|wcFG|wcBody|wcItem|wcTimer, w.allocWorld)
+	w.RegisterAllocator(wcName|wcPosition|wcGlyph|wcBG|wcFG|wcBody|wcItem, w.allocWorld)
 	w.RegisterCreator(wcInput, w.createInput)
 	w.RegisterCreator(wcBody, w.createBody)
-	w.RegisterDestroyer(wcTimer, w.destroyTimer)
 	w.RegisterDestroyer(wcBody, w.destroyBody)
 	w.RegisterDestroyer(wcItem, w.destroyItem)
 	w.RegisterDestroyer(wcInput, w.destroyInput)
@@ -221,7 +216,6 @@ func (w *world) allocWorld(id ecs.EntityID, t ecs.ComponentType) {
 	w.FG = append(w.FG, 0)
 	w.bodies = append(w.bodies, nil)
 	w.items = append(w.items, nil)
-	w.timers = append(w.timers, timer{})
 }
 
 func (w *world) createInput(id ecs.EntityID, t ecs.ComponentType) {
@@ -230,10 +224,6 @@ func (w *world) createInput(id ecs.EntityID, t ecs.ComponentType) {
 
 func (w *world) createBody(id ecs.EntityID, t ecs.ComponentType) {
 	w.bodies[id] = newBody()
-}
-
-func (w *world) destroyTimer(id ecs.EntityID, t ecs.ComponentType) {
-	w.timers[id] = timer{}
 }
 
 func (w *world) destroyBody(id ecs.EntityID, t ecs.ComponentType) {
@@ -280,7 +270,7 @@ func (w *world) Close() error { return nil }
 
 func (w *world) Process() {
 	w.moves.Delete(ecs.AnyRel(mrCollide), nil)
-	w.tick()               // run timers
+	w.timers.Process()     // run timers
 	w.prepareCollidables() // collect collidables
 	w.generateAIMoves()    // give AI a chance!
 	w.applyMoves()         // resolve moves
@@ -289,31 +279,6 @@ func (w *world) Process() {
 	w.processRest()        // healing etc
 	w.checkOver()          // no souls => done
 	w.maybeSpawn()         // spawn more demons
-}
-
-func (w *world) tick() {
-	// run timers
-	for it := w.Iter(ecs.All(wcTimer)); it.Next(); {
-		timer := &w.timers[it.ID()]
-
-		if timer.n <= 0 {
-			continue
-		}
-		timer.n--
-		if timer.n > 0 {
-			continue
-		}
-
-		ent := it.Entity()
-		timer.f(ent)
-		if timer.m != 0 {
-			// refresh interval timer
-			timer.n = timer.m
-		} else {
-			// one shot timer
-			ent.Delete(wcTimer)
-		}
-	}
 }
 
 const maxChargeFromResting = 4
@@ -835,7 +800,7 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 		targName := w.getName(targ, "nameless")
 		name := fmt.Sprintf("remains of %s", targName)
 		item := w.newItem(w.Positions[targID], name, '%', severed)
-		w.setInterval(item, 5, w.decayRemains)
+		w.timers.Every(item, 5, w.decayRemains)
 		if severed.Len() > 0 {
 			w.log("%s's remains have dropped on the floor", targName)
 		} else {
@@ -969,18 +934,6 @@ func (w *world) chooseAttackedPart(ent ecs.Entity) ecs.Entity {
 		}
 		return stick - armor
 	})
-}
-
-func (w *world) setTimer(ent ecs.Entity, n int, f func(ecs.Entity)) *timer {
-	ent.Add(wcTimer)
-	w.timers[ent.ID()] = timer{n: n, f: f}
-	return &w.timers[ent.ID()]
-}
-
-func (w *world) setInterval(ent ecs.Entity, n int, f func(ecs.Entity)) *timer {
-	ent.Add(wcTimer)
-	w.timers[ent.ID()] = timer{n: n, m: n, f: f}
-	return &w.timers[ent.ID()]
 }
 
 func (w *world) addBox(box point.Box, glyph rune) {
