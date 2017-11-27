@@ -308,10 +308,10 @@ func (plc *LayoutPlacement) copy(g Grid, off int) {
 		rflush = plc.align&AlignHFlush != 0 && right
 		pad    = plc.sep
 		paded  point.Point
-		ix     int
 	)
 
-	ix, plc.have = trim(g)
+	bound := trim(g)
+	plc.have = bound.Size()
 
 	if dx := g.Size.X - plc.have.X; dx > 0 {
 		if right {
@@ -340,8 +340,8 @@ func (plc *LayoutPlacement) copy(g Grid, off int) {
 	// actual copy
 	for ly, gy := plc.start, 0; gy < plc.have.Y; ly, gy = ly+1, gy+1 {
 		li := ly*plc.lay.Grid.Size.X + off
-		gi := gy*plc.have.X + ix
-		for gx := ix; gx < plc.have.X; gx++ {
+		gi := gy*plc.have.X + bound.TopLeft.X
+		for gx := bound.TopLeft.X; gx < plc.have.X; gx++ {
 			plc.lay.Grid.Data[li] = g.Data[gi]
 			li++
 			gi++
@@ -361,9 +361,8 @@ func (plc *LayoutPlacement) copy(g Grid, off int) {
 	plc.have = plc.have.Add(paded)
 }
 
-func trim(g Grid) (ix int, have point.Point) {
+func trim(g Grid) (bound point.Box) {
 	anyCol, anyRow := usedColumns(g)
-	var bound point.Box
 	bound.BottomRight = g.Size
 
 	// trim top
@@ -398,7 +397,7 @@ func trim(g Grid) (ix int, have point.Point) {
 		bound.BottomRight.Y--
 	}
 
-	return bound.TopLeft.X, bound.Size()
+	return bound
 }
 
 func usedColumns(g Grid) (anyCol, anyRow []bool) {
