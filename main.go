@@ -316,20 +316,6 @@ func (w *world) tick() {
 
 const maxChargeFromResting = 4
 
-func (w *world) addCharge(ent ecs.Entity) {
-	if !ent.Type().All(wcInput) {
-		return // who asked you
-	}
-	w.moves.UpsertOne(mrPending, ent, ent, func(rel ecs.Entity) {
-		rel.Add(movN)
-		rel.Delete(movP)
-		id := rel.ID()
-		if n := w.moves.n[id]; n < maxChargeFromResting {
-			w.moves.n[id] = n + 1
-		}
-	}, nil)
-}
-
 func (w *world) addPendingMove(ent ecs.Entity, move point.Point) {
 	if !ent.Type().All(wcInput) {
 		return // who asked you

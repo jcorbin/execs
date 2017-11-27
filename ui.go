@@ -372,10 +372,7 @@ func (w *world) HandleKey(k view.KeyEvent) (rerr error) {
 
 	// default to resting
 	if !handled {
-		for it := w.Iter(ecs.All(playMoveMask)); it.Next(); {
-			w.addCharge(it.Entity())
-		}
-		proc, handled = true, true
+		proc = true
 	}
 
 	if proc {
