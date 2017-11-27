@@ -362,13 +362,13 @@ func (plc *LayoutPlacement) copy(g Grid, off int) {
 }
 
 func trim(g Grid) (ix int, have point.Point) {
-	any := usedColumns(g)
+	anyCol, _ := usedColumns(g)
 	var bound point.Box
 	bound.BottomRight = g.Size
 
 	// trim left
 	for x := 0; x < bound.BottomRight.X; x++ {
-		if any[x] {
+		if anyCol[x] {
 			break
 		}
 		bound.TopLeft.X++
@@ -376,7 +376,7 @@ func trim(g Grid) (ix int, have point.Point) {
 
 	// trim right
 	for x := bound.BottomRight.X - 1; x >= bound.TopLeft.X; x-- {
-		if any[x] {
+		if anyCol[x] {
 			break
 		}
 		bound.BottomRight.X--
@@ -385,21 +385,25 @@ func trim(g Grid) (ix int, have point.Point) {
 	return bound.TopLeft.X, bound.Size()
 }
 
-func usedColumns(g Grid) []bool {
-	any := make([]bool, g.Size.X)
-	for gi := 0; gi < len(g.Data); {
+func usedColumns(g Grid) (anyCol, anyRow []bool) {
+	anyCol = make([]bool, g.Size.X)
+	anyRow = make([]bool, g.Size.Y)
+	for y, i := 0, 0; i < len(g.Data); y++ {
 		for x := 0; x < g.Size.X; x++ {
-			if ch := g.Data[gi].Ch; ch != 0 {
-				any[x] = true
+			if ch := g.Data[i].Ch; ch != 0 {
+				anyCol[x] = true
+				anyRow[y] = true
 			}
-			if fg := g.Data[gi].Fg; fg != 0 {
-				any[x] = true
+			if fg := g.Data[i].Fg; fg != 0 {
+				anyCol[x] = true
+				anyRow[y] = true
 			}
-			if bg := g.Data[gi].Bg; bg != 0 {
-				any[x] = true
+			if bg := g.Data[i].Bg; bg != 0 {
+				anyCol[x] = true
+				anyRow[y] = true
 			}
-			gi++
+			i++
 		}
 	}
-	return any
+	return anyCol, anyRow
 }
