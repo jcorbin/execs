@@ -12,6 +12,16 @@ type Iterator struct {
 	tcl TypeClause
 }
 
+// First returns the next entity from the iterator, or NilEntity if iteration
+// is done; it's basically a convenient way to call Next() hten Entity() if
+// next was true.
+func (it *Iterator) First() Entity {
+	if it.Next() {
+		return it.Entity()
+	}
+	return NilEntity
+}
+
 // Next advances the iterator to point at the next matching entity, and
 // returns true if such an entity was found; otherwise iteration is done, and
 // false is returned.
