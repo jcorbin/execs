@@ -402,6 +402,7 @@ func (w *world) applyMoves() {
 			return
 		}
 
+		// TODO: replace these with a "what's here" query
 		defer func() {
 			pos := w.Positions[a.ID()]
 			for it := w.Iter(ecs.All(wcItem | wcPosition)); it.Next(); {
