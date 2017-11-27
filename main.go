@@ -612,11 +612,6 @@ func (w *world) processAIItems() {
 			}
 		} else {
 			// have booped?
-			w.log("%s> booped %v @%v",
-				w.getName(ai, "anon"),
-				w.getName(b, "???"),
-				w.Positions[b.ID()],
-			)
 			goals[ab{ai.ID(), b.ID()}].Destroy()
 		}
 	}
