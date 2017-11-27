@@ -334,14 +334,20 @@ func (w *world) addPendingMove(ent ecs.Entity, move point.Point) {
 	if !ent.Type().All(wcInput) {
 		return // who asked you
 	}
-	w.moves.UpsertOne(mrPending, ent, ent, func(rel ecs.Entity) {
-		rel.Add(movP | movN)
-		id := rel.ID()
-		w.moves.p[id] = w.moves.p[id].Add(move)
-		if n := w.moves.n[id]; n < maxChargeFromResting {
-			w.moves.n[id] = n + 1
-		}
-	}, nil)
+	w.moves.UpsertOne(mrPending, ent, ent,
+		func(rel ecs.Entity) {
+			rel.Add(movP | movN)
+			id := rel.ID()
+			w.moves.p[id] = w.moves.p[id].Add(move)
+			if n := w.moves.n[id]; n < maxChargeFromResting {
+				w.moves.n[id] = n + 1
+			}
+		},
+		func(accum, next ecs.Entity) {
+			if next.Type().All(movN) {
+				w.moves.n[accum.ID()] += w.moves.n[next.ID()]
+			}
+		})
 }
 
 func (w *world) generateAIMoves() {
