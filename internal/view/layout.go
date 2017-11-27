@@ -362,29 +362,27 @@ func (plc *LayoutPlacement) copy(g Grid, off int) {
 }
 
 func trim(g Grid) (ix int, have point.Point) {
-	have = g.Size
 	any := usedColumns(g)
+	var bound point.Box
+	bound.BottomRight = g.Size
 
 	// trim left
-	actual := have.X
-	for ; ix < g.Size.X; ix++ {
-		if any[ix] {
-			break
-		}
-		actual--
-	}
-
-	// trim right
-	for x := g.Size.X - 1; x >= ix; x-- {
+	for x := 0; x < bound.BottomRight.X; x++ {
 		if any[x] {
 			break
 		}
-		actual--
+		bound.TopLeft.X++
 	}
 
-	have.X = actual
+	// trim right
+	for x := bound.BottomRight.X - 1; x >= bound.TopLeft.X; x-- {
+		if any[x] {
+			break
+		}
+		bound.BottomRight.X--
+	}
 
-	return ix, have
+	return bound.TopLeft.X, bound.Size()
 }
 
 func usedColumns(g Grid) []bool {
