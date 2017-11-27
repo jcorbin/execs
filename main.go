@@ -750,17 +750,25 @@ func (w *world) maybeSpawn() {
 	}
 }
 
+func soulInvolved(a, b ecs.Entity) bool {
+	// TODO: ability to say "those are soul remains"
+	return a.Type().All(wcSoul) || b.Type().All(wcSoul)
+}
+
 func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 	// TODO: store damage and kill relations
 
 	srcBo, targBo := w.bodies[src.ID()], w.bodies[targ.ID()]
 	dealt, _, destroyed := targBo.damagePart(bPart, dmg)
 	if !destroyed {
-		w.log("%s's %s dealt %v damage to %s's %s",
-			w.getName(src, "!?!"), srcBo.DescribePart(aPart),
-			dealt,
-			w.getName(targ, "?!?"), targBo.DescribePart(bPart),
-		)
+		if soulInvolved(src, targ) {
+			w.log("%s's %s dealt %v damage to %s's %s",
+				w.getName(src, "!?!"), srcBo.DescribePart(aPart),
+				dealt,
+				w.getName(targ, "?!?"), targBo.DescribePart(bPart),
+			)
+		}
+
 		// TODO: decouple damage -> agro into a separate upsert after the
 		// damage proc; requires damage/kill relations
 		w.moves.UpsertOne(
@@ -778,10 +786,12 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 		return
 	}
 
-	w.log("%s's %s destroyed by %s's %s",
-		w.getName(targ, "?!?"), targBo.DescribePart(bPart),
-		w.getName(src, "!?!"), srcBo.DescribePart(aPart),
-	)
+	if soulInvolved(src, targ) {
+		w.log("%s's %s destroyed by %s's %s",
+			w.getName(targ, "?!?"), targBo.DescribePart(bPart),
+			w.getName(src, "!?!"), srcBo.DescribePart(aPart),
+		)
+	}
 
 	targID := targ.ID()
 
@@ -813,7 +823,9 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 				head.Add(bcDerived)
 				severed.derived[head.ID()] = targ
 			}
-			w.log("%s was disembodied by %s", w.getName(targ, "?!?"), w.getName(src, "!?!"))
+			if soulInvolved(src, targ) {
+				w.log("%s was disembodied by %s", w.getName(targ, "?!?"), w.getName(src, "!?!"))
+			}
 			return
 		}
 	}
@@ -866,12 +878,16 @@ func (w *world) dirtyFloorTile(pos point.Point) (ecs.Entity, bool) {
 func (w *world) checkAttackHit(src, targ ecs.Entity) (ecs.Entity, ecs.Entity) {
 	aPart := w.chooseAttackerPart(src)
 	if aPart == ecs.NilEntity {
-		w.log("%s has nothing to hit %s with.", w.getName(src, "!?!"), w.getName(targ, "?!?"))
+		if soulInvolved(src, targ) {
+			w.log("%s has nothing to hit %s with.", w.getName(src, "!?!"), w.getName(targ, "?!?"))
+		}
 		return ecs.NilEntity, ecs.NilEntity
 	}
 	bPart := w.chooseAttackedPart(targ)
 	if bPart == ecs.NilEntity {
-		w.log("%s can find nothing worth hitting on %s.", w.getName(src, "!?!"), w.getName(targ, "?!?"))
+		if soulInvolved(src, targ) {
+			w.log("%s can find nothing worth hitting on %s.", w.getName(src, "!?!"), w.getName(targ, "?!?"))
+		}
 		return ecs.NilEntity, ecs.NilEntity
 	}
 	return aPart, bPart

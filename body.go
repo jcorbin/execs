@@ -413,12 +413,14 @@ func (rem bodyRemains) scavenge(pr prompt.Prompt) (prompt.Prompt, bool) {
 		imp = append(imp, fmt.Sprintf("%s damage +%v", entBo.DescribePart(recv), damage))
 	}
 
-	rem.w.log("%s gained %v from %s's %s",
-		rem.w.getName(rem.ent, "unknown"),
-		strings.Join(imp, " and "),
-		rem.w.getName(rem.item, "unknown"),
-		rem.bo.DescribePart(rem.part),
-	)
+	if soulInvolved(rem.ent, rem.item) {
+		rem.w.log("%s gained %v from %s's %s",
+			rem.w.getName(rem.ent, "unknown"),
+			strings.Join(imp, " and "),
+			rem.w.getName(rem.item, "unknown"),
+			rem.bo.DescribePart(rem.part),
+		)
+	}
 
 	if rem.bo.Len() == 0 {
 		defer rem.item.Destroy()
