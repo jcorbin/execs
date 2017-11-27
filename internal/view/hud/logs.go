@@ -31,14 +31,13 @@ func (logs Logs) RenderSize() (wanted, needed point.Point) {
 	wanted.X = 1
 	wanted.Y = moremath.MinInt(len(logs.Buffer), logs.Max)
 	for i := range logs.Buffer {
-		if n := utf8.RuneCountInString(logs.Buffer[i]); n > needed.X {
-			needed.X = n
+		if n := utf8.RuneCountInString(logs.Buffer[i]); n > wanted.X {
+			wanted.X = n
 		}
 	}
 	if needed.Y > wanted.Y {
 		needed.Y = wanted.Y
 	}
-	wanted.X = needed.X
 	return wanted, needed
 }
 
@@ -49,12 +48,7 @@ func (logs Logs) Render(g view.Grid) {
 		off = 0
 	}
 	for i, y := off, 0; i < len(logs.Buffer); i, y = i+1, y+1 {
-		gi := y * g.Size.X
-		for s, x := logs.Buffer[i], 0; len(s) > 0 && x < g.Size.X; x++ {
-			r, n := utf8.DecodeRuneInString(s)
-			s = s[n:]
-			g.Data[gi+x].Ch = r
-		}
+		g.WriteString(0, y, logs.Buffer[i])
 	}
 }
 
