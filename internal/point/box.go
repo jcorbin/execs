@@ -64,7 +64,7 @@ func (b Box) Min(pt Point) Box {
 	return b
 }
 
-// Min returns a copy of the box each corner max'd to the given point.
+// Max returns a copy of the box each corner max'd to the given point.
 func (b Box) Max(pt Point) Box {
 	b.TopLeft = b.TopLeft.Max(pt)
 	b.BottomRight = b.BottomRight.Max(pt)
