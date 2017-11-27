@@ -317,6 +317,10 @@ func (w *world) HandleKey(k view.KeyEvent) (rerr error) {
 		return err
 	}
 
+	if w.over {
+		return nil
+	}
+
 	player := w.findPlayer()
 
 	if player != ecs.NilEntity && w.ui.bar.IsRoot() {
@@ -378,9 +382,6 @@ func (w *world) HandleKey(k view.KeyEvent) (rerr error) {
 		w.Process()
 	}
 
-	if w.over {
-		return view.ErrStop
-	}
 	return nil
 }
 
