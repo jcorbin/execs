@@ -298,13 +298,14 @@ func (plc *LayoutPlacement) Render() {
 	}
 }
 
-func (plc *LayoutPlacement) copy(g Grid, off int) (delta int) {
+func (plc *LayoutPlacement) copy(g Grid, off int) int {
 	var (
 		left   = plc.align&AlignCenter == AlignLeft
 		right  = plc.align&AlignCenter == AlignRight
 		lflush = plc.align&AlignHFlush != 0 && left
 		rflush = plc.align&AlignHFlush != 0 && right
 		pad    = plc.sep
+		paded  point.Point
 		ix     int
 	)
 
@@ -318,7 +319,7 @@ func (plc *LayoutPlacement) copy(g Grid, off int) (delta int) {
 				plc.lay.Grid.Data[li] = pad
 			}
 			off++
-			delta++
+			paded.X++
 		} else if rpad {
 			off--
 		} else {
@@ -344,10 +345,10 @@ func (plc *LayoutPlacement) copy(g Grid, off int) (delta int) {
 			li := ly*plc.lay.Grid.Size.X + off
 			plc.lay.Grid.Data[li] = pad
 		}
-		delta++
+		paded.X++
 	}
 
-	return delta
+	return paded.X
 }
 
 func trim(g Grid, off int, align Align) (_, ix int, have point.Point) {
