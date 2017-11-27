@@ -547,6 +547,62 @@ func TestLayout(t *testing.T) {
 		},
 
 		// TODO: center first, then big left occludes the prior center
+
+		{
+			name: "single over wanted",
+			init: func() Grid {
+				return MakeGrid(point.Point{X: 16, Y: 6})
+			},
+			sas: []sa{
+				{overWant(lshaped('a', 3, 2, 1), 2, 0), AlignTop | AlignLeft},
+			},
+			expected: []string{
+				"aaa             ",
+				"aa              ",
+				"a               ",
+				"                ",
+				"                ",
+				"                ",
+			},
+		},
+
+		{
+			name: "single over needed",
+			init: func() Grid {
+				return MakeGrid(point.Point{X: 16, Y: 6})
+			},
+			sas: []sa{
+				{overNeed(lshaped('a', 3, 2, 1), 2, 0), AlignTop | AlignLeft},
+			},
+			expected: []string{
+				"aaa             ",
+				"aa              ",
+				"a               ",
+				"                ",
+				"                ",
+				"                ",
+			},
+		},
+
+		{
+			name: "over wanted&needed w/company",
+			init: func() Grid {
+				return MakeGrid(point.Point{X: 16, Y: 6})
+			},
+			sas: []sa{
+				{lshaped('a', 3, 2, 1), AlignTop | AlignLeft},
+				{overWant(lshaped('b', 3, 2, 1), 2, 0), AlignTop | AlignLeft},
+				{overNeed(lshaped('c', 3, 2, 1), 2, 0), AlignTop | AlignLeft},
+			},
+			expected: []string{
+				"aaa bbb ccc     ",
+				"aa  bb  cc      ",
+				"a   b   c       ",
+				"                ",
+				"                ",
+				"                ",
+			},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			lay := Layout{}
@@ -593,4 +649,28 @@ func (sh shape) Render(g Grid) {
 			g.WriteString(0, y, s)
 		}
 	}
+}
+
+func overWant(ren Renderable, x, y int) Renderable { return overSize{ren, point.Zero, point.Pt(x, y)} }
+func overNeed(ren Renderable, x, y int) Renderable { return overSize{ren, point.Pt(x, y), point.Zero} }
+func overWantNeed(ren Renderable, wanted, needed point.Point) Renderable {
+	return overSize{ren, wanted, needed}
+}
+
+type overSize struct {
+	Renderable
+	wanted, needed point.Point
+}
+
+func (over overSize) RenderSize() (wanted, needed point.Point) {
+	wanted, needed = over.Renderable.RenderSize()
+	wanted = wanted.Add(over.wanted)
+	needed = needed.Add(over.needed)
+	if wanted.X < needed.X {
+		wanted.X = needed.X
+	}
+	if wanted.Y < needed.Y {
+		wanted.Y = needed.Y
+	}
+	return wanted, needed
 }
