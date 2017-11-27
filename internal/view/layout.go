@@ -302,6 +302,7 @@ func (plc *LayoutPlacement) copy(g Grid, off int) int {
 	var (
 		left   = plc.align&AlignCenter == AlignLeft
 		right  = plc.align&AlignCenter == AlignRight
+		center = plc.align&AlignCenter == AlignCenter
 		lflush = plc.align&AlignHFlush != 0 && left
 		rflush = plc.align&AlignHFlush != 0 && right
 		pad    = plc.sep
@@ -309,7 +310,15 @@ func (plc *LayoutPlacement) copy(g Grid, off int) int {
 		ix     int
 	)
 
-	off, ix, plc.have = trim(g, off, plc.align)
+	ix, plc.have = trim(g)
+
+	if dx := g.Size.X - plc.have.X; dx > 0 {
+		if right {
+			off += dx
+		} else if center {
+			off += dx / 2
+		}
+	}
 
 	// pad left
 	if pad.Ch != 0 {
@@ -351,7 +360,7 @@ func (plc *LayoutPlacement) copy(g Grid, off int) int {
 	return paded.X
 }
 
-func trim(g Grid, off int, align Align) (_, ix int, have point.Point) {
+func trim(g Grid) (ix int, have point.Point) {
 	have = g.Size
 	any := usedColumns(g)
 
@@ -372,18 +381,9 @@ func trim(g Grid, off int, align Align) (_, ix int, have point.Point) {
 		actual--
 	}
 
-	if diff := have.X - actual; diff > 0 {
-		switch align & AlignCenter {
-		case AlignRight:
-			off += diff
-		case AlignCenter:
-			off += diff / 2
-		}
-	}
-
 	have.X = actual
 
-	return off, ix, have
+	return ix, have
 }
 
 func usedColumns(g Grid) []bool {
