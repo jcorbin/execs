@@ -1,5 +1,8 @@
 package point
 
+// Pt is a convenience constructor for Point.
+func Pt(x, y int) Point { return Point{x, y} }
+
 // Point represents a point in <X,Y> 2-space.
 type Point struct{ X, Y int }
 
