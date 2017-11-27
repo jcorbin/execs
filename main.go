@@ -338,17 +338,18 @@ func (w *world) addPendingMove(ent ecs.Entity, move point.Point) {
 
 func (w *world) generateAIMoves() {
 	for it := w.Iter(ecs.All(aiMoveMask)); it.Next(); {
-		if target, found := w.aiTarget(it.Entity()); found {
-			// Move towards the target!
-			w.addPendingMove(it.Entity(), target.Sub(w.Positions[it.ID()]).Sign())
+		ai := it.Entity()
+		var move point.Point
+		if target, found := w.aiTarget(ai); found {
+			move = target.Sub(w.Positions[ai.ID()]).Sign()
 		} else {
 			// No? give up and just randomly budge then!
-			w.log("%s> Hmm...", w.getName(it.Entity(), "???"))
-			w.addPendingMove(it.Entity(), point.Point{
+			move = point.Point{
 				X: w.rng.Intn(3) - 1,
 				Y: w.rng.Intn(3) - 1,
-			})
+			}
 		}
+		w.addPendingMove(ai, move)
 	}
 }
 
