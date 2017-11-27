@@ -337,7 +337,12 @@ func (bo *body) partHPRating(ent ecs.Entity) float64 {
 	return rating
 }
 
-func (bo *body) sever(ids ...ecs.EntityID) *body {
+func (bo *body) sever(
+	log func(string, ...interface{}),
+	ents ...ecs.Entity,
+) *body {
+	// TODO: consider using a DFS traversal
+
 	type rel struct {
 		ent, a, b ecs.Entity
 		r         ecs.RelationType
@@ -346,16 +351,24 @@ func (bo *body) sever(ids ...ecs.EntityID) *body {
 	var (
 		cont  = newBody()
 		xlate = make(map[ecs.EntityID]ecs.EntityID)
-		q     = append([]ecs.EntityID(nil), ids...)
+		q     = make([]ecs.EntityID, len(ents))
 		n     = bo.rel.Len()
 		rels  = make([]rel, 0, n)
 		relis = make(map[ecs.EntityID]struct{}, n)
+		entis = make(map[ecs.EntityID]struct{}, n)
 	)
+	for i := range ents {
+		q[i] = bo.Deref(ents[i])
+	}
 
 	for len(q) > 0 {
 		id := q[0]
 		copy(q, q[1:])
 		q = q[:len(q)-1]
+		if _, seen := entis[id]; seen {
+			continue
+		}
+		entis[id] = struct{}{}
 
 		ent := bo.Ref(id)
 		if !ent.Type().All(bcPart) {
@@ -373,17 +386,16 @@ func (bo *body) sever(ids ...ecs.EntityID) *body {
 		}
 
 		// collect affected relations for final processing
-		cur := bo.rel.Cursor(ecs.AllRel(brControl), nil)
-		for cur.Scan() {
-			ent := cur.Entity()
-			id := ent.ID()
+		for cur := bo.rel.LookupA(ecs.AllRel(brControl), ent.ID()); cur.Scan(); {
+			id := cur.Entity().ID()
 			if _, seen := relis[id]; !seen {
 				relis[id] = struct{}{}
-				rels = append(rels, rel{ent, cur.A(), cur.B(), cur.R()})
+				rels = append(rels, rel{cur.Entity(), cur.A(), cur.B(), cur.R()})
+				q = append(q, cur.B().ID())
 			}
 		}
 
-		ent.Delete(bcPart)
+		defer ent.Destroy()
 
 		if len(q) == 0 && (bo.Iter(ecs.All(bcPart|bcHead)).Count() == 0 ||
 			bo.Iter(ecs.All(bcPart|bcTorso)).Count() == 0) {

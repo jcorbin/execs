@@ -830,7 +830,7 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 
 	targID := targ.ID()
 
-	severed := targBo.sever(bPart.ID())
+	severed := targBo.sever(w.log, bPart)
 	if severed != nil {
 		targName := w.getName(targ, "nameless")
 		name := fmt.Sprintf("remains of %s", targName)
@@ -838,8 +838,26 @@ func (w *world) dealAttackDamage(src, aPart, targ, bPart ecs.Entity, dmg int) {
 		w.setInterval(item, 5, w.decayRemains)
 		if severed.Len() > 0 {
 			w.log("%s's remains have dropped on the floor", targName)
+		} else {
+			w.log("empty severed? %v",
+				w.getName(targ, "?!?"), targBo.DescribePart(bPart),
+			)
 		}
 	}
+
+	bPart.Destroy()
+
+	// var xx []string
+	// for _, root := range targBo.rel.Roots(ecs.AllRel(brControl), nil) {
+	// 	xx = append(xx, targBo.DescribePart(root))
+	// }
+	// w.log("roots: %v", xx)
+	// for cur := targBo.rel.Cursor(ecs.AllRel(brControl), nil); cur.Scan(); {
+	// 	w.log("%v => %v (%v)",
+	// 		targBo.DescribePart(cur.A()),
+	// 		targBo.DescribePart(cur.B()),
+	// 		cur.Entity())
+	// }
 
 	if bo := w.bodies[targID]; bo.Iter(ecs.All(bcPart)).Count() > 0 {
 		return

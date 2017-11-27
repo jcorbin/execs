@@ -285,7 +285,7 @@ func (bs bodySummary) partHPColor(part ecs.Entity) termbox.Attribute {
 		return itemColors[0]
 	}
 	id := bs.bo.Deref(part)
-	if !part.Type().All(bcPart | bcHP) {
+	if !part.Type().All(bcPart) {
 		return itemColors[0]
 	}
 	hp := bs.bo.hp[id]
@@ -337,7 +337,9 @@ func (bs bodySummary) Render(g view.Grid) {
 		{xo + 6, y + 4, '_', bcFoot | bcRight},
 	} {
 		it := bs.bo.Iter(ecs.All(bcPart | pt.t))
-		g.Set(pt.x, pt.y, pt.ch, bs.partHPColor(it.First()), 0)
+		if it.Next() {
+			g.Set(pt.x, pt.y, pt.ch, bs.partHPColor(it.Entity()), 0)
+		}
 	}
 
 	y += 5
