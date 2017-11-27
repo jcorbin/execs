@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"os"
 	"strings"
-	"time"
 
 	termbox "github.com/nsf/termbox-go"
 
@@ -133,16 +132,16 @@ type timer struct {
 }
 
 func newWorld(v *view.View) (*world, error) {
-	f, err := os.Create(fmt.Sprintf("%v.log", time.Now().Format(time.RFC3339)))
-	if err != nil {
-		return nil, err
-	}
+	// f, err := os.Create(fmt.Sprintf("%v.log", time.Now().Format(time.RFC3339)))
+	// if err != nil {
+	// 	return nil, err
+	// }
 	w := &world{
-		rng:    rand.New(rand.NewSource(rand.Int63())),
-		logger: log.New(f, "", 0),
+		rng: rand.New(rand.NewSource(rand.Int63())),
+		// logger: log.New(f, "", 0),
 	}
 	w.init(v)
-	w.log("logging to %q", f.Name())
+	// w.log("logging to %q", f.Name())
 	return w, nil
 }
 
@@ -658,9 +657,11 @@ func (w *world) processCombat() {
 		dmg := int(moremath.Round(float64(srcBo.dmg[aPart.ID()]) * rating * rand))
 		dmg -= targBo.armor[bPart.ID()]
 		if dmg == 0 {
-			w.log("%s's %s bounces off %s's %s",
-				w.getName(src, "!?!"), srcBo.DescribePart(aPart),
-				w.getName(targ, "?!?"), targBo.DescribePart(bPart))
+			if soulInvolved(src, targ) {
+				w.log("%s's %s bounces off %s's %s",
+					w.getName(src, "!?!"), srcBo.DescribePart(aPart),
+					w.getName(targ, "?!?"), targBo.DescribePart(bPart))
+			}
 			continue
 		}
 
@@ -996,7 +997,9 @@ func (w *world) log(mess string, args ...interface{}) {
 		s = strings.Replace(s, rule.old, rule.new, -1)
 	}
 	w.ui.Log(s)
-	w.logger.Printf(s)
+	if w.logger != nil {
+		w.logger.Printf(s)
+	}
 }
 
 func (w *world) getName(ent ecs.Entity, deflt string) string {
