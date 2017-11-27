@@ -365,4 +365,39 @@ for and debugging the new layout engine...
   - unified goal setting under an `UpsertMany` from it's prior "lookup, maybe
     delete, then insert if we didn't have one"
 
+### [Fifteen](../../tree/fifteen)
+
+Slayer of bugs, and restorer of HP.
+
+By sheer weight of test cases, I have solved most (I shudder to think "all")
+bugs in the layout view engine... in fact I'm fairly certain there are
+remaining deficiencies, they just haven't been salient to my pursuits...
+Anyhow, the layout engine no longer staircases horribly; and the code is almost
+understandable, so that's not nothing...
+
+The game itself made decent progress: there's a nice new body summary
+visualization, a resting mechanic, and a healing mechanic (currently healing is
+the only thing that uses resting, but they're actually two separate mechanics
+fwiw.)
+
+Full Notes:
+
+- Game:
+  - made the game persist after "game over" so that you can see what happened to you.
+  - many fixes to the body system, including severing now works correctly!
+  - new shiny body summary, that uses an ASCII doll.
+  - axed so many log sites to stop spamming the console.
+  - added a resting/healing system: once you rest to a full charge, you then can
+    heal up to that many HP on one body part.
+  - movement system smoothed out a bit, less surprises.
+  - reified charge relations out of pending moves.
+
+- View System:
+  - allow hud logs to be horizontally truncated, rather than hiding.
+  - added an integration test for hud logs.
+  - fixed key handling.
+  - so many more layout tests; they layout engine now has less bugs.
+  - there's a new `Grid.Lines` utility method, useful for tests and debguging.
+
 [es-beta]: http://entity-systems.wikidot.com/rdbms-beta
+
