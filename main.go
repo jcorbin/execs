@@ -342,12 +342,6 @@ func (w *world) generateAIMoves() {
 		var move point.Point
 		if target, found := w.aiTarget(ai); found {
 			move = target.Sub(w.Positions[ai.ID()]).Sign()
-		} else {
-			// No? give up and just randomly budge then!
-			move = point.Point{
-				X: w.rng.Intn(3) - 1,
-				Y: w.rng.Intn(3) - 1,
-			}
 		}
 		w.addPendingMove(ai, move)
 	}
