@@ -15,7 +15,7 @@ const (
 	bcHP ecs.ComponentType = 1 << iota
 	bcPart
 	bcDerived
-	// bcStats TODO missing
+	// TODO damage and armor components
 	bcName
 
 	bcRight
@@ -246,6 +246,40 @@ func (bo *body) PartName(ent ecs.Entity) string {
 		return "tail"
 	}
 	return ""
+}
+
+func (bo *body) PartAbbr(ent ecs.Entity) string {
+	var s string
+	switch ent.Type() & bcPartMask {
+	case bcHead:
+		return "Hd"
+	case bcTorso:
+		return "By"
+	case bcUpperArm:
+		s = "uA"
+	case bcForeArm:
+		s = "fA"
+	case bcHand:
+		s = "Hn"
+	case bcThigh:
+		s = "Th"
+	case bcCalf:
+		s = "Lg"
+	case bcFoot:
+		s = "Ft"
+	case bcTail:
+		s = "Tl"
+	default:
+		return "?"
+	}
+	switch ent.Type() & bcLocMask {
+	case bcRight:
+		return "R" + s
+	case bcLeft:
+		return "L" + s
+	default:
+		return s
+	}
 }
 
 func (bo *body) DescribePart(ent ecs.Entity) string {

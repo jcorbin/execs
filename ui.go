@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"strconv"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -200,12 +200,11 @@ type bodySummary struct {
 	ent ecs.Entity
 	a   view.Align
 
-	armor, damage, charge int
-	hp, maxHP             int
-	hpParts               []string
-	armorParts            []string
-	damageParts           []string
-	chargeParts           []string
+	charge      int
+	hp, maxHP   int
+	armorParts  []string
+	damageParts []string
+	chargeParts []string
 }
 
 func makeBodySummary(w *world, ent ecs.Entity) view.Renderable {
@@ -220,10 +219,9 @@ func makeBodySummary(w *world, ent ecs.Entity) view.Renderable {
 
 func (bs *bodySummary) reset() {
 	n := bs.bo.Len() + 1
-	bs.armor, bs.damage, bs.charge = 0, 0, 0
-	bs.hpParts = nstrings(1, n, bs.hpParts)
+	bs.charge = 0
 	bs.armorParts = nstrings(1, n, bs.armorParts)
-	bs.damageParts = nstrings(1, n, bs.damageParts)
+	bs.damageParts = nstrings(0, n, bs.damageParts)
 	bs.chargeParts = nstrings(1, 1, bs.chargeParts)
 }
 
@@ -231,49 +229,130 @@ func (bs *bodySummary) build() {
 	bs.reset()
 
 	bs.charge = bs.w.getCharge(bs.ent)
-	for gt := bs.bo.rel.Traverse(ecs.AllRel(brControl), ecs.TraverseDFS); gt.Traverse(); {
-		id := gt.Node().ID()
-		hp := bs.bo.hp[id]
-		bs.hp += hp
-		bs.maxHP += bs.bo.maxHP[id]
-		bs.hpParts = append(bs.hpParts, strconv.Itoa(hp))
-		if n := bs.bo.armor[id]; n > 0 {
-			bs.armorParts = append(bs.armorParts, strconv.Itoa(n))
-			bs.armor += n
-		}
-		if n := bs.bo.dmg[id]; n > 0 {
-			bs.damageParts = append(bs.damageParts, strconv.Itoa(n))
-			bs.damage += n
-		}
+
+	for it := bs.bo.Iter(ecs.All(bcPart | bcHP)); it.Next(); {
+		bs.hp += bs.bo.hp[it.ID()]
+		bs.maxHP += bs.bo.maxHP[it.ID()]
 	}
 
-	bs.damageParts[0] = fmt.Sprintf("Damage(%v):", bs.damage)
-	bs.armorParts[0] = fmt.Sprintf("Armor(%v):", bs.armor)
-	bs.hpParts[0] = fmt.Sprintf("HP(%v/%v):", bs.hp, bs.maxHP)
+	headArmor := 0
+	for it := bs.bo.Iter(ecs.All(bcPart | bcHead)); it.Next(); {
+		headArmor += bs.bo.armor[it.ID()]
+	}
+
+	torsoArmor := 0
+	for it := bs.bo.Iter(ecs.All(bcPart | bcTorso)); it.Next(); {
+		torsoArmor += bs.bo.armor[it.ID()]
+	}
+
+	for _, part := range bs.bo.rel.Leaves(ecs.AllRel(brControl), nil) {
+		bs.damageParts = append(bs.damageParts, fmt.Sprintf(
+			"%v+%v",
+			bs.bo.PartAbbr(part),
+			bs.bo.dmg[part.ID()],
+		))
+	}
+	sort.Strings(bs.damageParts)
+
+	bs.armorParts[0] = fmt.Sprintf("Armor: %v %v", headArmor, torsoArmor)
 	bs.chargeParts[0] = fmt.Sprintf("Charge: %v", bs.charge)
 }
 
 func (bs bodySummary) RenderSize() (wanted, needed point.Point) {
+	needed.Y = 5 + 1
 	needed.X = moremath.MaxInt(
-		stringsWidth(" ", bs.hpParts),
-		stringsWidth(" ", bs.damageParts),
-		stringsWidth(" ", bs.armorParts),
+		7,
 		stringsWidth(" ", bs.chargeParts),
-	) - 1 // XXX wtf off by one ...
-	needed.Y = 4
+	)
+
+	for i := 0; i < len(bs.damageParts); {
+		j := i + 2
+		if j > len(bs.damageParts) {
+			j = len(bs.damageParts)
+		}
+		needed.X = moremath.MaxInt(needed.X, stringsWidth(" ", bs.damageParts[i:j]))
+		needed.Y++
+		i = j
+	}
+
+	needed.Y++ // XXX why
+
 	return needed, needed
 }
 
-func (bs bodySummary) Render(g view.Grid) {
-	// TODO: render a doll like
-	//    _O_
-	//   / | \
-	//   = | =
-	//    / \
-	//  _/   \_
+func (bs bodySummary) partHPColor(part ecs.Entity) termbox.Attribute {
+	if part == ecs.NilEntity {
+		return itemColors[0]
+	}
+	id := bs.bo.Deref(part)
+	if !part.Type().All(bcPart | bcHP) {
+		return itemColors[0]
+	}
+	hp := bs.bo.hp[id]
+	maxHP := bs.bo.maxHP[id]
+	return safeColorsIX(itemColors, 1+(len(itemColors)-2)*hp/maxHP)
+}
 
-	for y, parts := range [][]string{bs.damageParts, bs.armorParts, bs.hpParts, bs.chargeParts} {
-		g.WriteString(0, y, strings.Join(parts, " "))
+func (bs bodySummary) Render(g view.Grid) {
+	// TODO: bodyHPColors ?
+	// TODO: support scaling body with grafting
+
+	w := g.Size.X
+	y := 0
+	mess := fmt.Sprintf("%.0f%%", float64(bs.hp)/float64(bs.maxHP)*100)
+	g.WriteString((w-len(mess))/2, y, mess)
+	y++
+
+	//  0123456
+	// 0  _O_
+	// 1 / | \
+	// 2 = | =
+	// 3  / \
+	// 4_/   \_
+
+	xo := (w - 7) / 2
+	for _, pt := range []struct {
+		x, y int
+		ch   rune
+		t    ecs.ComponentType
+	}{
+		{xo + 2, y + 0, '_', bcUpperArm | bcLeft},
+		{xo + 3, y + 0, 'O', bcHead},
+		{xo + 4, y + 0, '_', bcUpperArm | bcRight},
+
+		{xo + 1, y + 1, '/', bcForeArm | bcLeft},
+		{xo + 3, y + 1, '|', bcTorso},
+		{xo + 5, y + 1, '\\', bcForeArm | bcRight},
+
+		{xo + 1, y + 2, '=', bcHand | bcLeft},
+		{xo + 3, y + 2, '|', bcTorso},
+		{xo + 5, y + 2, '=', bcHand | bcRight},
+
+		{xo + 2, y + 3, '/', bcThigh | bcLeft},
+		{xo + 4, y + 3, '\\', bcThigh | bcRight},
+
+		{xo + 0, y + 4, '_', bcFoot | bcLeft},
+		{xo + 1, y + 4, '/', bcCalf | bcLeft},
+		{xo + 5, y + 4, '\\', bcCalf | bcRight},
+		{xo + 6, y + 4, '_', bcFoot | bcRight},
+	} {
+		it := bs.bo.Iter(ecs.All(bcPart | pt.t))
+		g.Set(pt.x, pt.y, pt.ch, bs.partHPColor(it.First()), 0)
+	}
+
+	y += 5
+
+	g.WriteString(0, y, strings.Join(bs.chargeParts, " "))
+	y++
+
+	for i := 0; i < len(bs.damageParts); {
+		j := i + 2
+		if j > len(bs.damageParts) {
+			j = len(bs.damageParts)
+		}
+		g.WriteString(0, y, strings.Join(bs.damageParts[i:j], " "))
+		y++
+		i = j
 	}
 }
 
