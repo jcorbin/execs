@@ -117,9 +117,9 @@ func (ct *colorTable) genTile(
 	// TODO: better 2d generation
 	last := floorTable.Ref(1)
 	var pos point.Point
-	for pos.Y = box.TopLeft.Y + 1; pos.Y < box.BottomRight.Y+1; pos.Y++ {
+	for pos.Y = box.TopLeft.Y + 1; pos.Y < box.BottomRight.Y; pos.Y++ {
 		first := last
-		for pos.X = box.TopLeft.X + 1; pos.X < box.BottomRight.X+1; pos.X++ {
+		for pos.X = box.TopLeft.X + 1; pos.X < box.BottomRight.X; pos.X++ {
 			c, _ := floorTable.toColor(last)
 			f(pos, c)
 			last = floorTable.ChooseNext(rng, last)
