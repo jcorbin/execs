@@ -263,16 +263,6 @@ func (w *world) destroyInput(id ecs.EntityID, t ecs.ComponentType) {
 	}
 }
 
-func (bo *body) destroy(w *world) {
-	for i := range w.bodies {
-		if i > 0 && w.bodies[i] == nil {
-			bo.Clear()
-			w.bodies[i] = bo
-			break
-		}
-	}
-}
-
 func (w *world) extent() point.Box {
 	var bbox point.Box
 	for it := w.Iter(ecs.All(renderMask)); it.Next(); {
