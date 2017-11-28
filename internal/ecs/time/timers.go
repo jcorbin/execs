@@ -15,9 +15,10 @@ type Timers struct {
 }
 
 type timer struct {
-	t    ecs.ComponentType
-	n, m int
-	f    func(ecs.Entity)
+	t        ecs.ComponentType
+	remain   int
+	period   int
+	callback func(ecs.Entity)
 }
 
 // Init sets up the timer facility, attached to the given ecs.Core, and using
@@ -37,19 +38,19 @@ func (ti *Timers) Init(core *ecs.Core, t ecs.ComponentType) {
 // After attaches a one-shot timer to the given entity that expires after N
 // System.Process() ticks. The timer calls the given function once expired. Any
 // prior timer attached to the entity is overwritten.
-func (ti *Timers) After(ent ecs.Entity, N int, f func(ecs.Entity)) {
+func (ti *Timers) After(ent ecs.Entity, N int, callback func(ecs.Entity)) {
 	id := ti.core.Deref(ent)
 	ent.Add(ti.t)
-	ti.timers[id] = timer{n: N, f: f}
+	ti.timers[id] = timer{remain: N, callback: callback}
 }
 
 // Every attaches a periodic timer to the given entity that fires every N
 // System.Process() ticks. The timer calls the given function every time. Any
 // prior timer attached to the entity is overwritten.
-func (ti *Timers) Every(ent ecs.Entity, N int, f func(ecs.Entity)) {
+func (ti *Timers) Every(ent ecs.Entity, N int, callback func(ecs.Entity)) {
 	id := ti.core.Deref(ent)
 	ent.Add(ti.t)
-	ti.timers[id] = timer{n: N, m: N, f: f}
+	ti.timers[id] = timer{remain: N, period: N, callback: callback}
 }
 
 // Cancel deletes any timer attached to the given entity, returning true only
@@ -71,11 +72,11 @@ func (ti *Timers) Cancel(ent ecs.Entity) bool {
 func (ti *Timers) Process() {
 	for it := ti.core.Iter(ecs.All(ti.t)); it.Next(); {
 		t := &ti.timers[it.ID()]
-		if t.n <= 0 {
+		if t.remain <= 0 {
 			continue
 		}
-		t.n--
-		if t.n > 0 {
+		t.remain--
+		if t.remain > 0 {
 			continue
 		}
 		ent := it.Entity()
@@ -84,13 +85,13 @@ func (ti *Timers) Process() {
 }
 
 func (t *timer) process(ent ecs.Entity) func(ecs.Entity) {
-	f := t.f
-	if t.m != 0 {
-		t.n = t.m // interval refresh
+	callback := t.callback
+	if t.period != 0 {
+		t.remain = t.period // interval refresh
 	} else {
 		ent.Delete(t.t) // one shot
 	}
-	return f
+	return callback
 }
 
 func (ti *Timers) alloc(id ecs.EntityID, t ecs.ComponentType)        { ti.timers = append(ti.timers, timer{}) }
