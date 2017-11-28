@@ -542,6 +542,11 @@ func (w *world) nextEnemy() (ecs.Entity, *body) {
 }
 
 func (w *world) maybeSpawn() {
+	spawnPoints := w.Iter(ecs.All(wcSpawn))
+	if spawnPoints.Count() == 0 {
+		return
+	}
+
 	totalAgro := 0
 	for cur := w.moves.Cursor(ecs.AllRel(mrAgro), nil); cur.Scan(); {
 		totalAgro += w.moves.n[cur.Entity().ID()]
@@ -570,8 +575,8 @@ func (w *world) maybeSpawn() {
 	}
 
 spawnPoint:
-	for it := w.Iter(ecs.All(wcSpawn)); it.Next(); {
-		pos := w.Positions[it.ID()]
+	for spawnPoints.Next() {
+		pos := w.Positions[spawnPoints.ID()]
 
 		// TODO: spatial query
 		for it := w.Iter(ecs.All(collMask)); it.Next(); {
