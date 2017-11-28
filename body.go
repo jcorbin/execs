@@ -233,7 +233,7 @@ func (bo *body) PartName(ent ecs.Entity) string {
 	case bcUpperArm:
 		return "upper arm"
 	case bcForeArm:
-		return "fore arm"
+		return "forearm"
 	case bcHand:
 		return "hand"
 	case bcThigh:
