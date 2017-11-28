@@ -36,6 +36,7 @@ const (
 	wcAI
 	wcFloor
 	wcWall
+	wcSpawn
 )
 
 const (
@@ -541,13 +542,6 @@ func (w *world) nextEnemy() (ecs.Entity, *body) {
 }
 
 func (w *world) maybeSpawn() {
-	pos := point.Zero // TODO: randomize?
-	for it := w.Iter(ecs.All(collMask)); it.Next(); {
-		if w.Positions[it.ID()].Equal(pos) {
-			return
-		}
-	}
-
 	totalAgro := 0
 	for cur := w.moves.Cursor(ecs.AllRel(mrAgro), nil); cur.Scan(); {
 		totalAgro += w.moves.n[cur.Entity().ID()]
@@ -575,10 +569,24 @@ func (w *world) maybeSpawn() {
 		sum = 0
 	}
 
-	enemy, bo := w.nextEnemy()
-	if hp := bo.HP(); w.rng.Intn(sum+hp) < hp {
-		enemy.Delete(wcWaiting)
-		enemy.Add(wcPosition | wcCollide | wcInput | wcAI)
+spawnPoint:
+	for it := w.Iter(ecs.All(wcSpawn)); it.Next(); {
+		pos := w.Positions[it.ID()]
+
+		for it := w.Iter(ecs.All(collMask)); it.Next(); {
+			if w.Positions[it.ID()].Equal(pos) {
+				continue spawnPoint
+			}
+		}
+
+		enemy, bo := w.nextEnemy()
+		hp := bo.HP()
+		sum += hp
+		if w.rng.Intn(sum) < hp {
+			enemy.Delete(wcWaiting)
+			enemy.Add(wcPosition | wcCollide | wcInput | wcAI)
+			w.Positions[enemy.ID()] = pos
+		}
 	}
 }
 
@@ -927,6 +935,14 @@ func (w *world) getFrustration(ent ecs.Entity) (n int) {
 	return n
 }
 
+func (w *world) addSpawn(x, y int) ecs.Entity {
+	spawn := w.AddEntity(wcPosition | wcGlyph | wcFG | wcSpawn)
+	w.Positions[spawn.ID()] = point.Pt(x, y)
+	w.Glyphs[spawn.ID()] = '✖' // ×
+	w.FG[spawn.ID()] = 54
+	return spawn
+}
+
 func main() {
 	if err := view.JustKeepRunning(func(v *view.View) (view.Client, error) {
 		w, err := newWorld(v)
@@ -935,8 +951,10 @@ func main() {
 		}
 
 		pt := point.Point{X: 12, Y: 8}
-
 		w.addBox(point.Box{TopLeft: pt.Neg(), BottomRight: pt}, '#')
+
+		w.addSpawn(0, 0)
+
 		player := w.newChar("you", 'X')
 		player.Add(wcPosition | wcCollide | wcInput | wcSoul)
 
