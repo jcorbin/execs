@@ -553,9 +553,7 @@ func (w *world) maybeSpawn() {
 		totalAgro += w.moves.n[cur.Entity().ID()]
 	}
 
-	totalHP := 0
-	totalDmg := 0
-	combatCount := 0
+	totalHP, totalDmg, combatCount := 0, 0, 0
 	for it := w.Iter(ecs.All(combatMask | wcInput)); it.Next(); {
 		if !it.Type().All(wcWaiting) {
 			combatCount++
