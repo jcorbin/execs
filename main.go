@@ -39,6 +39,7 @@ const (
 	wcFloor
 	wcWall
 	wcSpawn
+	wcAnt
 )
 
 const (
@@ -78,13 +79,15 @@ type world struct {
 	ecs.System
 	pos eps.EPS
 
-	timers ecsTime.Timers
-	Names  []string
-	Glyphs []rune
-	BG     []termbox.Attribute
-	FG     []termbox.Attribute
-	bodies []*body
-	items  []worldItem
+	timers  ecsTime.Timers
+	Names   []string
+	Glyphs  []rune
+	BG      []termbox.Attribute
+	FG      []termbox.Attribute
+	bodies  []*body
+	items   []worldItem
+	antRule []antRule
+	antHead []uint
 
 	moves   moves // TODO: maybe subsume into pos?
 	waiting ecs.Iterator
@@ -165,6 +168,7 @@ func (w *world) init(v *view.View) {
 		&w.timers,
 		&w.moves.timers,
 		ecs.ProcFunc(w.generateAIMoves), // give AI a chance!
+		ecs.ProcFunc(w.runAnts),         // Yar!
 		ecs.ProcFunc(w.applyMoves),      // resolve moves
 		ecs.ProcFunc(w.processAIItems),  // nom nom
 		ecs.ProcFunc(w.processCombat),   // e.g. deal damage
@@ -180,13 +184,16 @@ func (w *world) init(v *view.View) {
 	w.FG = []termbox.Attribute{0}
 	w.bodies = []*body{nil}
 	w.items = []worldItem{nil}
+	w.antRule = []antRule{0}
+	w.antHead = []uint{0}
 
-	w.RegisterAllocator(wcName|wcGlyph|wcBG|wcFG|wcBody|wcItem, w.allocWorld)
+	w.RegisterAllocator(wcName|wcGlyph|wcBG|wcFG|wcBody|wcItem|wcAnt, w.allocWorld)
 	w.RegisterCreator(wcInput, w.createInput)
 	w.RegisterCreator(wcBody, w.createBody)
 	w.RegisterDestroyer(wcBody, w.destroyBody)
 	w.RegisterDestroyer(wcItem, w.destroyItem)
 	w.RegisterDestroyer(wcInput, w.destroyInput)
+	w.RegisterDestroyer(wcAnt, w.destroyAnt)
 
 	w.pos.Init(&w.Core, wcPosition)
 	w.moves.init(&w.Core) // TODO: maybe subsume into pos?
@@ -243,6 +250,8 @@ func (w *world) allocWorld(id ecs.EntityID, t ecs.ComponentType) {
 	w.FG = append(w.FG, 0)
 	w.bodies = append(w.bodies, nil)
 	w.items = append(w.items, nil)
+	w.antRule = append(w.antRule, 0)
+	w.antHead = append(w.antHead, 0)
 }
 
 func (w *world) createInput(id ecs.EntityID, t ecs.ComponentType) {
@@ -273,6 +282,11 @@ func (w *world) destroyInput(id ecs.EntityID, t ecs.ComponentType) {
 		// w.log("%s destroyed by %s", w.getName(targ, "?!?"), w.getName(src, "!?!"))
 		w.log("%s has been destroyed", name)
 	}
+}
+
+func (w *world) destroyAnt(id ecs.EntityID, t ecs.ComponentType) {
+	w.antRule[id] = 0
+	w.antHead[id] = 0
 }
 
 func (w *world) extent() point.Box {
@@ -922,15 +936,27 @@ func main() {
 			return nil, err
 		}
 
-		pt := point.Point{X: 12, Y: 8}
-		w.addBox(point.Box{TopLeft: pt.Neg(), BottomRight: pt}, '#')
+		// pt := point.Point{X: 12, Y: 8}
+		// w.addBox(point.Box{TopLeft: pt.Neg(), BottomRight: pt}, '#')
 
-		w.addSpawn(0, -5)
-		w.addSpawn(-8, 5)
-		w.addSpawn(8, 5)
+		// w.addSpawn(0, -5)
+		// w.addSpawn(-8, 5)
+		// w.addSpawn(8, 5)
 
 		player := w.newChar("you", 'X', wcSoul)
 		w.ui.bar.addAction(newRangeChooser(w, player))
+
+		ant := w.AddEntity(wcPosition | wcGlyph | wcAnt)
+		w.Glyphs[ant.ID()] = '*'
+		w.pos.Set(ant, point.Zero)
+		w.antRule[ant.ID()] = makeAntRule(
+			antL,
+			antR,
+			antL|antR,
+			antR,
+			antL,
+		)
+		w.antHead[ant.ID()] = 0
 
 		w.Process()
 
