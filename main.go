@@ -87,13 +87,15 @@ type world struct {
 
 type moves struct {
 	ecs.Relation
-	n []int
-	p []point.Point
+	timers ecsTime.Timers
+	n      []int
+	p      []point.Point
 }
 
 const (
 	movN ecs.ComponentType = 1 << iota
 	movP
+	movT
 
 	mrCollide ecs.RelationType = 1 << iota
 	mrHit
@@ -111,6 +113,7 @@ const (
 
 func (mov *moves) init(core *ecs.Core) {
 	mov.Relation.Init(core, 0, core, 0)
+	mov.timers.Init(&mov.Core, movT)
 	mov.n = []int{0}
 	mov.p = []point.Point{point.Zero}
 	mov.RegisterAllocator(movN|movP, mov.allocData)
@@ -149,6 +152,7 @@ func (w *world) init(v *view.View) {
 			w.moves.Delete(ecs.AnyRel(mrCollide), nil)
 		}),
 		&w.timers,
+		&w.moves.timers,
 		ecs.ProcFunc(w.prepareCollidables), // collect collidables
 		ecs.ProcFunc(w.generateAIMoves),    // give AI a chance!
 		ecs.ProcFunc(w.applyMoves),         // resolve moves
