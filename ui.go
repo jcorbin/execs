@@ -557,64 +557,66 @@ func (w *world) renderViewport(max point.Point) view.Grid {
 			fg, bg termbox.Attribute
 		)
 
-		var zVal uint8
-
 		if it.Type().All(wcGlyph) {
+			var zVal uint8
+
 			ch = w.Glyphs[it.ID()]
 			zVal = 1
-		}
 
-		// TODO: move to hp update
-		if it.Type().All(wcBody) && it.Type().Any(wcSoul|wcAI) {
-			zVal = 255
-			hp, maxHP := w.bodies[it.ID()].HPRange()
-			if !it.Type().All(wcSoul) {
-				zVal--
-				fg = safeColorsIX(aiColors, 1+(len(aiColors)-2)*hp/maxHP)
+			// TODO: move to hp update
+			if it.Type().All(wcBody) && it.Type().Any(wcSoul|wcAI) {
+				zVal = 255
+				hp, maxHP := w.bodies[it.ID()].HPRange()
+				if !it.Type().All(wcSoul) {
+					zVal--
+					fg = safeColorsIX(aiColors, 1+(len(aiColors)-2)*hp/maxHP)
+				} else {
+					fg = safeColorsIX(soulColors, 1+(len(soulColors)-2)*hp/maxHP)
+				}
+			} else if it.Type().All(wcSoul) {
+				zVal = 127
+				fg = soulColors[0]
+			} else if it.Type().All(wcAI) {
+				zVal = 126
+				fg = aiColors[0]
+			} else if it.Type().All(wcItem) {
+				zVal = 10
+				fg = itemColors[len(itemColors)-1]
+				if dur, ok := w.items[it.ID()].(durableItem); ok {
+					fg = itemColors[0]
+					if hp, maxHP := dur.HPRange(); maxHP > 0 {
+						fg = safeColorsIX(itemColors, (len(itemColors)-1)*hp/maxHP)
+					}
+				}
 			} else {
-				fg = safeColorsIX(soulColors, 1+(len(soulColors)-2)*hp/maxHP)
-			}
-		} else if it.Type().All(wcSoul) {
-			zVal = 127
-			fg = soulColors[0]
-		} else if it.Type().All(wcAI) {
-			zVal = 126
-			fg = aiColors[0]
-		} else if it.Type().All(wcItem) {
-			zVal = 10
-			fg = itemColors[len(itemColors)-1]
-			if dur, ok := w.items[it.ID()].(durableItem); ok {
-				fg = itemColors[0]
-				if hp, maxHP := dur.HPRange(); maxHP > 0 {
-					fg = safeColorsIX(itemColors, (len(itemColors)-1)*hp/maxHP)
+				zVal = 2
+				if it.Type().All(wcFG) {
+					fg = w.FG[it.ID()]
 				}
 			}
-		} else {
-			zVal = 2
-			if it.Type().All(wcFG) {
-				fg = w.FG[it.ID()]
+
+			i := pos.Y*grid.Size.X + pos.X
+			if i < 0 || i >= len(zVals) {
+				// TODO: debug
+				continue
 			}
-		}
 
-		i := pos.Y*grid.Size.X + pos.X
-		if i < 0 || i >= len(zVals) {
-			// TODO: debug
-			continue
-		}
-
-		if zVals[i] < zVal {
+			if zVals[i] >= zVal {
+				continue
+			}
 			zVals[i] = zVal
-			if it.Type().All(wcBG) {
-				bg = w.BG[it.ID()]
-			}
-			if fg != 0 {
-				fg++
-			}
-			if bg != 0 {
-				bg++
-			}
-			grid.Merge(pos.X, pos.Y, ch, fg, bg)
 		}
+
+		if it.Type().All(wcBG) {
+			bg = w.BG[it.ID()]
+		}
+		if fg != 0 {
+			fg++
+		}
+		if bg != 0 {
+			bg++
+		}
+		grid.Merge(pos.X, pos.Y, ch, fg, bg)
 	}
 
 	return grid
