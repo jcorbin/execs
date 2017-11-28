@@ -573,6 +573,7 @@ spawnPoint:
 	for it := w.Iter(ecs.All(wcSpawn)); it.Next(); {
 		pos := w.Positions[it.ID()]
 
+		// TODO: spatial query
 		for it := w.Iter(ecs.All(collMask)); it.Next(); {
 			if w.Positions[it.ID()].Equal(pos) {
 				continue spawnPoint
