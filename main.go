@@ -955,7 +955,9 @@ func main() {
 		pt := point.Point{X: 12, Y: 8}
 		w.addBox(point.Box{TopLeft: pt.Neg(), BottomRight: pt}, '#')
 
-		w.addSpawn(0, 0)
+		w.addSpawn(0, -5)
+		w.addSpawn(-8, 5)
+		w.addSpawn(8, 5)
 
 		player := w.newChar("you", 'X')
 		player.Add(wcPosition | wcCollide | wcInput | wcSoul)
