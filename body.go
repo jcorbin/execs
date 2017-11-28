@@ -342,6 +342,7 @@ func (bo *body) sever(
 	ents ...ecs.Entity,
 ) *body {
 	// TODO: consider using a DFS traversal
+	// TODO: fix orphaned head
 
 	type rel struct {
 		ent, a, b ecs.Entity

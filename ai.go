@@ -105,7 +105,7 @@ func (w *world) scoreAIGoal(ai, goal ecs.Entity) int {
 		return 0
 	}
 	if goal.Type().All(wcItem) {
-		return (quadLimit - score) * quadLimit
+		return (quadLimit - score) * quadLimit / 2
 	}
 	return score
 }
