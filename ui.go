@@ -566,18 +566,16 @@ func (w *world) renderViewport(max point.Point) view.Grid {
 
 	for it := w.Iter(ecs.Clause(wcPosition, wcGlyph|wcBG)); it.Next(); {
 		pos := w.Positions[it.ID()].Add(offset)
-		if pos.Less(point.Zero) || !pos.Less(grid.Size) {
+		gi := pos.Y*grid.Size.X + pos.X
+		if gi < 0 || gi >= len(grid.Data) {
+			// TODO: debug
 			continue
 		}
-		var (
-			ch     rune
-			fg, bg termbox.Attribute
-		)
 
 		if it.Type().All(wcGlyph) {
+			var fg termbox.Attribute
 			var zVal uint8
 
-			ch = w.Glyphs[it.ID()]
 			zVal = 1
 
 			// TODO: move to hp update
@@ -612,28 +610,24 @@ func (w *world) renderViewport(max point.Point) view.Grid {
 				}
 			}
 
-			i := pos.Y*grid.Size.X + pos.X
-			if i < 0 || i >= len(zVals) {
-				// TODO: debug
+			if ch := w.Glyphs[it.ID()]; zVal >= zVals[gi] && ch != 0 {
+				grid.Data[gi].Ch = ch
+				zVals[gi] = zVal
+				if fg != 0 {
+					grid.Data[gi].Fg = fg + 1
+				} else {
+					grid.Data[gi].Fg = 0
+				}
+			} else {
 				continue
 			}
-
-			if zVals[i] >= zVal {
-				continue
-			}
-			zVals[i] = zVal
 		}
 
 		if it.Type().All(wcBG) {
-			bg = w.BG[it.ID()]
+			if bg := w.BG[it.ID()]; bg != 0 {
+				grid.Data[gi].Bg = bg + 1
+			}
 		}
-		if fg != 0 {
-			fg++
-		}
-		if bg != 0 {
-			bg++
-		}
-		grid.Merge(pos.X, pos.Y, ch, fg, bg)
 	}
 
 	return grid
