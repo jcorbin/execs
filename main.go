@@ -586,6 +586,7 @@ spawnPoint:
 			enemy.Delete(wcWaiting)
 			enemy.Add(wcPosition | wcCollide | wcInput | wcAI)
 			w.Positions[enemy.ID()] = pos
+			w.addFrustration(enemy, w.bodies[enemy.ID()].HP())
 		}
 	}
 }
@@ -957,6 +958,7 @@ func main() {
 
 		player := w.newChar("you", 'X')
 		player.Add(wcPosition | wcCollide | wcInput | wcSoul)
+		w.addFrustration(player, w.bodies[player.ID()].HP())
 
 		w.ui.bar.addAction(newRangeChooser(w, player))
 
