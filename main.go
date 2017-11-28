@@ -528,6 +528,18 @@ func (w *world) checkOver() {
 	}
 }
 
+func (w *world) nextEnemy() (ecs.Entity, *body) {
+	var ent ecs.Entity
+	if it := w.Iter(ecs.All(charMask | wcWaiting)); it.Next() {
+		ent = it.Entity()
+	} else {
+		w.enemyCounter++
+		ent = w.newChar(fmt.Sprintf("enemy%d", w.enemyCounter), 'X')
+		ent.Add(wcWaiting)
+	}
+	return ent, w.bodies[ent.ID()]
+}
+
 func (w *world) maybeSpawn() {
 	pos := point.Zero // TODO: randomize?
 	for it := w.Iter(ecs.All(collMask)); it.Next(); {
@@ -535,16 +547,6 @@ func (w *world) maybeSpawn() {
 			return
 		}
 	}
-
-	var enemy ecs.Entity
-	if it := w.Iter(ecs.All(charMask | wcWaiting)); it.Next() {
-		enemy = it.Entity()
-	} else {
-		w.enemyCounter++
-		enemy = w.newChar(fmt.Sprintf("enemy%d", w.enemyCounter), 'X')
-		enemy.Add(wcWaiting)
-	}
-	bo := w.bodies[enemy.ID()]
 
 	totalAgro := 0
 	for cur := w.moves.Cursor(ecs.AllRel(mrAgro), nil); cur.Scan(); {
@@ -574,6 +576,8 @@ func (w *world) maybeSpawn() {
 	if sum < 0 {
 		sum = 0
 	}
+
+	enemy, bo := w.nextEnemy()
 	if hp := bo.HP(); w.rng.Intn(sum+hp) < hp {
 		enemy.Delete(wcWaiting)
 		enemy.Add(wcPosition | wcCollide | wcInput | wcAI)
