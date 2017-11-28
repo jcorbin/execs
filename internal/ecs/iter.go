@@ -26,7 +26,7 @@ func (it *Iterator) Next() bool {
 }
 
 // Reset resets the iterator, causing it to start over.
-func (it *Iterator) Reset() { it.i = 0 }
+func (it *Iterator) Reset() { it.i = -1 }
 
 // Count counts how many entities remain to be iterated, without advancing the
 // iterator.
