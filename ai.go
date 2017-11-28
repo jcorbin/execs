@@ -96,16 +96,16 @@ func (w *world) aiTarget(ai ecs.Entity) (point.Point, bool) {
 }
 
 func (w *world) scoreAIGoal(ai, goal ecs.Entity) int {
-	const quadLimit = 144
+	const itemLimit = 25
 
 	myPos := w.Positions[ai.ID()]
 	goalPos := w.Positions[goal.ID()]
 	score := goalPos.Sub(myPos).SumSQ()
-	if score > quadLimit {
-		return 0
-	}
 	if goal.Type().All(wcItem) {
-		return (quadLimit - score) * quadLimit / 2
+		if score > itemLimit {
+			return 0
+		}
+		return (itemLimit - score) * itemLimit
 	}
 	return score
 }
