@@ -76,6 +76,7 @@ func (w *world) aiTarget(ai ecs.Entity) (point.Point, bool) {
 			} else {
 				w.moves.n[id]++
 				if w.moves.n[id] >= 3 {
+					w.addFrustration(ai, 32)
 					// stuck trying to get that one, give up
 					return
 				}
