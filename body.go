@@ -342,7 +342,6 @@ func (bo *body) sever(
 	ents ...ecs.Entity,
 ) *body {
 	// TODO: consider using a DFS traversal
-	// TODO: fix orphaned head
 
 	type rel struct {
 		ent, a, b ecs.Entity
@@ -398,11 +397,22 @@ func (bo *body) sever(
 
 		defer ent.Destroy()
 
-		if len(q) == 0 && (bo.Iter(ecs.All(bcPart|bcHead)).Count() == 0 ||
-			bo.Iter(ecs.All(bcPart|bcTorso)).Count() == 0) {
-			it := bo.Iter(ecs.All(bcPart))
+		if len(q) == 0 {
+			nh, nt, it := 0, 0, bo.Iter(ecs.All(bcPart))
 			for it.Next() {
-				q = append(q, it.ID())
+				if _, gone := entis[it.ID()]; !gone {
+					if it.Type().All(bcHead) {
+						nh++
+					} else if it.Type().All(bcTorso) {
+						nt++
+					}
+				}
+			}
+			if nh == 0 || nt == 0 {
+				it.Reset()
+				for it.Next() {
+					q = append(q, it.ID())
+				}
 			}
 		}
 	}
