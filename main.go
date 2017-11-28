@@ -889,6 +889,42 @@ func (w *world) collides(ent ecs.Entity, pos point.Point) []ecs.Entity {
 	// return 0, false
 }
 
+func (mov *moves) decayN(rel ecs.Entity) {
+	n := 0
+	if rel.Type().All(movN) {
+		id := rel.ID()
+		n = mov.n[id]
+		n--
+		mov.n[id] = n
+	}
+	if n <= 0 {
+		rel.Delete(movT)
+	}
+}
+
+func (w *world) addFrustration(ent ecs.Entity, n int) {
+	w.moves.UpsertOne(mrAgro, ent, ent,
+		func(rel ecs.Entity) {
+			rel.Add(movN)
+			w.moves.n[rel.ID()] += n
+			w.moves.timers.Every(rel, 1, w.moves.decayN)
+		},
+		func(accum, next ecs.Entity) {
+			if next.Type().All(movN) {
+				w.moves.n[accum.ID()] += w.moves.n[next.ID()]
+			}
+		})
+}
+
+func (w *world) getFrustration(ent ecs.Entity) (n int) {
+	for cur := w.moves.LookupA(ecs.AllRel(mrAgro), w.Deref(ent)); cur.Scan(); {
+		if cur.B() == ent {
+			n += w.moves.n[cur.Entity().ID()]
+		}
+	}
+	return n
+}
+
 func main() {
 	if err := view.JustKeepRunning(func(v *view.View) (view.Client, error) {
 		w, err := newWorld(v)
