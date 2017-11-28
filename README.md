@@ -143,6 +143,8 @@ Next up I have plans for all those spare body parts... also maybe reclaim
 something from destroyed body parts (e.g. the remaining damage/armor points on
 whatever body part(s) you destroy)...
 
+[es-beta]: http://entity-systems.wikidot.com/rdbms-beta
+
 ### [Seven](../../tree/seven)
 
 Seven is an auspicous time to start over; now it's starting to look a lot more
@@ -399,5 +401,31 @@ Full Notes:
   - so many more layout tests; they layout engine now has less bugs.
   - there's a new `Grid.Lines` utility method, useful for tests and debguging.
 
-[es-beta]: http://entity-systems.wikidot.com/rdbms-beta
+### [Sixteen](../../tree/sixteen)
 
+Head Off Zombies, and spawn moar!
+
+Tuned, tweaked, and fixed the world:
+
+- Fixed body system bug that was leaving disembodied head roaming around.
+- AIs are much more laid back now, they only go for closer items, and less
+  likely to.
+- Added a frustration mechanic (agro with yourself): everyone starts out
+  frustrated; AIs get frustrated when stuck; frustration decays 1/tick.
+- The effect of frustration is to dampen chance to spawn after something has
+  spawned (since its just agro, it get counted against the spawning chance's
+  agro deficit).
+- The spawning system now uses spawn points, of which there are now three;
+  spawn points don't have to be marked, but I made them so for now.
+- Many minor fixes all over the place
+
+ECS progress:
+- Fixed Iterator.Reset.
+- Started to define `System` and `Proc` types.
+- Added a [`time` package](https://github.com/jcorbin/execs/blob/home/internal/ecs/time/timers.go) that can attach timers to any `ecs.Core`.
+
+The timer system is worth taking a look at, here's how easy it is to add it to
+an ecs:
+- [let move relations have timers too](https://github.com/jcorbin/execs/commit/db5ac0b46cb8b25188b6d03903df897e0b112cbb)
+- then [using it is super easy too](https://github.com/jcorbin/execs/commit/41157ab45e9b3e121bcc13cad3f52d6b51df6249#diff-7ddfb3e035b42cd70649cc33393fe32cR910)
+- e.g. [prior use of world timers for decay](https://github.com/jcorbin/execs/blob/sixteen/main.go#L657)
