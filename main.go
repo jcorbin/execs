@@ -563,7 +563,7 @@ func (w *world) maybeSpawn() {
 		}
 	}
 
-	agroDeficit := combatCount*30 - totalAgro
+	agroDeficit := totalHP/combatCount - totalAgro
 	sum := totalHP + totalDmg - agroDeficit
 	if sum < 0 {
 		sum = 0
