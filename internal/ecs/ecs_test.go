@@ -395,22 +395,24 @@ func TestGraph_Traverse(t *testing.T) {
 
 		{"DFS", func(t *testing.T) {
 			_, G := setupGraphTest(0)
+			gt := G.Traverse(ecs.AllClause, ecs.TraverseDFS)
+			gt.Init()
 			assert.Equal(t,
 				[]ecs.EntityID{1, 2, 4, 5, 3, 6, 7},
-				gtids(G.Traverse(ecs.AllClause, ecs.TraverseDFS)))
+				gtids(gt))
 		}},
 
 		{"CoDFS", func(t *testing.T) {
 			_, G := setupGraphTest(0)
+			gt := G.Traverse(ecs.AllClause, ecs.TraverseCoDFS)
 			for _, ids := range [][]ecs.EntityID{
 				{4, 2, 1},
 				{5, 2, 1},
 				{6, 3, 1},
 				{7, 3, 1},
 			} {
-				assert.Equal(t,
-					ids,
-					gtids(G.Traverse(ecs.AllClause, ecs.TraverseCoDFS, ids[0])))
+				gt.Init(ids[0])
+				assert.Equal(t, ids, gtids(gt))
 			}
 		}},
 	}.run(t)

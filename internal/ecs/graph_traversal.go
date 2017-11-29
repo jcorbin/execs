@@ -17,16 +17,14 @@ const (
 )
 
 // Traverse returns a new graph travers for the given type clause and mode.
-func (G *Graph) Traverse(tcl TypeClause, mode TraversalMode, seed ...EntityID) GraphTraverser {
+func (G *Graph) Traverse(tcl TypeClause, mode TraversalMode) GraphTraverser {
 	switch mode {
 	case TraverseDFS, TraverseCoDFS:
-		dfs := &dfsTraverser{
+		return &dfsTraverser{
 			g:    G,
 			tcl:  tcl,
 			mode: mode,
 		}
-		dfs.init(seed)
-		return dfs
 
 	default:
 		panic("invalid graph traversal mode")
@@ -35,6 +33,7 @@ func (G *Graph) Traverse(tcl TypeClause, mode TraversalMode, seed ...EntityID) G
 
 // GraphTraverser traverses a graph in some order.
 type GraphTraverser interface {
+	Init(seed ...EntityID)
 	Traverse() bool
 	G() *Graph
 	Edge() Entity
@@ -105,8 +104,15 @@ func (gt *dfsTraverser) setState(cur Cursor) {
 	}
 }
 
-func (gt *dfsTraverser) init(seed []EntityID) {
-	gt.seen = nil
+func (gt *dfsTraverser) Init(seed ...EntityID) {
+	if len(gt.seen) > 0 {
+		for id := range gt.seen {
+			delete(gt.seen, id)
+		}
+	} else {
+		// TODO: shave down this estimate?
+		gt.seen = make(map[EntityID]struct{}, gt.g.Len())
+	}
 	gt.edge = 0
 	gt.node = 0
 	gt.q = gt.q[:0]
@@ -136,6 +142,4 @@ func (gt *dfsTraverser) init(seed []EntityID) {
 			}
 		}
 	}
-
-	gt.seen = make(map[EntityID]struct{}, gt.g.Len()) // TODO: shave down this estimate?
 }
