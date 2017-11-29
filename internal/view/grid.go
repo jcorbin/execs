@@ -22,6 +22,17 @@ func MakeGrid(sz point.Point) Grid {
 	return g
 }
 
+// Resize update the grid size, growing Data capacity or truncating its length
+// as needed.
+func (g *Grid) Resize(sz point.Point) {
+	g.Size = sz
+	if n := sz.X * sz.Y; n > cap(g.Data) {
+		g.Data = make([]termbox.Cell, n)
+	} else {
+		g.Data = g.Data[:n]
+	}
+}
+
 // Get sets a cell in the grid.
 func (g Grid) Get(x, y int) termbox.Cell {
 	return g.Data[y*g.Size.X+x]
