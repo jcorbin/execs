@@ -25,6 +25,7 @@ type View struct {
 
 	sizeLock sync.Mutex
 	size     point.Point
+	termGrid Grid
 }
 
 func (v *View) runWith(f func() error) (rerr error) {
@@ -110,16 +111,21 @@ func (v *View) render(client Client) error {
 		return fmt.Errorf("bogus terminal size %v", v.size)
 	}
 
-	termGrid := MakeGrid(v.size)
+	if !v.termGrid.Size.Equal(v.size) {
+		v.termGrid.Resize(v.size)
+	}
+	for i := range v.termGrid.Data {
+		v.termGrid.Data[i] = termbox.Cell{}
+	}
 
-	if err := client.Render(termGrid); err != nil {
+	if err := client.Render(v.termGrid); err != nil {
 		return err
 	}
 
 	if err := termbox.Clear(termbox.ColorDefault, termbox.ColorDefault); err != nil {
 		return fmt.Errorf("termbox.Clear failed: %v", err)
 	}
-	copy(termbox.CellBuffer(), termGrid.Data)
+	copy(termbox.CellBuffer(), v.termGrid.Data)
 	if err := termbox.Flush(); err != nil {
 		return fmt.Errorf("termbox.Flush failed: %v", err)
 	}
