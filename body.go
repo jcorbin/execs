@@ -60,6 +60,8 @@ type body struct {
 	//       side may come from a different Core (body)).
 	// TODO: Relation would need a new flag "last cascades" so that destroy
 	//       only happens after the last relation is destroyed.
+
+	coGT ecs.GraphTraverser
 }
 
 // TODO: split package and intermediate through:
@@ -94,6 +96,7 @@ func newBody() *body {
 	bo.rel.Init(&bo.Core, 0)
 	bo.RegisterAllocator(bcPart, bo.allocPart)
 	bo.RegisterDestroyer(bcDerived, bo.destroyDerived)
+	bo.coGT = bo.rel.Traverse(ecs.AllRel(brControl), ecs.TraverseCoDFS)
 	return bo
 }
 
@@ -330,9 +333,8 @@ func (bo *body) allHeads() []ecs.Entity {
 
 func (bo *body) partHPRating(ent ecs.Entity) float64 {
 	rating := 1.0
-	gt := bo.rel.Traverse(ecs.AllRel(brControl), ecs.TraverseCoDFS)
-	for gt.Init(ent.ID()); gt.Traverse(); {
-		id := gt.Node().ID()
+	for bo.coGT.Init(ent.ID()); bo.coGT.Traverse(); {
+		id := bo.coGT.Node().ID()
 		rating *= float64(bo.hp[id]) / float64(bo.maxHP[id])
 	}
 	return rating

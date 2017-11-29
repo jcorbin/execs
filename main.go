@@ -457,9 +457,8 @@ func (bo *body) movementRating() float64 {
 	ratings := make(map[ecs.EntityID]float64, 6)
 	for it := bo.Iter(ecs.Any(bcFoot | bcCalf | bcThigh)); it.Next(); {
 		rating := 1.0
-		gt := bo.rel.Traverse(ecs.AllRel(brControl), ecs.TraverseCoDFS)
-		for gt.Init(it.ID()); gt.Traverse(); {
-			id := gt.Node().ID()
+		for bo.coGT.Init(it.ID()); bo.coGT.Traverse(); {
+			id := bo.coGT.Node().ID()
 			delete(ratings, id)
 			rating *= float64(bo.hp[id]) / float64(bo.maxHP[id])
 		}
