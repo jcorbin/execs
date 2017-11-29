@@ -6,12 +6,14 @@ import (
 	"math/rand"
 	"os"
 	"strings"
+	"time"
 
 	termbox "github.com/nsf/termbox-go"
 
 	"github.com/jcorbin/execs/internal/ecs"
 	"github.com/jcorbin/execs/internal/ecs/time"
 	"github.com/jcorbin/execs/internal/moremath"
+	"github.com/jcorbin/execs/internal/perf"
 	"github.com/jcorbin/execs/internal/point"
 	"github.com/jcorbin/execs/internal/view"
 	"github.com/jcorbin/execs/internal/view/hud/prompt"
@@ -62,6 +64,7 @@ type destroyableItem interface {
 }
 
 type world struct {
+	perf perf.Perf
 	ui
 
 	logFile *os.File
@@ -144,8 +147,15 @@ func newWorld(v *view.View) (*world, error) {
 	return w, nil
 }
 
+func (w *world) Process() {
+	w.perf.Process()
+}
+
 func (w *world) init(v *view.View) {
-	w.ui.init(v)
+	profOut := fmt.Sprintf("prof-%s", time.Now().Format(time.RFC3339))
+	w.perf.Init(profOut, &w.System)
+
+	w.ui.init(v, &w.perf)
 	w.timers.Init(&w.Core, wcTimer)
 
 	w.Procs = append(w.Procs,

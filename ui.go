@@ -8,6 +8,7 @@ import (
 
 	"github.com/jcorbin/execs/internal/ecs"
 	"github.com/jcorbin/execs/internal/moremath"
+	"github.com/jcorbin/execs/internal/perf"
 	"github.com/jcorbin/execs/internal/point"
 	"github.com/jcorbin/execs/internal/view"
 	"github.com/jcorbin/execs/internal/view/hud"
@@ -190,8 +191,9 @@ type ui struct {
 	View *view.View
 
 	hud.Logs
-	prompt prompt.Prompt
-	bar    actionBar
+	perfDash perf.Dash
+	prompt   prompt.Prompt
+	bar      actionBar
 }
 
 type bodySummary struct {
@@ -358,14 +360,19 @@ func (bs bodySummary) Render(g view.Grid) {
 	}
 }
 
-func (ui *ui) init(v *view.View) {
+func (ui *ui) init(v *view.View, perf *perf.Perf) {
 	ui.View = v
 	ui.Logs.Init(1000)
 	ui.Logs.Align = view.AlignLeft | view.AlignTop | view.AlignHFlush
 	ui.bar.sep = " "
+	ui.perfDash.Perf = perf
 }
 
 func (ui *ui) handle(k view.KeyEvent) (proc, handled bool, err error) {
+	if ui.perfDash.HandleKey(k) {
+		return false, true, nil
+	}
+
 	defer func() {
 		if !handled {
 			ui.prompt.Clear()
@@ -394,6 +401,14 @@ func (ui *ui) handle(k view.KeyEvent) (proc, handled bool, err error) {
 
 func (w *world) HandleKey(k view.KeyEvent) (rerr error) {
 	proc, handled, err := w.ui.handle(k)
+	defer func() {
+		if rerr != nil {
+			_ = w.perf.Close()
+		} else if err := w.perf.Err(); err != nil {
+			rerr = err
+		}
+	}()
+
 	if err != nil {
 		return err
 	}
@@ -507,6 +522,8 @@ func (w *world) Render(termGrid view.Grid) error {
 
 	hud.AddRenderable(&w.ui.bar, view.AlignLeft|view.AlignBottom)
 	hud.AddRenderable(&w.ui.prompt, view.AlignLeft|view.AlignBottom)
+
+	hud.AddRenderable(w.ui.perfDash, view.AlignRight|view.AlignBottom)
 
 	for it := w.Iter(ecs.All(wcSoul | wcBody)); it.Next(); {
 		hud.AddRenderable(makeBodySummary(w, it.Entity()),
