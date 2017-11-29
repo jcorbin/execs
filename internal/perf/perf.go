@@ -2,6 +2,7 @@ package perf
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"runtime"
@@ -107,6 +108,9 @@ func (perf *Perf) startProfiling() error {
 	if perf.profiling {
 		return nil
 	}
+	if err := perf.copyExecutable(); err != nil {
+		return err
+	}
 	f, err := perf.createOutput("cpu")
 	if err != nil {
 		return err
@@ -149,6 +153,43 @@ func (perf *Perf) takeProfile() error {
 		}
 	}
 	return nil
+}
+
+func (perf *Perf) copyExecutable() (rerr error) {
+	dstName := path.Join(perf.outputBase, "exe")
+
+	var sysStat syscall.Stat_t
+	err := syscall.Stat(dstName, &sysStat)
+	if err != nil && err != syscall.ENOENT {
+		return err
+	}
+
+	dst, err := createMkdirAll(dstName)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cerr := dst.Close(); rerr == nil {
+			rerr = cerr
+		}
+	}()
+
+	srcName, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	src, err := os.Open(srcName)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cerr := src.Close(); rerr == nil {
+			rerr = cerr
+		}
+	}()
+
+	_, err = io.Copy(dst, src)
+	return err
 }
 
 func (perf *Perf) createOutput(name string) (*os.File, error) {
