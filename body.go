@@ -330,7 +330,8 @@ func (bo *body) allHeads() []ecs.Entity {
 
 func (bo *body) partHPRating(ent ecs.Entity) float64 {
 	rating := 1.0
-	for gt := bo.rel.Traverse(ecs.AllRel(brControl), ecs.TraverseCoDFS, ent.ID()); gt.Traverse(); {
+	gt := bo.rel.Traverse(ecs.AllRel(brControl), ecs.TraverseCoDFS)
+	for gt.Init(ent.ID()); gt.Traverse(); {
 		id := gt.Node().ID()
 		rating *= float64(bo.hp[id]) / float64(bo.maxHP[id])
 	}
