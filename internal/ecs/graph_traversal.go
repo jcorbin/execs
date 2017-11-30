@@ -51,6 +51,7 @@ func newDFSTraverser(G *Graph, tcl TypeClause, mode TraversalMode) *dfsTraverser
 		g:    G,
 		tcl:  tcl,
 		mode: mode,
+		q:    make([]EntityID, 0, G.aCore.Cap()),
 	}
 	return gt
 }
