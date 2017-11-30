@@ -429,3 +429,27 @@ an ecs:
 - [let move relations have timers too](https://github.com/jcorbin/execs/commit/db5ac0b46cb8b25188b6d03903df897e0b112cbb)
 - then [using it is super easy too](https://github.com/jcorbin/execs/commit/41157ab45e9b3e121bcc13cad3f52d6b51df6249#diff-7ddfb3e035b42cd70649cc33393fe32cR910)
 - e.g. [prior use of world timers for decay](https://github.com/jcorbin/execs/blob/sixteen/main.go#L657)
+
+### [Eighteen](../../tree/eighteen)
+
+Profiling, Performance, and Timing!
+
+It's been a light last couple of days, so coalescing their progress into one
+update (and belated at that):
+
+- Added a performance dashboard that shows:
+  - current round number
+  - last round processing time
+  - total heap space / total heap objects at end of last round
+  - a "recording" pip that can be triggered with the "\*" key; when recording,
+    all Go `runtime/pprof` data is dumped to a sub directory at the end of
+    every round and a Go CPU profile is being taken continuously.
+- Subsequent perf progress from profiling:
+  - stop re-allocating `termGrid` in the view layer
+  - allow graph traverser and lookup cursor to be re-used
+  - in the main game, stop re-building graph traversers and cursors
+
+This line of perf work came after I tride to start a Langton's Ant module, and
+quickly fell off a perf cliff. Hearteningly, the perf story of the ECS core is
+quite good, it only seems to be the surrounding "query the ECS data" layers
+that incur allocation costs.
