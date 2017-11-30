@@ -20,12 +20,7 @@ const (
 func (G *Graph) Traverse(tcl TypeClause, mode TraversalMode) GraphTraverser {
 	switch mode {
 	case TraverseDFS, TraverseCoDFS:
-		return &dfsTraverser{
-			g:    G,
-			tcl:  tcl,
-			mode: mode,
-		}
-
+		return newDFSTraverser(G, tcl, mode)
 	default:
 		panic("invalid graph traversal mode")
 	}
@@ -49,6 +44,15 @@ type dfsTraverser struct {
 	node EntityID
 	curs []Cursor
 	q    []EntityID
+}
+
+func newDFSTraverser(G *Graph, tcl TypeClause, mode TraversalMode) *dfsTraverser {
+	gt := &dfsTraverser{
+		g:    G,
+		tcl:  tcl,
+		mode: mode,
+	}
+	return gt
 }
 
 func (gt *dfsTraverser) G() *Graph    { return gt.g }
