@@ -25,14 +25,15 @@ func (w *world) generateAIMoves() {
 func (w *world) aiTarget(ai ecs.Entity) (point.Point, bool) {
 	// chase the thing we hate the most
 	opp, hate := ecs.NilEntity, 0
-	for cur := w.moves.LookupA(ecs.AllRel(mrAgro), ai.ID()); cur.Scan(); {
-		if cur.B() == ai {
+	w.curAgro.Init(ai.ID())
+	for w.curAgro.Scan() {
+		if w.curAgro.B() == ai {
 			continue
 		}
-		if ent := cur.Entity(); ent.Type().All(movN) {
+		if ent := w.curAgro.Entity(); ent.Type().All(movN) {
 			// TODO: take other factors like distance into account
 			if n := w.moves.n[ent.ID()]; n > hate {
-				if b := cur.B(); b.Type().All(combatMask) {
+				if b := w.curAgro.B(); b.Type().All(combatMask) {
 					opp, hate = b, n
 				}
 			}

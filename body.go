@@ -61,7 +61,8 @@ type body struct {
 	// TODO: Relation would need a new flag "last cascades" so that destroy
 	//       only happens after the last relation is destroyed.
 
-	coGT ecs.GraphTraverser
+	curCtl ecs.LookupCursor
+	coGT   ecs.GraphTraverser
 }
 
 // TODO: split package and intermediate through:
@@ -96,6 +97,7 @@ func newBody() *body {
 	bo.rel.Init(&bo.Core, 0)
 	bo.RegisterAllocator(bcPart, bo.allocPart)
 	bo.RegisterDestroyer(bcDerived, bo.destroyDerived)
+	bo.curCtl = bo.rel.LookupA(ecs.AllRel(brControl))
 	bo.coGT = bo.rel.Traverse(ecs.AllRel(brControl), ecs.TraverseCoDFS)
 	return bo
 }
@@ -389,12 +391,13 @@ func (bo *body) sever(
 		}
 
 		// collect affected relations for final processing
-		for cur := bo.rel.LookupA(ecs.AllRel(brControl), ent.ID()); cur.Scan(); {
-			id := cur.Entity().ID()
+		bo.curCtl.Init(ent.ID())
+		for bo.curCtl.Scan() {
+			id := bo.curCtl.Entity().ID()
 			if _, seen := relis[id]; !seen {
 				relis[id] = struct{}{}
-				rels = append(rels, rel{cur.Entity(), cur.A(), cur.B(), cur.R()})
-				q = append(q, cur.B().ID())
+				rels = append(rels, rel{bo.curCtl.Entity(), bo.curCtl.A(), bo.curCtl.B(), bo.curCtl.R()})
+				q = append(q, bo.curCtl.B().ID())
 			}
 		}
 

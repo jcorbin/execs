@@ -87,6 +87,11 @@ type world struct {
 
 	coll  []ecs.EntityID // TODO: use an index structure for this
 	moves moves
+
+	curFrust     ecs.LookupCursor
+	curMoveRange ecs.LookupCursor
+	curCharge    ecs.LookupCursor
+	curAgro      ecs.LookupCursor
 }
 
 type moves struct {
@@ -191,6 +196,11 @@ func (w *world) init(v *view.View) {
 	w.RegisterDestroyer(wcInput, w.destroyInput)
 
 	w.moves.init(&w.Core)
+
+	w.curAgro = w.moves.LookupA(ecs.AllRel(mrAgro))
+	w.curFrust = w.moves.LookupA(ecs.AllRel(mrAgro))
+	w.curMoveRange = w.moves.LookupA(ecs.AllRel(mrMoveRange))
+	w.curCharge = w.moves.LookupA(ecs.All(movCharge))
 }
 
 var movementRangeLabels = []string{"Walk", "Lunge"}
@@ -322,9 +332,9 @@ func (w *world) setMovementRange(a ecs.Entity, n int) {
 }
 
 func (w *world) getMovementRange(a ecs.Entity) int {
-	id := w.Deref(a)
-	for cur := w.moves.LookupA(ecs.AllRel(mrMoveRange), id); cur.Scan(); {
-		if ent := cur.Entity(); ent.Type().All(movN) {
+	w.curMoveRange.Init(w.Deref(a))
+	for w.curMoveRange.Scan() {
+		if ent := w.curMoveRange.Entity(); ent.Type().All(movN) {
 			if n := w.moves.n[ent.ID()]; n <= maxMovementRange {
 				return n
 			}
@@ -334,8 +344,9 @@ func (w *world) getMovementRange(a ecs.Entity) int {
 }
 
 func (w *world) getCharge(ent ecs.Entity) (charge int) {
-	for cur := w.moves.LookupA(ecs.All(movCharge), w.Deref(ent)); cur.Scan(); {
-		charge += w.moves.n[cur.Entity().ID()]
+	w.curCharge.Init(w.Deref(ent))
+	for w.curCharge.Scan() {
+		charge += w.moves.n[w.curCharge.Entity().ID()]
 	}
 	return charge
 }
@@ -946,9 +957,10 @@ func (w *world) addFrustration(ent ecs.Entity, n int) {
 }
 
 func (w *world) getFrustration(ent ecs.Entity) (n int) {
-	for cur := w.moves.LookupA(ecs.AllRel(mrAgro), w.Deref(ent)); cur.Scan(); {
-		if cur.B() == ent {
-			n += w.moves.n[cur.Entity().ID()]
+	w.curFrust.Init(w.Deref(ent))
+	for w.curFrust.Scan() {
+		if w.curFrust.B() == ent {
+			n += w.moves.n[w.curFrust.Entity().ID()]
 		}
 	}
 	return n
