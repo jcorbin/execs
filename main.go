@@ -152,7 +152,8 @@ func (w *world) Process() {
 }
 
 func (w *world) init(v *view.View) {
-	profOut := fmt.Sprintf("prof-%s", time.Now().Format(time.RFC3339))
+	profOut := fmt.Sprintf("prof-%s", time.Now().Format("20060102T150405Z0700"))
+
 	w.perf.Init(profOut, &w.System)
 
 	w.ui.init(v, &w.perf)
