@@ -24,7 +24,7 @@ func (rel *Relation) indexLookup(
 	tcl TypeClause,
 	qids, aids []EntityID,
 	aix []int,
-) Cursor {
+) LookupCursor {
 	return &indexCursor{
 		rel:  rel,
 		tcl:  tcl,
@@ -92,6 +92,10 @@ type indexCursor struct {
 
 	r             RelationType
 	ent, aid, bid EntityID
+}
+
+func (ixc *indexCursor) Init(qids ...EntityID) {
+	ixc.qids = qids
 }
 
 func (ixc *indexCursor) scan() bool {

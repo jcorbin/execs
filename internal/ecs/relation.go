@@ -163,7 +163,7 @@ func (rel *Relation) Cursor(
 
 // LookupA returns a Cursor that will iterate over relations involving one or
 // more given A entities.
-func (rel *Relation) LookupA(tcl TypeClause, ids ...EntityID) Cursor {
+func (rel *Relation) LookupA(tcl TypeClause, ids ...EntityID) LookupCursor {
 	if rel.aix == nil {
 		return rel.scanLookup(tcl, false, ids)
 	}
@@ -172,7 +172,7 @@ func (rel *Relation) LookupA(tcl TypeClause, ids ...EntityID) Cursor {
 
 // LookupB returns a Cursor that will iterate over relations involving one or
 // more given B entities.
-func (rel *Relation) LookupB(tcl TypeClause, ids ...EntityID) Cursor {
+func (rel *Relation) LookupB(tcl TypeClause, ids ...EntityID) LookupCursor {
 	if rel.bix == nil {
 		return rel.scanLookup(tcl, true, ids)
 	}

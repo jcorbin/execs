@@ -10,7 +10,14 @@ type Cursor interface {
 	B() Entity
 }
 
-func (rel *Relation) scanLookup(tcl TypeClause, co bool, qids []EntityID) Cursor {
+// LookupCursor is a cursor looking for particular IDs in either the A or B
+// side.
+type LookupCursor interface {
+	Cursor
+	Init(qids ...EntityID)
+}
+
+func (rel *Relation) scanLookup(tcl TypeClause, co bool, qids []EntityID) LookupCursor {
 	// TODO: if qids is big enough, build a set first
 	if co {
 		return &coScanCursor{
@@ -35,6 +42,7 @@ type scanCursor struct {
 	qids []EntityID
 }
 
+func (sc *scanCursor) Init(qids ...EntityID) { sc.qids = qids }
 func (sc *scanCursor) Scan() bool {
 	for sc.iterCursor.Scan() {
 		id := sc.iterCursor.a.ID()
@@ -49,6 +57,7 @@ func (sc *scanCursor) Scan() bool {
 
 type coScanCursor scanCursor
 
+func (csc *coScanCursor) Init(qids ...EntityID) { csc.qids = qids }
 func (csc *coScanCursor) Scan() bool {
 	for csc.iterCursor.Scan() {
 		id := csc.iterCursor.b.ID()
