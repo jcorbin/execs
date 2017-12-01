@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"os"
 	"strings"
-	"time"
 
 	termbox "github.com/nsf/termbox-go"
 
@@ -152,9 +151,7 @@ func (w *world) Process() {
 }
 
 func (w *world) init(v *view.View) {
-	profOut := fmt.Sprintf("prof-%s", time.Now().Format("20060102T150405Z0700"))
-
-	w.perf.Init(profOut, &w.System)
+	w.perf.Init("", &w.System)
 
 	w.ui.init(v, &w.perf)
 	w.timers.Init(&w.Core, wcTimer)
