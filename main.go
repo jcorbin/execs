@@ -10,6 +10,7 @@ import (
 	termbox "github.com/nsf/termbox-go"
 
 	"github.com/jcorbin/execs/internal/ecs"
+	"github.com/jcorbin/execs/internal/ecs/eps"
 	"github.com/jcorbin/execs/internal/ecs/time"
 	"github.com/jcorbin/execs/internal/moremath"
 	"github.com/jcorbin/execs/internal/perf"
@@ -41,11 +42,12 @@ const (
 )
 
 const (
-	renderMask   = wcPosition | wcGlyph
-	playMoveMask = wcPosition | wcInput | wcSoul
-	charMask     = wcName | wcGlyph | wcBody | wcSolid
-	collMask     = wcPosition | wcCollide
-	combatMask   = wcCollide | wcBody
+	renderMask    = wcPosition | wcGlyph
+	playMoveMask  = wcPosition | wcInput | wcSoul
+	charMask      = wcName | wcGlyph | wcBody | wcSolid
+	collMask      = wcPosition | wcCollide
+	combatMask    = wcCollide | wcBody
+	floorTileMask = wcPosition | wcBG | wcFloor
 )
 
 type worldItem interface {
@@ -74,18 +76,17 @@ type world struct {
 	enemyCounter int
 
 	ecs.System
+	pos eps.EPS
 
-	timers    ecsTime.Timers
-	Names     []string
-	Positions []point.Point
-	Glyphs    []rune
-	BG        []termbox.Attribute
-	FG        []termbox.Attribute
-	bodies    []*body
-	items     []worldItem
+	timers ecsTime.Timers
+	Names  []string
+	Glyphs []rune
+	BG     []termbox.Attribute
+	FG     []termbox.Attribute
+	bodies []*body
+	items  []worldItem
 
-	coll  []ecs.EntityID // TODO: use an index structure for this
-	moves moves
+	moves moves // TODO: maybe subsume into pos?
 }
 
 type moves struct {
@@ -162,33 +163,32 @@ func (w *world) init(v *view.View) {
 		}),
 		&w.timers,
 		&w.moves.timers,
-		ecs.ProcFunc(w.prepareCollidables), // collect collidables
-		ecs.ProcFunc(w.generateAIMoves),    // give AI a chance!
-		ecs.ProcFunc(w.applyMoves),         // resolve moves
-		ecs.ProcFunc(w.processAIItems),     // nom nom
-		ecs.ProcFunc(w.processCombat),      // e.g. deal damage
-		ecs.ProcFunc(w.processRest),        // healing etc
-		ecs.ProcFunc(w.checkOver),          // no souls => done
-		ecs.ProcFunc(w.maybeSpawn),         // spawn more demons
+		ecs.ProcFunc(w.generateAIMoves), // give AI a chance!
+		ecs.ProcFunc(w.applyMoves),      // resolve moves
+		ecs.ProcFunc(w.processAIItems),  // nom nom
+		ecs.ProcFunc(w.processCombat),   // e.g. deal damage
+		ecs.ProcFunc(w.processRest),     // healing etc
+		ecs.ProcFunc(w.checkOver),       // no souls => done
+		ecs.ProcFunc(w.maybeSpawn),      // spawn more demons
 	)
 
 	// TODO: consider eliminating the padding for EntityID(0)
 	w.Names = []string{""}
-	w.Positions = []point.Point{point.Point{}}
 	w.Glyphs = []rune{0}
 	w.BG = []termbox.Attribute{0}
 	w.FG = []termbox.Attribute{0}
 	w.bodies = []*body{nil}
 	w.items = []worldItem{nil}
 
-	w.RegisterAllocator(wcName|wcPosition|wcGlyph|wcBG|wcFG|wcBody|wcItem, w.allocWorld)
+	w.RegisterAllocator(wcName|wcGlyph|wcBG|wcFG|wcBody|wcItem, w.allocWorld)
 	w.RegisterCreator(wcInput, w.createInput)
 	w.RegisterCreator(wcBody, w.createBody)
 	w.RegisterDestroyer(wcBody, w.destroyBody)
 	w.RegisterDestroyer(wcItem, w.destroyItem)
 	w.RegisterDestroyer(wcInput, w.destroyInput)
 
-	w.moves.init(&w.Core)
+	w.pos.Init(&w.Core, wcPosition)
+	w.moves.init(&w.Core) // TODO: maybe subsume into pos?
 }
 
 var movementRangeLabels = []string{"Walk", "Lunge"}
@@ -236,7 +236,6 @@ func (rc *rangeChooser) chosen(prior prompt.Prompt, n int) (next prompt.Prompt, 
 
 func (w *world) allocWorld(id ecs.EntityID, t ecs.ComponentType) {
 	w.Names = append(w.Names, "")
-	w.Positions = append(w.Positions, point.Point{})
 	w.Glyphs = append(w.Glyphs, 0)
 	w.BG = append(w.BG, 0)
 	w.FG = append(w.FG, 0)
@@ -277,7 +276,8 @@ func (w *world) destroyInput(id ecs.EntityID, t ecs.ComponentType) {
 func (w *world) extent() point.Box {
 	var bbox point.Box
 	for it := w.Iter(ecs.All(renderMask)); it.Next(); {
-		bbox = bbox.ExpandTo(w.Positions[it.ID()])
+		pos, _ := w.pos.Get(it.Entity())
+		bbox = bbox.ExpandTo(pos)
 	}
 	return bbox
 }
@@ -393,12 +393,12 @@ func (w *world) applyMoves() {
 			return
 		}
 
-		// TODO: replace these with a "what's here" query
 		defer func() {
-			pos := w.Positions[a.ID()]
-			for it := w.Iter(ecs.All(wcItem | wcPosition)); it.Next(); {
-				if w.Positions[it.ID()] == pos {
-					emit(mrCollide|mrItem, a, it.Entity())
+			if pos, ok := w.pos.Get(a); ok {
+				items := w.pos.At(pos)
+				items = ecs.Filter(items, ecs.All(wcItem))
+				for _, item := range items {
+					emit(mrCollide|mrItem, a, item)
 				}
 			}
 		}()
@@ -423,11 +423,16 @@ func (w *world) applyMoves() {
 
 		// move until we collide or exceeding lunging distance
 		limit := w.getMovementRange(a)
-		pos := w.Positions[a.ID()]
+		pos, _ := w.pos.Get(a)
 		i := 0
 		for ; i < n && i < limit; i++ {
 			new := pos.Add(pend.Sign())
-			if hit := w.collides(a, new); len(hit) > 0 {
+			var hit []ecs.Entity
+			if a.Type().All(wcCollide) {
+				hit = w.pos.At(new)
+				hit = ecs.Filter(hit, ecs.All(wcCollide))
+			}
+			if len(hit) > 0 {
 				for _, b := range hit {
 					if b.Type().All(wcSolid) {
 						hitRel := emit(mrCollide|mrHit, a, b)
@@ -435,7 +440,7 @@ func (w *world) applyMoves() {
 							hitRel.Add(movN)
 							w.moves.n[hitRel.ID()] = m
 						}
-						w.Positions[a.ID()] = pos
+						w.pos.Set(a, pos)
 						return
 					}
 				}
@@ -443,7 +448,7 @@ func (w *world) applyMoves() {
 			pos = new
 		}
 		n -= i
-		w.Positions[a.ID()] = pos
+		w.pos.Set(a, pos)
 
 		// moved without hitting anything
 		ent = emit(r, a, b)
@@ -586,13 +591,9 @@ func (w *world) maybeSpawn() {
 
 spawnPoint:
 	for spawnPoints.Next() {
-		pos := w.Positions[spawnPoints.ID()]
-
-		// TODO: spatial query
-		for it := w.Iter(ecs.All(collMask)); it.Next(); {
-			if w.Positions[it.ID()].Equal(pos) {
-				continue spawnPoint
-			}
+		pos, _ := w.pos.Get(spawnPoints.Entity())
+		if len(ecs.Filter(w.pos.At(pos), ecs.All(collMask))) > 0 {
+			continue spawnPoint
 		}
 
 		enemy, bo := w.nextEnemy()
@@ -601,7 +602,7 @@ spawnPoint:
 		if w.rng.Intn(sum) < hp {
 			enemy.Delete(wcWaiting)
 			enemy.Add(wcPosition | wcCollide | wcInput | wcAI)
-			w.Positions[enemy.ID()] = pos
+			w.pos.Set(enemy, pos)
 			w.addFrustration(enemy, w.bodies[enemy.ID()].HP())
 		}
 	}
@@ -655,13 +656,12 @@ func (w *world) dealAttackDamage(
 		)
 	}
 
-	targID := targ.ID()
-
 	severed := targBo.sever(w.log, bPart)
 	if severed != nil {
 		targName := w.getName(targ, "nameless")
 		name := fmt.Sprintf("remains of %s", targName)
-		item := w.newItem(w.Positions[targID], name, '%', severed)
+		pos, _ := w.pos.Get(targ)
+		item := w.newItem(pos, name, '%', severed)
 		w.timers.Every(item, 5, w.decayRemains)
 		if severed.Len() > 0 {
 			w.log("%s's remains have dropped on the floor", targName)
@@ -686,7 +686,7 @@ func (w *world) dealAttackDamage(
 	// 		cur.Entity())
 	// }
 
-	if bo := w.bodies[targID]; bo.Iter(ecs.All(bcPart)).Count() > 0 {
+	if bo := w.bodies[targ.ID()]; bo.Iter(ecs.All(bcPart)).Count() > 0 {
 		return leftover, false
 	}
 
@@ -698,7 +698,7 @@ func (w *world) dealAttackDamage(
 		}
 		if spi > 0 {
 			targ.Delete(wcBody | wcCollide)
-			w.Glyphs[targID] = '⟡'
+			w.Glyphs[targ.ID()] = '⟡'
 			for _, head := range heads {
 				head.Add(bcDerived)
 				severed.derived[head.ID()] = targ
@@ -725,7 +725,8 @@ func (w *world) decayRemains(item ecs.Entity) {
 		}
 	}
 	if rem.Len() == 0 {
-		w.dirtyFloorTile(w.Positions[item.ID()])
+		pos, _ := w.pos.Get(item)
+		w.dirtyFloorTile(pos)
 		// TODO: do something neat after max dirty (spawn something
 		// creepy)
 		item.Destroy()
@@ -733,18 +734,16 @@ func (w *world) decayRemains(item ecs.Entity) {
 }
 
 func (w *world) dirtyFloorTile(pos point.Point) (ecs.Entity, bool) {
-	for it := w.Iter(ecs.All(wcPosition | wcBG | wcFloor)); it.Next(); {
-		if id := it.ID(); w.Positions[id] == pos {
-			bg := w.BG[id]
-			for i := range floorColors {
-				if floorColors[i] == bg {
-					j := i + 1
-					canDirty := j < len(floorColors)
-					if canDirty {
-						w.BG[id] = floorColors[j]
-					}
-					return it.Entity(), canDirty
+	for _, tile := range ecs.Filter(w.pos.At(pos), ecs.All(floorTileMask)) {
+		bg := w.BG[tile.ID()]
+		for i := range floorColors {
+			if floorColors[i] == bg {
+				j := i + 1
+				canDirty := j < len(floorColors)
+				if canDirty {
+					w.BG[tile.ID()] = floorColors[j]
 				}
+				return tile, canDirty
 			}
 		}
 	}
@@ -815,7 +814,7 @@ func (w *world) addBox(box point.Box, glyph rune) {
 		for i := 0; i < r.n; i++ {
 			wall := w.AddEntity(wcPosition | wcCollide | wcSolid | wcGlyph | wcBG | wcFG | wcWall)
 			w.Glyphs[wall.ID()] = glyph
-			w.Positions[wall.ID()] = pos
+			w.pos.Set(wall, pos)
 			c, _ := wallTable.toColor(last)
 			w.BG[wall.ID()] = c
 			w.FG[wall.ID()] = c + 1
@@ -826,14 +825,14 @@ func (w *world) addBox(box point.Box, glyph rune) {
 
 	floorTable.genTile(w.rng, box, func(pos point.Point, bg termbox.Attribute) {
 		floor := w.AddEntity(wcPosition | wcBG | wcFloor)
-		w.Positions[floor.ID()] = pos
+		w.pos.Set(floor, pos)
 		w.BG[floor.ID()] = bg
 	})
 }
 
 func (w *world) newItem(pos point.Point, name string, glyph rune, val worldItem) ecs.Entity {
 	ent := w.AddEntity(wcPosition | wcCollide | wcName | wcGlyph | wcItem)
-	w.Positions[ent.ID()] = pos
+	w.pos.Set(ent, pos)
 	w.Glyphs[ent.ID()] = glyph
 	w.Names[ent.ID()] = name
 	w.items[ent.ID()] = val
@@ -842,8 +841,8 @@ func (w *world) newItem(pos point.Point, name string, glyph rune, val worldItem)
 
 func (w *world) newChar(name string, glyph rune) ecs.Entity {
 	ent := w.AddEntity(charMask)
+	w.pos.Set(ent, point.Zero)
 	w.Glyphs[ent.ID()] = glyph
-	w.Positions[ent.ID()] = point.Zero
 	w.Names[ent.ID()] = name
 	w.bodies[ent.ID()].build(w.rng)
 	return ent
@@ -873,47 +872,6 @@ func (w *world) getName(ent ecs.Entity, deflt string) string {
 		return deflt
 	}
 	return w.Names[ent.ID()]
-}
-
-func (w *world) prepareCollidables() {
-	// TODO: maintain a cleverer structure, like a quad-tree, instead
-	it := w.Iter(ecs.All(collMask))
-	if n := it.Count(); cap(w.coll) < n {
-		w.coll = make([]ecs.EntityID, 0, n)
-	} else {
-		w.coll = w.coll[:0]
-	}
-	for it.Next() {
-		w.coll = append(w.coll, it.ID())
-	}
-}
-
-func (w *world) collides(ent ecs.Entity, pos point.Point) []ecs.Entity {
-	if !ent.Type().All(wcCollide) {
-		return nil
-	}
-	var id ecs.EntityID
-	if ent != ecs.NilEntity {
-		id = w.Deref(ent)
-	}
-	var r []ecs.Entity
-	for _, hitID := range w.coll {
-		if hitID != id {
-			if hitPos := w.Positions[hitID]; hitPos.Equal(pos) {
-				r = append(r, w.Ref(hitID))
-			}
-		}
-	}
-	return r
-
-	// TODO: binary search
-	// i := sort.Search(len(w.coll), func(i int) bool {
-	// 	return w.Positions[w.coll[i]].Less(pos)
-	// })
-	// if i < len(w.coll) {
-	// 	return w.coll[i], w.coll[i] != id && w.Positions[w.coll[i]].Equal(pos)
-	// }
-	// return 0, false
 }
 
 func (mov *moves) decayN(rel ecs.Entity) {
@@ -954,7 +912,7 @@ func (w *world) getFrustration(ent ecs.Entity) (n int) {
 
 func (w *world) addSpawn(x, y int) ecs.Entity {
 	spawn := w.AddEntity(wcPosition | wcGlyph | wcFG | wcSpawn)
-	w.Positions[spawn.ID()] = point.Pt(x, y)
+	w.pos.Set(spawn, point.Pt(x, y))
 	w.Glyphs[spawn.ID()] = '✖' // ×
 	w.FG[spawn.ID()] = 54
 	return spawn

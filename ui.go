@@ -541,7 +541,7 @@ func (w *world) renderViewport(max point.Point) view.Grid {
 		focus point.Point
 	)
 	for it := w.Iter(ecs.All(renderMask)); it.Next(); {
-		pos := w.Positions[it.ID()]
+		pos, _ := w.pos.Get(it.Entity())
 		if it.Type().All(wcSoul) {
 			// TODO: centroid between all souls would be a way to move beyond
 			// "last wins"
@@ -564,8 +564,10 @@ func (w *world) renderViewport(max point.Point) view.Grid {
 	grid := view.MakeGrid(ofbox.Size().Min(max))
 	zVals := make([]uint8, len(grid.Data))
 
+	// TODO: use an pos range query
 	for it := w.Iter(ecs.Clause(wcPosition, wcGlyph|wcBG)); it.Next(); {
-		pos := w.Positions[it.ID()].Add(offset)
+		pos, _ := w.pos.Get(it.Entity())
+		pos = pos.Add(offset)
 		gi := pos.Y*grid.Size.X + pos.X
 		if gi < 0 || gi >= len(grid.Data) {
 			// TODO: debug

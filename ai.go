@@ -16,7 +16,8 @@ func (w *world) generateAIMoves() {
 		// TODO: if too damaged, rest
 		var move point.Point
 		if target, found := w.aiTarget(ai); found {
-			move = target.Sub(w.Positions[ai.ID()]).Sign()
+			pos, _ := w.pos.Get(ai)
+			move = target.Sub(pos).Sign()
 		}
 		w.addPendingMove(ai, move)
 	}
@@ -39,7 +40,7 @@ func (w *world) aiTarget(ai ecs.Entity) (point.Point, bool) {
 		}
 	}
 	if opp != ecs.NilEntity {
-		return w.Positions[opp.ID()], true
+		return w.pos.Get(opp)
 	}
 
 	// revert to our goal...
@@ -55,7 +56,7 @@ func (w *world) aiTarget(ai ecs.Entity) (point.Point, bool) {
 				// no goal, pick one!
 				if goal := w.chooseAIGoal(ai); goal != ecs.NilEntity {
 					emit(mrGoal, ai, goal)
-					goalPos, found = w.Positions[goal.ID()], true
+					goalPos, found = w.pos.Get(goal)
 				}
 				return
 			}
@@ -65,8 +66,8 @@ func (w *world) aiTarget(ai ecs.Entity) (point.Point, bool) {
 				return
 			}
 
-			myPos := w.Positions[ai.ID()]
-			goalPos = w.Positions[goal.ID()]
+			myPos, _ := w.pos.Get(ai)
+			goalPos, _ = w.pos.Get(goal)
 			if id := rel.ID(); !rel.Type().All(movN | movP) {
 				rel.Add(movN | movP)
 				w.moves.p[id] = myPos
@@ -89,7 +90,8 @@ func (w *world) aiTarget(ai ecs.Entity) (point.Point, bool) {
 			score *= 16 // inertia bonus
 			altScore := w.scoreAIGoal(ai, alt)
 			if w.rng.Intn(score+altScore) < altScore {
-				goal, goalPos = alt, w.Positions[alt.ID()]
+				pos, _ := w.pos.Get(alt)
+				goal, goalPos = alt, pos
 			}
 
 			// keep or update
@@ -102,8 +104,8 @@ func (w *world) aiTarget(ai ecs.Entity) (point.Point, bool) {
 func (w *world) scoreAIGoal(ai, goal ecs.Entity) int {
 	const itemLimit = 25
 
-	myPos := w.Positions[ai.ID()]
-	goalPos := w.Positions[goal.ID()]
+	myPos, _ := w.pos.Get(ai)
+	goalPos, _ := w.pos.Get(goal)
 	score := goalPos.Sub(myPos).SumSQ()
 	if goal.Type().All(wcItem) {
 		if score > itemLimit {
