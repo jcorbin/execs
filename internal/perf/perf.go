@@ -34,11 +34,17 @@ type Perf struct {
 	memStats [numSamples]runtime.MemStats
 }
 
-// Init sets up the perf system, writing results into the given directory.
-func (perf *Perf) Init(outputBase string, proc ecs.Proc) {
+// Init sets up the perf system, writing results into a timestamped directory
+// with an optional name prefix.
+func (perf *Perf) Init(name string, proc ecs.Proc) {
+	const timeFormat = "20060102T150405Z0700"
 	perf.profDebug = 2
-	perf.outputBase = outputBase
 	perf.Proc = proc
+	if nowf := time.Now().Format(timeFormat); name == "" {
+		perf.outputBase = fmt.Sprintf("prof-%s", nowf)
+	} else {
+		perf.outputBase = fmt.Sprintf("%s-prof-%s", name, nowf)
+	}
 }
 
 // Process runs a round of the perf system.
