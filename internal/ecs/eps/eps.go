@@ -111,28 +111,6 @@ func (eps *EPS) destroy(id ecs.EntityID, t ecs.ComponentType) {
 	}
 }
 
-// TODO: evaluate hilbert instead of z-order
-func zorderKey(pt point.Point) (z uint64) {
-	// TODO: evaluate a table ala
-	// https://graphics.stanford.edu/~seander/bithacks.html#InterleaveTableObvious
-	x, y := truncInt32(pt.X), truncInt32(pt.Y)
-	for i := uint(0); i < 32; i++ {
-		z |= (x&(1<<i))<<i | (y&(1<<i))<<(i+1)
-	}
-	return z
-}
-
-func truncInt32(n int) uint64 {
-	if n < math.MinInt32 {
-		return 0
-	}
-	if n > math.MaxInt32 {
-		return math.MaxUint32
-	}
-	return uint64(uint32(n - math.MinInt32))
-
-}
-
 func (d data) Len() int { return len(d.posIX) - 1 }
 
 func (d data) Less(i, j int) bool {
@@ -167,4 +145,25 @@ func (d data) searchRun(key uint64) (i, m int) {
 		m++
 	}
 	return i, m
+}
+
+// TODO: evaluate hilbert instead of z-order
+func zorderKey(pt point.Point) (z uint64) {
+	// TODO: evaluate a table ala
+	// https://graphics.stanford.edu/~seander/bithacks.html#InterleaveTableObvious
+	x, y := truncInt32(pt.X), truncInt32(pt.Y)
+	for i := uint(0); i < 32; i++ {
+		z |= (x&(1<<i))<<i | (y&(1<<i))<<(i+1)
+	}
+	return z
+}
+
+func truncInt32(n int) uint64 {
+	if n < math.MinInt32 {
+		return 0
+	}
+	if n > math.MaxInt32 {
+		return math.MaxUint32
+	}
+	return uint64(uint32(n - math.MinInt32))
 }
