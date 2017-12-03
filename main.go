@@ -86,7 +86,8 @@ type world struct {
 	bodies []*body
 	items  []worldItem
 
-	moves moves // TODO: maybe subsume into pos?
+	moves   moves // TODO: maybe subsume into pos?
+	waiting ecs.Iterator
 }
 
 type moves struct {
@@ -189,6 +190,7 @@ func (w *world) init(v *view.View) {
 
 	w.pos.Init(&w.Core, wcPosition)
 	w.moves.init(&w.Core) // TODO: maybe subsume into pos?
+	w.waiting = w.Iter(ecs.All(charMask | wcWaiting))
 }
 
 var movementRangeLabels = []string{"Walk", "Lunge"}
@@ -542,18 +544,6 @@ func (w *world) checkOver() {
 	}
 }
 
-func (w *world) nextEnemy() (ecs.Entity, *body) {
-	var ent ecs.Entity
-	if it := w.Iter(ecs.All(charMask | wcWaiting)); it.Next() {
-		ent = it.Entity()
-	} else {
-		w.enemyCounter++
-		ent = w.newChar(fmt.Sprintf("enemy%d", w.enemyCounter), 'X')
-		ent.Add(wcWaiting)
-	}
-	return ent, w.bodies[ent.ID()]
-}
-
 func (w *world) maybeSpawn() {
 	spawnPoints := w.Iter(ecs.All(wcSpawn))
 	if spawnPoints.Count() == 0 {
@@ -589,6 +579,7 @@ func (w *world) maybeSpawn() {
 		sum = 0
 	}
 
+	w.waiting.Reset()
 spawnPoint:
 	for spawnPoints.Next() {
 		pos, _ := w.pos.Get(spawnPoints.Entity())
@@ -596,8 +587,8 @@ spawnPoint:
 			continue spawnPoint
 		}
 
-		enemy, bo := w.nextEnemy()
-		hp := bo.HP()
+		enemy := w.nextWaiting()
+		hp := w.bodies[enemy.ID()].HP()
 		sum += hp
 		if w.rng.Intn(sum) < hp {
 			enemy.Delete(wcWaiting)
@@ -606,6 +597,16 @@ spawnPoint:
 			w.addFrustration(enemy, w.bodies[enemy.ID()].HP())
 		}
 	}
+}
+
+func (w *world) nextWaiting() ecs.Entity {
+	if w.waiting.Next() {
+		return w.waiting.Entity()
+	}
+	w.enemyCounter++
+	ent = w.newChar(fmt.Sprintf("enemy%d", w.enemyCounter), 'X')
+	ent.Add(wcWaiting)
+	return ent
 }
 
 func soulInvolved(a, b ecs.Entity) bool {
