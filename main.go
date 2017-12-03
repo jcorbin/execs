@@ -929,12 +929,10 @@ func main() {
 		w.addSpawn(-8, 5)
 		w.addSpawn(8, 5)
 
-		player := w.newChar("you", 'X', wcCollide | wcInput | wcSoul)
-		player.Delete(wcWaiting)
-		w.pos.Set(ent, point.Zero)
-		w.addFrustration(player, w.bodies[player.ID()].HP())
-
+		player := w.newChar("you", 'X', wcSoul)
 		w.ui.bar.addAction(newRangeChooser(w, player))
+
+		w.Process()
 
 		return w, nil
 	}); err != nil {
