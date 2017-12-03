@@ -2,6 +2,7 @@ package perf
 
 import (
 	"fmt"
+	"sort"
 	"unicode/utf8"
 
 	"github.com/jcorbin/execs/internal/point"
@@ -11,6 +12,7 @@ import (
 // Dash is a summary widget that can be triggered to show a perf dialog.
 type Dash struct {
 	*Perf
+	notes map[string]string
 	parts []string
 }
 
@@ -29,9 +31,12 @@ func (da *Dash) RenderSize() (wanted, needed point.Point) {
 	i := da.lastI()
 	lastElapsed := da.Perf.time[i].end.Sub(da.Perf.time[i].start)
 	ms := &da.Perf.memStats[i]
+	da.notes["heap"] = fmt.Sprintf("%v/%v", siBytes(ms.HeapAlloc), ms.HeapObjects)
 
 	if len(da.parts) > 0 {
 		da.parts = da.parts[:0]
+	} else {
+		da.parts = make([]string, 0, 1+len(da.notes))
 	}
 
 	da.parts = append(da.parts, fmt.Sprintf("t=%d Δt=%v", da.Perf.round, lastElapsed))
@@ -39,7 +44,11 @@ func (da *Dash) RenderSize() (wanted, needed point.Point) {
 	needed.Y = 1
 	wanted = needed
 
-	da.parts = append(da.parts, fmt.Sprintf("heap=%v/%v", siBytes(ms.HeapAlloc), ms.HeapObjects))
+	for name, mess := range da.notes {
+		part := fmt.Sprintf("%s=%s", name, mess)
+		da.parts = append(da.parts, part)
+	}
+	sort.Strings(da.parts[1:])
 
 	for _, part := range da.parts[1:] {
 		wanted.X += utf8.RuneCountInString(part)
