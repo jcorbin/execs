@@ -839,7 +839,6 @@ func (w *world) newItem(pos point.Point, name string, glyph rune, val worldItem)
 
 func (w *world) newChar(name string, glyph rune, t ecs.ComponentType) ecs.Entity {
 	ent := w.AddEntity(charMask | wcWaiting | t)
-	w.pos.Set(ent, point.Zero)
 	w.Glyphs[ent.ID()] = glyph
 	w.Names[ent.ID()] = name
 	w.bodies[ent.ID()].build(w.rng)
@@ -932,6 +931,7 @@ func main() {
 
 		player := w.newChar("you", 'X', wcCollide | wcInput | wcSoul)
 		player.Delete(wcWaiting)
+		w.pos.Set(ent, point.Zero)
 		w.addFrustration(player, w.bodies[player.ID()].HP())
 
 		w.ui.bar.addAction(newRangeChooser(w, player))
