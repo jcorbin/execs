@@ -590,7 +590,7 @@ func (w *world) maybeSpawn() {
 		sum += hp
 		if w.rng.Intn(sum) < hp {
 			ent.Delete(wcWaiting)
-			ent.Add(wcCollide | wcInput | wcAI)
+			ent.Add(wcCollide | wcInput)
 			w.pos.Set(ent, pos)
 			w.addFrustration(ent, hp)
 			ent = w.nextWaiting()
@@ -603,7 +603,7 @@ func (w *world) nextWaiting() ecs.Entity {
 		return w.waiting.Entity()
 	}
 	w.enemyCounter++
-	return w.newChar(fmt.Sprintf("enemy%d", w.enemyCounter), 'X', wcWaiting)
+	return w.newChar(fmt.Sprintf("enemy%d", w.enemyCounter), 'X', wcAI|wcWaiting)
 }
 
 func soulInvolved(a, b ecs.Entity) bool {
