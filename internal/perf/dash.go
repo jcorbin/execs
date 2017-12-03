@@ -11,6 +11,7 @@ import (
 // Dash is a summary widget that can be triggered to show a perf dialog.
 type Dash struct {
 	*Perf
+	parts []string
 }
 
 // HandleKey handles key input for the perf dashboard.
@@ -28,25 +29,34 @@ func (da *Dash) RenderSize() (wanted, needed point.Point) {
 	i := da.lastI()
 	lastElapsed := da.Perf.time[i].end.Sub(da.Perf.time[i].start)
 	ms := &da.Perf.memStats[i]
-	needed.X += utf8.RuneCountInString(fmt.Sprintf("t=%d Δt=%v", da.Perf.round, lastElapsed))
+
+	if len(da.parts) > 0 {
+		da.parts = da.parts[:0]
+	}
+
+	da.parts = append(da.parts, fmt.Sprintf("t=%d Δt=%v", da.Perf.round, lastElapsed))
+	needed.X = 2 + utf8.RuneCountInString(da.parts[0])
 	needed.Y = 1
 	wanted = needed
-	wanted.X += utf8.RuneCountInString(fmt.Sprintf(" heap=%v/%v", siBytes(ms.HeapAlloc), ms.HeapObjects))
+
+	da.parts = append(da.parts, fmt.Sprintf("heap=%v/%v", siBytes(ms.HeapAlloc), ms.HeapObjects))
+
+	for _, part := range da.parts[1:] {
+		wanted.X += utf8.RuneCountInString(part)
+	}
+
 	return wanted, needed
 }
 
 // Render the dashboard.
 func (da *Dash) Render(g view.Grid) {
-	i := da.lastI()
-	lastElapsed := da.Perf.time[i].end.Sub(da.Perf.time[i].start)
-	ms := &da.Perf.memStats[i]
 	x := 0
 	g.Set(x, 0, da.status(), 0, 0)
 	x++
-	g.WriteString(x, 0, "t=%d Δt=%v heap=%v/%v",
-		da.Perf.round, lastElapsed,
-		siBytes(ms.HeapAlloc), ms.HeapObjects,
-	)
+	for i := 0; i < len(da.parts) && x < g.Size.X-1; i++ {
+		x++
+		x += g.WriteString(x, 0, da.parts[i])
+	}
 }
 
 func (da Dash) lastI() int {
