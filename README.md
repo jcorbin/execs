@@ -453,3 +453,47 @@ This line of perf work came after I tride to start a Langton's Ant module, and
 quickly fell off a perf cliff. Hearteningly, the perf story of the ECS core is
 quite good, it only seems to be the surrounding "query the ECS data" layers
 that incur allocation costs.
+
+### [Twenty One](../../tree/twentyone)
+
+Wandering in the Wilderness...
+
+Spent the last three days delving too far into caves of performance, glimpsing
+exotic automata creatures, and finally reprised a cleaner spawning mechanic for
+my game.
+
+The ECS package now sports an Entity Positioning System (EPS). The EPS is
+implemented as a linear quadtree with z-order keys. It has only the most basic
+`Get(Entity) Point`, `Set(Entity, Point)`, and `At(Point) []Entity` methods for
+now. Particularly missing are range and nearest neighbor queries (doing so on a
+z-order curve requires [grokking some more maths
+stuff](https://en.wikipedia.org/wiki/Z-order_curve#Use_with_one-dimensional_data_structures_for_range_searching)).
+I'll probably build out a proper EMS (Entity Movement System) first, that will
+be able to supercede my game's current "one-at-a-time" move system, and be more
+performant for large number of entities to boot. At any rate, here's the [code
+for the new EPS](https://github.com/jcorbin/execs/commit/c56ecd9fedcff51dcee689682948c538381a4b74),
+and [here is its debut in my game](https://github.com/jcorbin/execs/commit/4b7d7160d4cd1d7bd312898f4c101cc8454f45b8).
+
+As far as my game goes, it's mostly been internal improvements / proving out
+the new EPS. However I did a bit of refactoring, and now the player spawns just
+like an enemy does! The way it works:
+- the game now has a general sense of "characters waiting to spawn"
+- waiting characters are not yet fully in the world (not solid, collidable, and
+  cannot get input)
+- there's always an "next AI" waiting to spawn; a next one is created as soon
+  as one spawn
+- each round every spawn point has a random chance to spawn a waiting charater;
+  this chance decreases, as it always has, with the total HP and hate deficit
+  in the world
+- the player then, is now "just" an initial condition in this waiting system;
+  due to how the random chance works, and since the player character is
+  created first, it's guaranteed to spawn on the first round of processing.
+
+For the pathologically curious, here's that line of refactoring:
+- [`1b9919e` refactor out w.{nextEnemy => nextWaiting}](https://github.com/jcorbin/execs/commit/1b9919ec316fc3151a69d5132dcd30247d61e93f)
+- [`a44b5fd` cleanup maybeSpawn conclusion](https://github.com/jcorbin/execs/commit/a44b5fdd81807728c2e12bcb5303812227ad32f6)
+- [`cdd4c17` take additional types thru newChar](https://github.com/jcorbin/execs/commit/cdd4c17c646ab231c2ad9283d252ca97a1934842)
+- [`9edb390` let nextWaiting set the waiting AI flag](https://github.com/jcorbin/execs/commit/9edb390f32169b01c1ff3275ee79e8e0fc0550e1)
+- [`e78f0fb` set waitig in newChar](https://github.com/jcorbin/execs/commit/e78f0fbc876c49133afa05526be05c95211dd52b)
+- [`3f18bc9` stop positionig in newChar](https://github.com/jcorbin/execs/commit/3f18bc99db19a973868a81b3753bebd9e5c7ce1c)
+- [`09bde51` spawn player like an enemy](https://github.com/jcorbin/execs/commit/09bde51a653a6f4980850de1cb2c8813a7504f00)
