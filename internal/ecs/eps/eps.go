@@ -20,18 +20,14 @@ type EPS struct {
 	t    ecs.ComponentType
 
 	frozen bool
-	data
+	pt     []point.Point
+	ix     index
 }
 
-type data struct {
-	pos   []pos
-	posIX []int
-}
-
-type pos struct {
-	def bool
-	point.Point
-	key uint64
+type index struct {
+	def []bool
+	key []uint64
+	ix  []int
 }
 
 // Init ialize the EPS wrt a given core and component type that
@@ -43,8 +39,10 @@ func (eps *EPS) Init(core *ecs.Core, t ecs.ComponentType) {
 	eps.core.RegisterCreator(eps.t, eps.create)
 	eps.core.RegisterDestroyer(eps.t, eps.destroy)
 
-	eps.pos = []pos{pos{}}
-	eps.posIX = []int{-1}
+	eps.pt = []point.Point{point.Zero}
+	eps.ix.def = []bool{false}
+	eps.ix.key = []uint64{0}
+	eps.ix.ix = []int{-1}
 }
 
 // Get the position of an entity; the bool argument is true only if
@@ -54,7 +52,7 @@ func (eps *EPS) Get(ent ecs.Entity) (point.Point, bool) {
 		return point.Zero, false
 	}
 	id := eps.core.Deref(ent)
-	return eps.pos[id].Point, eps.pos[id].def
+	return eps.pt[id], eps.ix.def[id]
 }
 
 // Set the position of an entity, adding the eps's component if
@@ -62,24 +60,24 @@ func (eps *EPS) Get(ent ecs.Entity) (point.Point, bool) {
 func (eps *EPS) Set(ent ecs.Entity, pt point.Point) {
 	id := eps.core.Deref(ent)
 	eps.frozen = true
-	if !eps.pos[id].def {
+	if !eps.ix.def[id] {
 		ent.Add(eps.t)
 	}
-	eps.pos[id].def = true
-	eps.pos[id].Point = pt
+	eps.pt[id] = pt
+	eps.ix.def[id] = true
+	eps.ix.key[id] = zorderKey(pt)
 	eps.frozen = false
-	eps.pos[id].key = zorderKey(eps.pos[id].Point)
-	sort.Sort(eps.data) // TODO: worth a fix-one algorithm?
+	sort.Sort(eps.ix) // TODO: worth a fix-one algorithm?
 }
 
 // At returns a slice of entities at a given point.
 func (eps *EPS) At(pt point.Point) (ents []ecs.Entity) {
 	k := zorderKey(pt)
-	i, m := eps.data.searchRun(k)
+	i, m := eps.ix.searchRun(k)
 	if m > 0 {
 		ents = make([]ecs.Entity, m)
 		for j := 0; j < m; i, j = i+1, j+1 {
-			xi := eps.posIX[i+1]
+			xi := eps.ix.ix[i+1]
 			ents[j] = eps.core.Ref(ecs.EntityID(xi))
 		}
 	}
@@ -91,55 +89,59 @@ func (eps *EPS) At(pt point.Point) (ents []ecs.Entity) {
 // func (eps *EPS) Within(box point.Box) []ecs.Entity
 
 func (eps *EPS) alloc(id ecs.EntityID, t ecs.ComponentType) {
-	i := len(eps.pos)
-	eps.pos = append(eps.pos, pos{})
-	eps.posIX = append(eps.posIX, i)
+	i := len(eps.pt)
+	eps.pt = append(eps.pt, point.Zero)
+	eps.ix.def = append(eps.ix.def, false)
+	eps.ix.key = append(eps.ix.key, 0)
+	eps.ix.ix = append(eps.ix.ix, i)
 }
 
 func (eps *EPS) create(id ecs.EntityID, t ecs.ComponentType) {
-	eps.pos[id].def = true
-	eps.pos[id].key = zorderKey(eps.pos[id].Point)
+	eps.ix.def[id] = true
+	eps.ix.key[id] = zorderKey(eps.pt[id])
 	if !eps.frozen {
-		sort.Sort(eps.data) // TODO: worth a fix-one algorithm?
+		sort.Sort(eps.ix) // TODO: worth a fix-one algorithm?
 	}
 }
 
 func (eps *EPS) destroy(id ecs.EntityID, t ecs.ComponentType) {
-	eps.pos[id] = pos{}
+	eps.pt[id] = point.Zero
+	eps.ix.def[id] = false
+	eps.ix.key[id] = 0
 	if !eps.frozen {
-		sort.Sort(eps.data) // TODO: worth a fix-one algorithm?
+		sort.Sort(eps.ix) // TODO: worth a fix-one algorithm?
 	}
 }
 
-func (d data) Len() int { return len(d.posIX) - 1 }
+func (ix index) Len() int { return len(ix.ix) - 1 }
 
-func (d data) Less(i, j int) bool {
-	xi, xj := d.posIX[i+1], d.posIX[j+1]
-	if !d.pos[xi].def {
+func (ix index) Less(i, j int) bool {
+	xi, xj := ix.ix[i+1], ix.ix[j+1]
+	if !ix.def[xi] {
 		return true
-	} else if !d.pos[xj].def {
+	} else if !ix.def[xj] {
 		return false
 	}
-	return d.pos[xi].key < d.pos[xj].key
+	return ix.key[xi] < ix.key[xj]
 }
 
-func (d data) Swap(i, j int) {
+func (ix index) Swap(i, j int) {
 	i++
 	j++
-	d.posIX[i], d.posIX[j] = d.posIX[j], d.posIX[i]
+	ix.ix[i], ix.ix[j] = ix.ix[j], ix.ix[i]
 }
 
-func (d data) search(key uint64) int {
-	return sort.Search(d.Len(), func(i int) bool {
-		xi := d.posIX[i+1]
-		return d.pos[xi].def && d.pos[xi].key >= key
+func (ix index) search(key uint64) int {
+	return sort.Search(ix.Len(), func(i int) bool {
+		xi := ix.ix[i+1]
+		return ix.def[xi] && ix.key[xi] >= key
 	})
 }
 
-func (d data) searchRun(key uint64) (i, m int) {
-	i = d.search(key)
-	for j, n := i, d.Len(); j < n; j++ {
-		if xi := d.posIX[j+1]; !d.pos[xi].def || d.pos[xi].key != key {
+func (ix index) searchRun(key uint64) (i, m int) {
+	i = ix.search(key)
+	for j, n := i, ix.Len(); j < n; j++ {
+		if xi := ix.ix[j+1]; !ix.def[xi] || ix.key[xi] != key {
 			break
 		}
 		m++
