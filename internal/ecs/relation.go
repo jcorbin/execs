@@ -294,6 +294,9 @@ func (rel *Relation) UpsertMany(
 		emit := func(er RelationType, ea, eb Entity) Entity {
 			n++
 			if any {
+				if ea == NilEntity || eb == NilEntity {
+					return NilEntity
+				}
 				return rel.insert(er, ea, eb)
 			}
 			any = true
