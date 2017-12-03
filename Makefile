@@ -7,8 +7,8 @@ all: $(branch)
 $(branch):
 	go build -o $@ $(sources)
 
-run:
-	go run $(sources)
+run: $(branch)
+	./$(branch) 2>$(branch)-$$(date '+%Y%m%dT%H%M%S%z').log
 
 test:
 	go test -v ./...
