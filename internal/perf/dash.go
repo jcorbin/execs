@@ -26,12 +26,20 @@ func (da Dash) HandleKey(k view.KeyEvent) bool {
 	return false
 }
 
+// Note adds or updats an optional note in the dashboard.
+func (da *Dash) Note(name, mess string, args ...interface{}) {
+	if da.notes == nil {
+		da.notes = make(map[string]string, 1)
+	}
+	da.notes[name] = fmt.Sprintf(mess, args...)
+}
+
 // RenderSize calculates the wanted/needed size render the dashboard.
 func (da *Dash) RenderSize() (wanted, needed point.Point) {
 	i := da.lastI()
 	lastElapsed := da.Perf.time[i].end.Sub(da.Perf.time[i].start)
 	ms := &da.Perf.memStats[i]
-	da.notes["heap"] = fmt.Sprintf("%v/%v", siBytes(ms.HeapAlloc), ms.HeapObjects)
+	da.Note("heap", "%v/%v", siBytes(ms.HeapAlloc), ms.HeapObjects)
 
 	if len(da.parts) > 0 {
 		da.parts = da.parts[:0]
