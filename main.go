@@ -603,7 +603,7 @@ func (w *world) nextWaiting() ecs.Entity {
 		return w.waiting.Entity()
 	}
 	w.enemyCounter++
-	return w.newChar(fmt.Sprintf("enemy%d", w.enemyCounter), 'X', wcAI|wcWaiting)
+	return w.newChar(fmt.Sprintf("enemy%d", w.enemyCounter), 'X', wcAI)
 }
 
 func soulInvolved(a, b ecs.Entity) bool {
@@ -838,7 +838,7 @@ func (w *world) newItem(pos point.Point, name string, glyph rune, val worldItem)
 }
 
 func (w *world) newChar(name string, glyph rune, t ecs.ComponentType) ecs.Entity {
-	ent := w.AddEntity(charMask | t)
+	ent := w.AddEntity(charMask | wcWaiting | t)
 	w.pos.Set(ent, point.Zero)
 	w.Glyphs[ent.ID()] = glyph
 	w.Names[ent.ID()] = name
@@ -931,6 +931,7 @@ func main() {
 		w.addSpawn(8, 5)
 
 		player := w.newChar("you", 'X', wcCollide | wcInput | wcSoul)
+		player.Delete(wcWaiting)
 		w.addFrustration(player, w.bodies[player.ID()].HP())
 
 		w.ui.bar.addAction(newRangeChooser(w, player))
