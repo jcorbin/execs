@@ -580,21 +580,20 @@ func (w *world) maybeSpawn() {
 	}
 
 	w.waiting.Reset()
-spawnPoint:
 	for spawnPoints.Next() {
 		pos, _ := w.pos.Get(spawnPoints.Entity())
 		if len(ecs.Filter(w.pos.At(pos), ecs.All(collMask))) > 0 {
-			continue spawnPoint
+			continue
 		}
-
-		enemy := w.nextWaiting()
-		hp := w.bodies[enemy.ID()].HP()
+		ent := w.nextWaiting()
+		hp := w.bodies[ent.ID()].HP()
 		sum += hp
 		if w.rng.Intn(sum) < hp {
-			enemy.Delete(wcWaiting)
-			enemy.Add(wcPosition | wcCollide | wcInput | wcAI)
-			w.pos.Set(enemy, pos)
-			w.addFrustration(enemy, w.bodies[enemy.ID()].HP())
+			ent.Delete(wcWaiting)
+			ent.Add(wcCollide | wcInput | wcAI)
+			w.pos.Set(ent, pos)
+			w.addFrustration(ent, hp)
+			ent = w.nextWaiting()
 		}
 	}
 }
