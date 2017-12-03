@@ -24,7 +24,7 @@ func (da Dash) HandleKey(k view.KeyEvent) bool {
 }
 
 // RenderSize calculates the wanted/needed size render the dashboard.
-func (da Dash) RenderSize() (wanted, needed point.Point) {
+func (da *Dash) RenderSize() (wanted, needed point.Point) {
 	i := da.lastI()
 	lastElapsed := da.Perf.time[i].end.Sub(da.Perf.time[i].start)
 	ms := &da.Perf.memStats[i]
@@ -36,7 +36,7 @@ func (da Dash) RenderSize() (wanted, needed point.Point) {
 }
 
 // Render the dashboard.
-func (da Dash) Render(g view.Grid) {
+func (da *Dash) Render(g view.Grid) {
 	i := da.lastI()
 	lastElapsed := da.Perf.time[i].end.Sub(da.Perf.time[i].start)
 	ms := &da.Perf.memStats[i]

@@ -523,7 +523,7 @@ func (w *world) Render(termGrid view.Grid) error {
 	hud.AddRenderable(&w.ui.bar, view.AlignLeft|view.AlignBottom)
 	hud.AddRenderable(&w.ui.prompt, view.AlignLeft|view.AlignBottom)
 
-	hud.AddRenderable(w.ui.perfDash, view.AlignRight|view.AlignBottom)
+	hud.AddRenderable(&w.ui.perfDash, view.AlignRight|view.AlignBottom)
 
 	for it := w.Iter(ecs.All(wcSoul | wcBody)); it.Next(); {
 		hud.AddRenderable(makeBodySummary(w, it.Entity()),
