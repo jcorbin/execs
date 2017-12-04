@@ -20,9 +20,10 @@ type EPS struct {
 	core *ecs.Core
 	t    ecs.ComponentType
 
-	inval int
-	pt    []point.Point
-	ix    index
+	resEnts []ecs.Entity
+	inval   int
+	pt      []point.Point
+	ix      index
 }
 
 type epsFlag uint8
@@ -67,21 +68,29 @@ func (eps *EPS) Set(ent ecs.Entity, pt point.Point) {
 	}
 }
 
-// At returns a slice of entities at a given point.
-func (eps *EPS) At(pt point.Point) (ents []ecs.Entity) {
+// At returns a slice of entities at a given point; NOTE the slice is not safe
+// to retain long term, and MAY be re-used by the next call to EPS.At.
+//
+// TODO: provide a struct that localizes that sharing.
+func (eps *EPS) At(pt point.Point) []ecs.Entity {
 	if eps.inval > 0 {
 		eps.reindex()
 	}
 	k := zorderKey(pt)
 	i, m := eps.ix.searchRun(k)
-	if m > 0 {
-		ents = make([]ecs.Entity, m)
-		for j := 0; j < m; i, j = i+1, j+1 {
-			xi := eps.ix.ix[i]
-			ents[j] = eps.core.Ref(ecs.EntityID(xi + 1))
-		}
+	if m == 0 {
+		return nil
 	}
-	return ents
+	if m <= cap(eps.resEnts) {
+		eps.resEnts = eps.resEnts[:m]
+	} else {
+		eps.resEnts = make([]ecs.Entity, m)
+	}
+	for j := 0; j < m; i, j = i+1, j+1 {
+		xi := eps.ix.ix[i]
+		eps.resEnts[j] = eps.core.Ref(ecs.EntityID(xi + 1))
+	}
+	return eps.resEnts
 }
 
 // TODO: NN queries, range queries, etc
