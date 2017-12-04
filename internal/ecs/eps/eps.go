@@ -31,12 +31,6 @@ const (
 	epsInval
 )
 
-type index struct {
-	flg []epsFlag
-	key []uint64
-	ix  []int
-}
-
 // Init ialize the EPS wrt a given core and component type that
 // represents "has a position".
 func (eps *EPS) Init(core *ecs.Core, t ecs.ComponentType) {
@@ -127,6 +121,12 @@ func (eps *EPS) reindex() {
 		eps.ix.flg[i] &= ^epsInval
 	}
 	eps.inval = 0
+}
+
+type index struct {
+	flg []epsFlag
+	key []uint64
+	ix  []int
 }
 
 func (ix index) Len() int      { return len(ix.ix) }
