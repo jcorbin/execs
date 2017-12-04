@@ -159,4 +159,21 @@ func TestEPS(t *testing.T) {
 		}
 	})
 
+	tps.load("e", 9, 9)
+	tps.pos.Set(tps.nomed("a"), point.Pt(9, 9))
+
+	t.Run("At re-use", func(t *testing.T) {
+		for i, tc := range []struct {
+			x, y int
+			noms []string
+		}{
+			{9, 9, []string{"a", "e"}},
+		} {
+			ents := tps.pos.At(point.Pt(tc.x, tc.y))
+			noms := tps.noms(ents)
+			sort.Strings(noms)
+			assert.Equal(t, tc.noms, noms, "[%v] noms", i)
+		}
+	})
+
 }
