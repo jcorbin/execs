@@ -1,6 +1,7 @@
 package eps
 
 import (
+	"log"
 	"math"
 	"sort"
 
@@ -114,7 +115,10 @@ func (eps *EPS) destroy(id ecs.EntityID, t ecs.ComponentType) {
 	}
 }
 
-const forceReSort = true
+const (
+	forceReSort = false
+	checkReSort = false
+)
 
 func (eps *EPS) reindex() {
 	// TODO: evaluate full-sort threshold
@@ -127,7 +131,70 @@ func (eps *EPS) reindex() {
 		return
 	}
 
-	panic("partial sort not implemented")
+	// order the invalidated values
+	inval := subindex{
+		ixi:   make([]int, 0, eps.inval),
+		index: eps.ix,
+	}
+	for i, xi := range eps.ix.ix {
+		if eps.ix.flg[xi]&epsInval != 0 {
+			inval.ixi = append(inval.ixi, i)
+		}
+	}
+	sort.Sort(inval)
+
+	// eps.ix is partitioned by inval.ixi (marks), integrate the invalidated
+	// values using binary search on each partition that is still sorted
+	lo, hi := 0, 0
+	for mi := 0; mi < len(inval.ixi); mi++ {
+		lo, hi = hi, inval.ixi[mi]
+		// TODO: special case small values of hi-lo?
+
+		// mark preceeds the region
+		if lo < hi && !eps.ix.Less(lo, hi) {
+			xi := eps.ix.ix[hi]
+			copy(eps.ix.ix[lo+1:hi+1], eps.ix.ix[lo:hi])
+			hi = lo
+			eps.ix.ix[hi] = xi
+			inval.ixi[mi] = hi
+			eps.ix.flg[xi] &= ^epsInval
+			hi++ // XXX dedupe to head?
+			continue
+		}
+
+		// mark beyond region, pull down next region
+		// lo == hi || hi > 0 &&
+		if n := hi - lo; n == 0 || (n > 0 && eps.ix.Less(hi-1, hi)) {
+			xi := eps.ix.ix[hi]
+			lo = hi
+			if mj := mi + 1; mj < len(inval.ixi) {
+				hi = inval.ixi[mj] - 1
+			} else {
+				hi = len(eps.ix.ix) - 1
+			}
+			copy(eps.ix.ix[lo:hi], eps.ix.ix[lo+1:hi+1])
+			eps.ix.ix[hi] = xi
+			inval.ixi[mi] = hi
+		}
+
+		// mark falls in this region, search-insert it anywhere after last
+		// mark, and anywhere until next mark
+		xi := eps.ix.ix[hi]
+		i := eps.ix.search(lo, hi, eps.ix.key[xi])
+		copy(eps.ix.ix[i+1:hi+1], eps.ix.ix[i:hi])
+		hi = i
+		eps.ix.ix[hi] = xi
+		inval.ixi[mi] = hi
+		eps.ix.flg[xi] &= ^epsInval
+		hi++ // XXX dedupe to head?
+	}
+
+	if checkReSort && !sort.IsSorted(eps.ix) {
+		log.Printf("EPS partial re-sort failure, falling back to sort!")
+		sort.Sort(eps.ix)
+	}
+
+	eps.inval = 0
 }
 
 type index struct {
