@@ -45,11 +45,6 @@ func (eps *EPS) Init(core *ecs.Core, t ecs.ComponentType) {
 	eps.core.RegisterAllocator(eps.t, eps.alloc)
 	eps.core.RegisterCreator(eps.t, eps.create)
 	eps.core.RegisterDestroyer(eps.t, eps.destroy)
-
-	eps.pt = []point.Point{point.Zero}
-	eps.ix.flg = []epsFlag{0}
-	eps.ix.key = []uint64{0}
-	eps.ix.ix = []int{-1}
 }
 
 // Get the position of an entity; the bool argument is true only if
@@ -59,19 +54,19 @@ func (eps *EPS) Get(ent ecs.Entity) (point.Point, bool) {
 		return point.Zero, false
 	}
 	id := eps.core.Deref(ent)
-	return eps.pt[id], eps.ix.flg[id]&epsDef != 0
+	return eps.pt[id-1], eps.ix.flg[id-1]&epsDef != 0
 }
 
 // Set the position of an entity, adding the eps's component if
 // necessary.
 func (eps *EPS) Set(ent ecs.Entity, pt point.Point) {
 	id := eps.core.Deref(ent)
-	if eps.ix.flg[id]&epsDef == 0 {
+	if eps.ix.flg[id-1]&epsDef == 0 {
 		ent.Add(eps.t)
 	}
-	eps.pt[id] = pt
-	eps.ix.key[id] = zorderKey(pt)
-	eps.ix.flg[id] |= epsInval
+	eps.pt[id-1] = pt
+	eps.ix.key[id-1] = zorderKey(pt)
+	eps.ix.flg[id-1] |= epsInval
 	eps.inval++
 }
 
@@ -86,7 +81,7 @@ func (eps *EPS) At(pt point.Point) (ents []ecs.Entity) {
 		ents = make([]ecs.Entity, m)
 		for j := 0; j < m; i, j = i+1, j+1 {
 			xi := eps.ix.ix[i]
-			ents[j] = eps.core.Ref(ecs.EntityID(xi))
+			ents[j] = eps.core.Ref(ecs.EntityID(xi + 1))
 		}
 	}
 	return ents
@@ -105,15 +100,15 @@ func (eps *EPS) alloc(id ecs.EntityID, t ecs.ComponentType) {
 }
 
 func (eps *EPS) create(id ecs.EntityID, t ecs.ComponentType) {
-	eps.ix.flg[id] = epsDef | epsInval
-	eps.ix.key[id] = zorderKey(eps.pt[id])
+	eps.ix.flg[id-1] = epsDef | epsInval
+	eps.ix.key[id-1] = zorderKey(eps.pt[id-1])
 	eps.inval++
 }
 
 func (eps *EPS) destroy(id ecs.EntityID, t ecs.ComponentType) {
-	eps.pt[id] = point.Zero
-	eps.ix.flg[id] = epsInval
-	eps.ix.key[id] = 0
+	eps.pt[id-1] = point.Zero
+	eps.ix.flg[id-1] = epsInval
+	eps.ix.key[id-1] = 0
 	eps.inval++
 }
 
@@ -126,22 +121,16 @@ func (eps *EPS) reindex() {
 	eps.inval = 0
 }
 
-func (ix index) Len() int { return len(ix.ix) - 1 }
-
+func (ix index) Len() int      { return len(ix.ix) }
+func (ix index) Swap(i, j int) { ix.ix[i], ix.ix[j] = ix.ix[j], ix.ix[i] }
 func (ix index) Less(i, j int) bool {
-	xi, xj := ix.ix[i+1], ix.ix[j+1]
+	xi, xj := ix.ix[i], ix.ix[j]
 	if ix.flg[xi]&epsDef == 0 {
 		return true
 	} else if ix.flg[xj]&epsDef == 0 {
 		return false
 	}
 	return ix.key[xi] < ix.key[xj]
-}
-
-func (ix index) Swap(i, j int) {
-	i++
-	j++
-	ix.ix[i], ix.ix[j] = ix.ix[j], ix.ix[i]
 }
 
 func (ix index) search(i, j int, key uint64) int {
@@ -158,7 +147,7 @@ func (ix index) search(i, j int, key uint64) int {
 }
 
 func (ix index) searchRun(key uint64) (i, m int) {
-	i = ix.search(1, len(ix.ix), key)
+	i = ix.search(0, len(ix.ix), key)
 	for j := i; j < len(ix.ix); j++ {
 		if xi := ix.ix[j]; ix.flg[xi]&epsDef == 0 || ix.key[xi] != key {
 			break
