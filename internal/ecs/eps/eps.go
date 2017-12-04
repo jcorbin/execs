@@ -66,8 +66,10 @@ func (eps *EPS) Set(ent ecs.Entity, pt point.Point) {
 	}
 	eps.pt[id-1] = pt
 	eps.ix.key[id-1] = zorderKey(pt)
-	eps.ix.flg[id-1] |= epsInval
-	eps.inval++
+	if flg := eps.ix.flg[id-1]; flg&epsInval == 0 {
+		eps.ix.flg[id-1] = flg | epsInval
+		eps.inval++
+	}
 }
 
 // At returns a slice of entities at a given point.
@@ -100,16 +102,22 @@ func (eps *EPS) alloc(id ecs.EntityID, t ecs.ComponentType) {
 }
 
 func (eps *EPS) create(id ecs.EntityID, t ecs.ComponentType) {
-	eps.ix.flg[id-1] = epsDef | epsInval
+	eps.ix.flg[id-1] |= epsDef
 	eps.ix.key[id-1] = zorderKey(eps.pt[id-1])
-	eps.inval++
+	if flg := eps.ix.flg[id-1]; flg&epsInval == 0 {
+		eps.ix.flg[id-1] = flg | epsInval
+		eps.inval++
+	}
 }
 
 func (eps *EPS) destroy(id ecs.EntityID, t ecs.ComponentType) {
 	eps.pt[id-1] = point.Zero
-	eps.ix.flg[id-1] = epsInval
+	eps.ix.flg[id-1] &= ^epsDef
 	eps.ix.key[id-1] = 0
-	eps.inval++
+	if flg := eps.ix.flg[id-1]; flg&epsInval == 0 {
+		eps.ix.flg[id-1] = flg | epsInval
+		eps.inval++
+	}
 }
 
 func (eps *EPS) reindex() {
