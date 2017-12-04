@@ -111,13 +111,14 @@ func (ent Entity) SetType(t ComponentType) {
 }
 
 func (co *Core) allocate() EntityID {
-	i := 0
-	for ; i < len(co.types); i++ {
-		if co.types[i] == NoType {
-			return EntityID(i + 1)
+	if co.free > 0 {
+		for i := 0; i < len(co.types); i++ {
+			if co.types[i] == NoType {
+				return EntityID(i + 1)
+			}
 		}
 	}
-	id := EntityID(i + 1)
+	id := EntityID(len(co.types) + 1)
 	co.types = append(co.types, NoType)
 	for _, ef := range co.allocators {
 		ef.f(id, NoType)
@@ -134,6 +135,7 @@ func (co *Core) setType(id EntityID, new ComponentType) {
 	)
 	co.types[id-1] = new
 	if old == NoType {
+		co.free--
 		for _, ef := range co.creators {
 			if ef.t == NoType {
 				ef.f(id, new)
@@ -160,5 +162,6 @@ func (co *Core) setType(id EntityID, new ComponentType) {
 				ef.f(id, new)
 			}
 		}
+		co.free++
 	}
 }
