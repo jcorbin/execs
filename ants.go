@@ -84,12 +84,31 @@ func (w *world) runAnts() {
 	n := it.Count()
 	createQ := make([]createReq, 0, n)
 	moveQ := make([]moveReq, 0, n)
+	deadQ := make(map[ecs.EntityID]struct{}, n)
 
 	for it.Next() {
+		if _, dead := deadQ[it.ID()]; dead {
+			continue
+		}
 		pos, _ := w.pos.Get(it.Entity())
 
+		here := w.pos.At(pos)
+
+		// TODO: better collision -> death rule
+		any := false
+		for _, ent := range here {
+			if id := ent.ID(); id != it.ID() && ent.Type().All(wcAnt) {
+				deadQ[id] = struct{}{}
+				any = true
+			}
+		}
+		if any {
+			deadQ[it.ID()] = struct{}{}
+			continue
+		}
+
 		cell := ecs.NilEntity
-		if cells := ecs.Filter(w.pos.At(pos), ecs.All(wcPosition|wcBG)); len(cells) > 0 {
+		if cells := ecs.Filter(here, ecs.All(wcPosition|wcBG)); len(cells) > 0 {
 			cell = cells[0]
 		}
 
@@ -117,6 +136,9 @@ func (w *world) runAnts() {
 		moveQ = append(moveQ, moveReq{it.Entity(), pos.Add(antHeads[head])})
 	}
 
+	for id := range deadQ {
+		w.Ref(id).Destroy()
+	}
 	for _, req := range createQ {
 		ent := w.AddEntity(wcGlyph | wcAnt)
 		w.pos.Set(ent, req.pos)
