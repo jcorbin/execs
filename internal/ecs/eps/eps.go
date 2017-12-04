@@ -64,7 +64,6 @@ func (eps *EPS) Set(ent ecs.Entity, pt point.Point) {
 		ent.Add(eps.t)
 	}
 	eps.pt[id] = pt
-	eps.ix.def[id] = true
 	eps.ix.key[id] = zorderKey(pt)
 	eps.frozen = false
 	sort.Sort(eps.ix) // TODO: worth a fix-one algorithm?
