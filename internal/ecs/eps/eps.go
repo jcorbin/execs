@@ -136,15 +136,21 @@ func (ix index) Swap(i, j int) {
 	ix.ix[i], ix.ix[j] = ix.ix[j], ix.ix[i]
 }
 
-func (ix index) search(key uint64) int {
-	return sort.Search(ix.Len(), func(i int) bool {
-		xi := ix.ix[i+1]
-		return ix.flg[xi]&epsDef != 0 && ix.key[xi] >= key
-	})+1
+func (ix index) search(i, j int, key uint64) int {
+	// adapted from sort.Search
+	for i < j {
+		h := int(uint(i+j) >> 1)
+		if xi := ix.ix[h]; ix.flg[xi]&epsDef != 0 && ix.key[xi] >= key {
+			j = h
+		} else {
+			i = h + 1
+		}
+	}
+	return i
 }
 
 func (ix index) searchRun(key uint64) (i, m int) {
-	i = ix.search(key)
+	i = ix.search(1, len(ix.ix), key)
 	for j := i; j < len(ix.ix); j++ {
 		if xi := ix.ix[j]; ix.flg[xi]&epsDef == 0 || ix.key[xi] != key {
 			break
