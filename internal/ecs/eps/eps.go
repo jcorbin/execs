@@ -19,15 +19,16 @@ type EPS struct {
 	core *ecs.Core
 	t    ecs.ComponentType
 
-	frozen bool
-	pt     []point.Point
-	ix     index
+	inval int
+	pt    []point.Point
+	ix    index
 }
 
 type epsFlag uint8
 
 const (
 	epsDef epsFlag = 1 << iota
+	epsInval
 )
 
 type index struct {
@@ -65,18 +66,20 @@ func (eps *EPS) Get(ent ecs.Entity) (point.Point, bool) {
 // necessary.
 func (eps *EPS) Set(ent ecs.Entity, pt point.Point) {
 	id := eps.core.Deref(ent)
-	eps.frozen = true
 	if eps.ix.flg[id]&epsDef == 0 {
 		ent.Add(eps.t)
 	}
 	eps.pt[id] = pt
 	eps.ix.key[id] = zorderKey(pt)
-	eps.frozen = false
-	sort.Sort(eps.ix) // TODO: worth a fix-one algorithm?
+	eps.ix.flg[id] |= epsInval
+	eps.inval++
 }
 
 // At returns a slice of entities at a given point.
 func (eps *EPS) At(pt point.Point) (ents []ecs.Entity) {
+	if eps.inval > 0 {
+		eps.reindex()
+	}
 	k := zorderKey(pt)
 	i, m := eps.ix.searchRun(k)
 	if m > 0 {
@@ -102,20 +105,25 @@ func (eps *EPS) alloc(id ecs.EntityID, t ecs.ComponentType) {
 }
 
 func (eps *EPS) create(id ecs.EntityID, t ecs.ComponentType) {
-	eps.ix.flg[id] = epsDef
+	eps.ix.flg[id] = epsDef | epsInval
 	eps.ix.key[id] = zorderKey(eps.pt[id])
-	if !eps.frozen {
-		sort.Sort(eps.ix) // TODO: worth a fix-one algorithm?
-	}
+	eps.inval++
 }
 
 func (eps *EPS) destroy(id ecs.EntityID, t ecs.ComponentType) {
 	eps.pt[id] = point.Zero
-	eps.ix.flg[id] = 0
+	eps.ix.flg[id] = epsInval
 	eps.ix.key[id] = 0
-	if !eps.frozen {
-		sort.Sort(eps.ix) // TODO: worth a fix-one algorithm?
+	eps.inval++
+}
+
+func (eps *EPS) reindex() {
+	// TODO: worth a fix-one algorithm?
+	sort.Sort(eps.ix)
+	for i := range eps.ix.flg {
+		eps.ix.flg[i] &= ^epsInval
 	}
+	eps.inval = 0
 }
 
 func (ix index) Len() int { return len(ix.ix) - 1 }
