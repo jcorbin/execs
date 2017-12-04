@@ -129,6 +129,11 @@ type index struct {
 	ix  []int
 }
 
+type subindex struct {
+	ixi   []int // subset of indices in...
+	index       // ...the underlying index
+}
+
 func (ix index) Len() int      { return len(ix.ix) }
 func (ix index) Swap(i, j int) { ix.ix[i], ix.ix[j] = ix.ix[j], ix.ix[i] }
 func (ix index) Less(i, j int) bool {
@@ -140,6 +145,10 @@ func (ix index) Less(i, j int) bool {
 	}
 	return ix.key[xi] < ix.key[xj]
 }
+
+func (si subindex) Len() int           { return len(si.ixi) }
+func (si subindex) Less(i, j int) bool { return si.index.Less(si.ixi[i], si.ixi[j]) }
+func (si subindex) Swap(i, j int)      { si.index.Swap(si.ixi[i], si.ixi[j]) }
 
 func (ix index) search(i, j int, key uint64) int {
 	// adapted from sort.Search
