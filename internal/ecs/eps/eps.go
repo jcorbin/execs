@@ -24,8 +24,14 @@ type EPS struct {
 	ix     index
 }
 
+type epsFlag uint8
+
+const (
+	epsDef epsFlag = 1 << iota
+)
+
 type index struct {
-	def []bool
+	flg []epsFlag
 	key []uint64
 	ix  []int
 }
@@ -40,7 +46,7 @@ func (eps *EPS) Init(core *ecs.Core, t ecs.ComponentType) {
 	eps.core.RegisterDestroyer(eps.t, eps.destroy)
 
 	eps.pt = []point.Point{point.Zero}
-	eps.ix.def = []bool{false}
+	eps.ix.flg = []epsFlag{0}
 	eps.ix.key = []uint64{0}
 	eps.ix.ix = []int{-1}
 }
@@ -52,7 +58,7 @@ func (eps *EPS) Get(ent ecs.Entity) (point.Point, bool) {
 		return point.Zero, false
 	}
 	id := eps.core.Deref(ent)
-	return eps.pt[id], eps.ix.def[id]
+	return eps.pt[id], eps.ix.flg[id]&epsDef != 0
 }
 
 // Set the position of an entity, adding the eps's component if
@@ -60,7 +66,7 @@ func (eps *EPS) Get(ent ecs.Entity) (point.Point, bool) {
 func (eps *EPS) Set(ent ecs.Entity, pt point.Point) {
 	id := eps.core.Deref(ent)
 	eps.frozen = true
-	if !eps.ix.def[id] {
+	if eps.ix.flg[id]&epsDef == 0 {
 		ent.Add(eps.t)
 	}
 	eps.pt[id] = pt
@@ -90,13 +96,13 @@ func (eps *EPS) At(pt point.Point) (ents []ecs.Entity) {
 func (eps *EPS) alloc(id ecs.EntityID, t ecs.ComponentType) {
 	i := len(eps.pt)
 	eps.pt = append(eps.pt, point.Zero)
-	eps.ix.def = append(eps.ix.def, false)
+	eps.ix.flg = append(eps.ix.flg, 0)
 	eps.ix.key = append(eps.ix.key, 0)
 	eps.ix.ix = append(eps.ix.ix, i)
 }
 
 func (eps *EPS) create(id ecs.EntityID, t ecs.ComponentType) {
-	eps.ix.def[id] = true
+	eps.ix.flg[id] = epsDef
 	eps.ix.key[id] = zorderKey(eps.pt[id])
 	if !eps.frozen {
 		sort.Sort(eps.ix) // TODO: worth a fix-one algorithm?
@@ -105,7 +111,7 @@ func (eps *EPS) create(id ecs.EntityID, t ecs.ComponentType) {
 
 func (eps *EPS) destroy(id ecs.EntityID, t ecs.ComponentType) {
 	eps.pt[id] = point.Zero
-	eps.ix.def[id] = false
+	eps.ix.flg[id] = 0
 	eps.ix.key[id] = 0
 	if !eps.frozen {
 		sort.Sort(eps.ix) // TODO: worth a fix-one algorithm?
@@ -116,9 +122,9 @@ func (ix index) Len() int { return len(ix.ix) - 1 }
 
 func (ix index) Less(i, j int) bool {
 	xi, xj := ix.ix[i+1], ix.ix[j+1]
-	if !ix.def[xi] {
+	if ix.flg[xi]&epsDef == 0 {
 		return true
-	} else if !ix.def[xj] {
+	} else if ix.flg[xj]&epsDef == 0 {
 		return false
 	}
 	return ix.key[xi] < ix.key[xj]
@@ -133,14 +139,14 @@ func (ix index) Swap(i, j int) {
 func (ix index) search(key uint64) int {
 	return sort.Search(ix.Len(), func(i int) bool {
 		xi := ix.ix[i+1]
-		return ix.def[xi] && ix.key[xi] >= key
+		return ix.flg[xi]&epsDef != 0 && ix.key[xi] >= key
 	})
 }
 
 func (ix index) searchRun(key uint64) (i, m int) {
 	i = ix.search(key)
 	for j, n := i, ix.Len(); j < n; j++ {
-		if xi := ix.ix[j+1]; !ix.def[xi] || ix.key[xi] != key {
+		if xi := ix.ix[j+1]; ix.flg[xi]&epsDef == 0 || ix.key[xi] != key {
 			break
 		}
 		m++
