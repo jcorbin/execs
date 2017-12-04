@@ -497,3 +497,91 @@ For the pathologically curious, here's that line of refactoring:
 - [`e78f0fb` set waitig in newChar](https://github.com/jcorbin/execs/commit/e78f0fbc876c49133afa05526be05c95211dd52b)
 - [`3f18bc9` stop positionig in newChar](https://github.com/jcorbin/execs/commit/3f18bc99db19a973868a81b3753bebd9e5c7ce1c)
 - [`09bde51` spawn player like an enemy](https://github.com/jcorbin/execs/commit/09bde51a653a6f4980850de1cb2c8813a7504f00)
+
+### [Twenty Two](../../tree/twentytwo)
+
+The new dungeon is crawling!
+
+So in a time long ago, I experimented with [square grid Langton's
+Ant](https://github.com/jcorbin/ants) and later on [the same on a hex
+grid](https://github.com/jcorbin/hexant). The time has come to reprise that
+work (mostly as a great trial balloon for how performant can I make my ECS, EPS,
+and co).
+
+In short I did a square grid ant again:
+- simple `L` / `R` turning rule set...
+- ...but with the unfinished twist that I developed in hexant:
+  - rules are expressed as a bit string
+  - therefore a rule can encode _BOTH_ `L` and `R`, meaning "the ants splits in two"
+
+If you don't add a death rule to as mundane a ruleset as `L R LR R L`, then
+what you get is explosive growth of your ant population (we're talking
+10s-of-thousands by circa turn 45).
+
+Right so let's now dive in and talk about what it means to "run the ants":
+1. for every ant in the world
+2. get its current cell
+3. compute its next state and position
+4. mutate its old cell
+5. move the ant
+
+So if you don't have some sort of index (spatial or categorical), step `2`
+above means "iterate everything in the world"; and you're doing that under
+something (as good as) "iterate everything in the world". So you've roughly got
+a _quadratic-time_ ant simulation, that by around round 45, takes multiple
+seconds to step.
+
+Choosing to avoid more general categorical indices for now, you start to build
+a spatial index. One natural fit for both an ECS and Go is a Linear Quadtree:
+you compute a Quadtree key (using a space filling curve like z-order or
+hilbert), and then you just sort your data by that key and perform binary
+search to do lookups.
+
+Great okay so now step `2` is _log-time_! But you've only shifted the problem:
+now step `5` is _quasilinear-time_ (because you chose to "just sort on
+mutation"); given that you're still doing that whole loop N-times, you're
+actually in _quasiquadratic-time_ now (I'm going to insist that's a way of
+saying `N*N*log(N)`); so strictly slower than before on balance!
+
+Feeling abundantly clever, but mostly lazy, you decide to stop sorting until
+forced to: now you sort at the top of step `2` after a prior round has
+invalidated the sort order... the feeling of dejavu only intensifies...
+
+Casting aside your laziness, and leaning into your clever tendencies, you
+realize "hey! most of those points are already in sorted order!". So you do a
+little more book-keeping, and _A LOT_ more logic to be able to beat that pesky
+_quasilinear_ time. Great, while the clever monstrosity you've now got does run
+substantially faster for what it has to do, it's still only moderately faster
+(I won't even try to summarize its run time, it's some sort of
+sum-of-log-of-an-integer-partition-of-N plus some less important linear factors
+... yeah I'm going to stop there).
+
+Having achieved your goal, and made the EPS indexing mechanism as fast as it can
+go, you now decide to do what you could've/should've done all along, and just
+use it less:
+1. for every ant in the world
+2.   get its current cell
+3.   compute its next state and position
+4.   mutate its old cell
+5.   _QUEUE_ a move for the ant
+6. _AFTER_ all ants have been processed, apply all queued moves
+
+To put it in "databasey" terms: your ants have no right to read their writes;
+this is a similar corollary to the prior notes on moving beyond
+first-write-wins move resolution in my normal game.
+
+Note: the real deal is actually a bit more complex, in that:
+- it also has a step for "if an ant hits an ant, they both die"; this actually
+  bounds the ant population to manageable amount
+- there's an additional _QUEUE_ and _AFTER_ processing for new ant creation, so
+  that no newly created ant gets a chance to move until the next round
+- likewise death is coalesced as notes from the loop, and ran as a
+  post-processing batch (right before creation of new ants for maximum entity
+  re-use)
+
+For the code curious:
+- the new ant system:
+  - [`9d23021` main: pivot to an ant-gen demo](https://github.com/jcorbin/execs/commit/9d2302128476bd7cc6a5c04f3825a2c9b4c1b1e4)
+  - [`adaa8e5` ants: add a suicide pact collision rule](https://github.com/jcorbin/execs/commit/adaa8e5e36cccd8ca8ea18f9bf2ea6bdaf1d8b0d)
+- and here's the craziest part of the new EPS (but boy does it go faster than the alternative of doing a full sort!)
+  - [`070d80b` eps: add partial re-sorting](https://github.com/jcorbin/execs/commit/070d80b0fc25219337716bdb3d1105984e0c0d4c)
