@@ -6,6 +6,7 @@ import "fmt"
 // and types.
 type Core struct {
 	types []ComponentType
+	free  int // TODO: list instead of count
 
 	allocators, creators, destroyers []entityFunc
 }
