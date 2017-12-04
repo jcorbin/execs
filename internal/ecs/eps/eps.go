@@ -134,7 +134,7 @@ func (ix index) Swap(i, j int) { ix.ix[i], ix.ix[j] = ix.ix[j], ix.ix[i] }
 func (ix index) Less(i, j int) bool {
 	xi, xj := ix.ix[i], ix.ix[j]
 	if ix.flg[xi]&epsDef == 0 {
-		return true
+		return ix.flg[xj]&epsDef != 0
 	} else if ix.flg[xj]&epsDef == 0 {
 		return false
 	}
