@@ -82,7 +82,7 @@ func (eps *EPS) At(pt point.Point) (ents []ecs.Entity) {
 	if m > 0 {
 		ents = make([]ecs.Entity, m)
 		for j := 0; j < m; i, j = i+1, j+1 {
-			xi := eps.ix.ix[i+1]
+			xi := eps.ix.ix[i]
 			ents[j] = eps.core.Ref(ecs.EntityID(xi))
 		}
 	}
@@ -140,13 +140,13 @@ func (ix index) search(key uint64) int {
 	return sort.Search(ix.Len(), func(i int) bool {
 		xi := ix.ix[i+1]
 		return ix.flg[xi]&epsDef != 0 && ix.key[xi] >= key
-	})
+	})+1
 }
 
 func (ix index) searchRun(key uint64) (i, m int) {
 	i = ix.search(key)
-	for j, n := i, ix.Len(); j < n; j++ {
-		if xi := ix.ix[j+1]; ix.flg[xi]&epsDef == 0 || ix.key[xi] != key {
+	for j := i; j < len(ix.ix); j++ {
+		if xi := ix.ix[j]; ix.flg[xi]&epsDef == 0 || ix.key[xi] != key {
 			break
 		}
 		m++
