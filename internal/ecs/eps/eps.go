@@ -114,13 +114,20 @@ func (eps *EPS) destroy(id ecs.EntityID, t ecs.ComponentType) {
 	}
 }
 
+const forceReSort = true
+
 func (eps *EPS) reindex() {
-	// TODO: worth a fix-one algorithm?
-	sort.Sort(eps.ix)
-	for i := range eps.ix.flg {
-		eps.ix.flg[i] &= ^epsInval
+	// TODO: evaluate full-sort threshold
+	if forceReSort || eps.inval > 3*len(eps.ix.ix)/4 {
+		sort.Sort(eps.ix)
+		for i := range eps.ix.flg {
+			eps.ix.flg[i] &= ^epsInval
+		}
+		eps.inval = 0
+		return
 	}
-	eps.inval = 0
+
+	panic("partial sort not implemented")
 }
 
 type index struct {
