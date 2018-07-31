@@ -7,11 +7,15 @@ import "fmt"
 // - it owns entity Type definition
 // - and supports watching changes in such Entity Type data
 type Scope struct {
-	typs   []Type
-	gens   []uint8
+	typs   []genType
 	free   []ID
 	watAll []Type
 	wats   []Watcher
+}
+
+type genType struct {
+	gen  uint8
+	Type Type
 }
 
 // ID identifies an individual entity under some Scope.
@@ -97,64 +101,61 @@ func (sc *Scope) Watch(all Type, wat Watcher) {
 // Create a new entity with the given Type, returning a handle to it.
 //
 // Fires any Watcher's whose all criteria are fully satisfied by the new Type.
-func (sc *Scope) Create(newTyp Type) (ent Entity) {
-	if newTyp == 0 {
-		return ent
-	}
-	ent.Scope = sc
-	if i := len(sc.free) - 1; i >= 0 {
-		ent.ID = sc.free[i]
-		sc.free = sc.free[:i]
-	} else {
-		if len(sc.typs) == 0 {
-			sc.typs = make([]Type, 1)
-			sc.gens = make([]uint8, 1)
+func (sc *Scope) Create(newType Type) (ent Entity) {
+	if newType != 0 {
+		ent = Entity{sc, sc.create()}
+		typ, seq := ent.typ()
+		if typ.Type != 0 {
+			panic(fmt.Sprintf("refusing to reuse an entity with non-zero type: %v", typ))
 		}
-		ent.ID = ID(len(sc.typs))
-		sc.typs = append(sc.typs, 0)
-		sc.gens = append(sc.gens, 0)
+		sc.typs[seq].Type = newType
+		ent.dispatchCreate(newType, newType)
 	}
-
-	gen, seq := ent.ID.genseq()
-	if oldTyp := sc.typs[seq]; oldTyp != 0 {
-		panic(fmt.Sprintf("refusing to reuse an entity with non-zero type: %v", oldTyp))
-	}
-	if gen != sc.gens[seq] {
-		panic(fmt.Sprintf("refusing to reuse an entity of generation %v, expected %v", gen, sc.gens[seq]))
-	}
-	sc.typs[seq] = newTyp
-	ent.dispatchCreate(newTyp, newTyp)
-
 	return ent
 }
 
-// Destroy the Entity; a convenience for SetType(0).
-func (ent Entity) Destroy() bool { return ent.SetType(0) }
+func (sc *Scope) create() ID {
+	if i := len(sc.free) - 1; i >= 0 {
+		id := sc.free[i]
+		sc.free = sc.free[:i]
+		return id
+	}
+	if len(sc.typs) == 0 {
+		sc.typs = append(sc.typs, genType{0xff, 0})
+	}
+	sc.typs = append(sc.typs, genType{})
+	return ID(len(sc.typs) - 1)
+}
 
-// Type returns the type of the entity. Panics if Entity's generation is out of
-// sync with Scope's.
-func (ent Entity) Type() Type {
+// Destroy the Entity; a convenience for SetType(0).
+func (ent Entity) Destroy() bool {
+	return ent.SetType(0)
+}
+
+func (ent Entity) typ() (genType, uint64) {
 	gen, seq := ent.ID.genseq()
 	if seq == 0 {
 		panic("invalid use of seq-0 ID")
 	}
-	if gen != ent.Scope.gens[seq] {
-		panic(fmt.Sprintf("mis-use of entity of generation %v, expected %v", gen, ent.Scope.gens[seq]))
+	typ := ent.Scope.typs[seq]
+	if gen != typ.gen {
+		panic(fmt.Sprintf("mis-use of entity of generation %v, expected %v", gen, typ.gen))
 	}
-	return ent.Scope.typs[seq]
+	return typ, seq
+}
+
+// Type returns the type of the entity. Panics if Entity's generation is out of
+// sync with Scope's.
+func (ent Entity) Type() Type {
+	typ, _ := ent.typ()
+	return typ.Type
 }
 
 // Seq returns the Entity's sequence number, validating it and the generation
 // number. Component data managers should use this to map internal data
 // (directly, indirectly, or otherwise) rather than the raw ID itself.
 func (ent Entity) Seq() uint64 {
-	gen, seq := ent.ID.genseq()
-	if seq == 0 {
-		panic("invalid use of seq-0 ID")
-	}
-	if gen != ent.Scope.gens[seq] {
-		panic(fmt.Sprintf("mis-use of entity of generation %v, expected %v", gen, ent.Scope.gens[seq]))
-	}
+	_, seq := ent.typ()
 	return seq
 }
 
@@ -165,57 +166,52 @@ func (ent Entity) Seq() uint64 {
 // future reuse. In a best-effort to prevent use-after-free bugs, the ID's
 // generation number is incremented before returning it to the free list,
 // invalidating any future use of the prior generation's handle.
-func (ent Entity) SetType(newTyp Type) bool {
+func (ent Entity) SetType(newType Type) bool {
 	if ent.Scope == nil || ent.ID == 0 {
 		panic("invalid entity handle")
 	}
+	priorTyp, seq := ent.typ()
 
-	gen, seq := ent.ID.genseq()
-	if gen != ent.Scope.gens[seq] {
-		panic(fmt.Sprintf("mis-use of entity of generation %v, expected %v", gen, ent.Scope.gens[seq]))
-	}
-
-	oldTyp := ent.Scope.typs[seq]
-	xorTyp := oldTyp ^ newTyp
-	if xorTyp == 0 {
+	typeChange := priorTyp.Type ^ newType
+	if typeChange == 0 {
 		return false
 	}
 
-	ent.Scope.typs[seq] = newTyp
+	ent.Scope.typs[seq].Type = newType
 
-	if destroyTyp := oldTyp & xorTyp; destroyTyp != 0 {
-		ent.dispatchDestroy(newTyp, destroyTyp)
+	if destroyTyp := priorTyp.Type & typeChange; destroyTyp != 0 {
+		ent.dispatchDestroy(newType, destroyTyp)
 	}
 
-	if newTyp == 0 {
-		gen++
-		ent.Scope.gens[seq] = gen // further reuse of this Entity handle should panic
+	if newType == 0 {
+		gen := priorTyp.gen + 1
+		ent.Scope.typs[seq].gen = gen // further reuse of this Entity handle should panic
 		ent.Scope.free = append(ent.Scope.free, ent.ID.setgen(gen))
 		return true
 	}
 
-	if createTyp := newTyp & xorTyp; createTyp != 0 {
-		ent.dispatchCreate(newTyp, createTyp)
+	if createTyp := newType & typeChange; createTyp != 0 {
+		ent.dispatchCreate(newType, createTyp)
 	}
 
 	return true
 }
 
-func (ent Entity) dispatchCreate(typ, newTyp Type) {
+func (ent Entity) dispatchCreate(newType, createdType Type) {
 	for i, all := range ent.Scope.watAll {
 		if all == 0 {
-			ent.Scope.wats[i].Create(ent, newTyp)
-		} else if newTyp&all != 0 && typ&all == all {
+			ent.Scope.wats[i].Create(ent, createdType)
+		} else if createdType&all != 0 && newType&all == all {
 			ent.Scope.wats[i].Create(ent, all)
 		}
 	}
 }
 
-func (ent Entity) dispatchDestroy(typ, oldTyp Type) {
+func (ent Entity) dispatchDestroy(newType, destroyedType Type) {
 	for i, all := range ent.Scope.watAll {
 		if all == 0 {
-			ent.Scope.wats[i].Destroy(ent, oldTyp)
-		} else if oldTyp&all != 0 && typ&all != all {
+			ent.Scope.wats[i].Destroy(ent, destroyedType)
+		} else if destroyedType&all != 0 && newType&all != all {
 			ent.Scope.wats[i].Destroy(ent, all)
 		}
 	}
