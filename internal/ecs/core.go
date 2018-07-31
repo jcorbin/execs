@@ -98,6 +98,23 @@ func (sc *Scope) Watch(all Type, wat Watcher) {
 	sc.wats = append(sc.wats, wat)
 }
 
+// RemoveWatcher removes a watcher from any/all Types registered by Watch.
+func (sc *Scope) RemoveWatcher(wat Watcher) {
+	j := 0
+	for i := 0; i < len(sc.wats); i++ {
+		if sc.wats[i] == wat {
+			continue
+		}
+		if i != j {
+			sc.watAll[j] = sc.watAll[i]
+			sc.wats[j] = sc.wats[i]
+		}
+		j++
+	}
+	sc.watAll = sc.watAll[:j]
+	sc.wats = sc.wats[:j]
+}
+
 // Create a new entity with the given Type, returning a handle to it.
 //
 // Fires any Watcher's whose all criteria are fully satisfied by the new Type.
