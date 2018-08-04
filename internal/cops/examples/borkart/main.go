@@ -1,0 +1,120 @@
+package main
+
+import (
+	"fmt"
+	"image/color"
+	"os"
+
+	"github.com/jcorbin/execs/internal/cops/display"
+	"github.com/jcorbin/execs/internal/cops/terminal"
+	"github.com/jcorbin/execs/internal/rectangle"
+	opensimplex "github.com/ojrac/opensimplex-go"
+)
+
+func main() {
+	if err := run(); err != nil {
+		fmt.Printf("%v\n", err)
+	}
+}
+
+func run() (err error) {
+
+	term := terminal.New(os.Stdout.Fd())
+	defer func() {
+		err = term.Restore()
+	}()
+	err = term.SetRaw()
+	if err != nil {
+		return err
+	}
+
+	bounds, err := term.Bounds()
+	if err != nil {
+		return err
+	}
+
+	front, back := display.New2(bounds)
+
+	w := 3
+	h := 4
+
+	white := color.RGBA{192, 198, 187, 255}
+	blue := color.RGBA{2, 50, 145, 255}
+
+	var buf []byte
+	cur := display.Start
+	buf, cur = cur.Home(buf)
+	buf, cur = cur.Clear(buf)
+	buf, cur = cur.Hide(buf)
+
+Loop:
+	for {
+		front.Fill(front.Bounds(), " ", blue, blue)
+		walls := rectangle.Inset(bounds, 6, 3)
+		front.Fill(walls, " ", white, white)
+		floor := rectangle.Inset(walls, 3, 1)
+
+		// generate floor tile noise
+		noise := opensimplex.NewWithSeed(0)
+		for y := walls.Min.Y; y < walls.Max.Y; y++ {
+			for x := walls.Min.X; x < walls.Max.X; x++ {
+				n := noise.Eval2(float64((x+1)/4), float64(y/2))
+				o := uint8(0)
+				if ((x+1)/4+(y/2))&1 == 0 {
+					o = 5
+				}
+				c := color.Gray{uint8(n*10) + (255 - 15) + o}
+				front.Foreground.Set(x, y, c)
+				front.Background.Set(x, y, c)
+			}
+		}
+
+		for y := floor.Min.Y; y < floor.Min.Y+h; y++ {
+			for x := floor.Min.X; x < floor.Min.X+w*2; x += 2 {
+				front.Text.Set(x, y, "👨‍👩‍👧‍👧")
+			}
+		}
+
+		buf, cur = display.RenderOver(buf, cur, front, back, display.Model24)
+		front, back = back, front
+		_, err = os.Stdout.Write(buf)
+		if err != nil {
+			return err
+		}
+		buf = buf[0:0]
+
+		var rbuf [1]byte
+		_, err = os.Stdin.Read(rbuf[0:1])
+		if err != nil {
+			return err
+		}
+
+		switch rbuf[0] {
+		case ' ':
+			back.Clear(back.Bounds())
+		case 'q':
+			break Loop
+		case 'j':
+			h++
+		case 'k':
+			h--
+		case 'h':
+			w--
+		case 'l':
+			w++
+		case 'c':
+			buf, cur = cur.Clear(buf)
+			back.Clear(back.Bounds())
+		}
+
+	}
+
+	buf, cur = cur.Home(buf)
+	buf, cur = cur.Clear(buf)
+	buf, cur = cur.Show(buf)
+	_, err = os.Stdout.Write(buf)
+	if err != nil {
+		return err
+	}
+	return err
+}
