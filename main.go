@@ -188,17 +188,33 @@ func (eb *EditBox) CursorX() int {
 }
 */
 
-func (it *imtui) doTextEdit(s []byte) (_ []byte, changed, submitted bool) {
-	id := it.nextID()
-	if it.active == 0 {
-		// TODO better focus system
-		if ke, _, ok := it.keyPressed(); ok {
-			if ke == termbox.KeyEnter {
-				it.active = id
-			}
-		}
-	}
-	if id != it.active {
+func drawLabel(
+	ui *ui,
+	box image.Rectangle,
+	s string,
+)
+
+func doTextEdit(
+	ui *ui,
+	box image.Rectangle,
+	s []byte,
+) (_ []byte, changed, submitted bool) {
+	id := ui.nextID()
+
+	// TODO focus system
+	// if ui.active == 0 {
+	// 	if ke, _, ok := ui.keyPressed(); ok {
+	// 		if ke == termbox.KeyEnter {
+	// 			ui.active = id
+	// 		}
+	// 	}
+	// }
+	// if id != ui.active {
+	// 	if id == ui.focus {
+	// 	}
+	// }
+
+	if id != ui.active {
 		// TODO draw inactive
 		return nil, false, false
 	}
@@ -212,7 +228,7 @@ func (it *imtui) doTextEdit(s []byte) (_ []byte, changed, submitted bool) {
 	// 	cursor_coffset int // cursor offset in unicode code points
 	// }
 
-	// if ke, ch, ok := it.keyPressed(); ok {
+	// if ke, ch, ok := ui.keyPressed(); ok {
 	// 	switch ke {
 	// 	// case termbox.KeyArrowLeft, termbox.KeyCtrlB:
 	// 	// edit_box.MoveCursorOneRuneBackward()
@@ -239,7 +255,6 @@ func (it *imtui) doTextEdit(s []byte) (_ []byte, changed, submitted bool) {
 	// 	}
 	// }
 
-	// pos := it.size.Div(2)
 	// midy := h / 2
 	// midx := (w - edit_box_width) / 2
 
@@ -259,12 +274,23 @@ func (it *imtui) doTextEdit(s []byte) (_ []byte, changed, submitted bool) {
 	return s, false, false
 }
 
-func (g *game) draw(it *imtui) error {
-	if ke, _, ok := it.keyPressed(); ok && ke == termbox.KeyEsc {
+func (g *game) draw(ui *ui) error {
+	if ke, _, ok := ui.KeyPressed(); ok && ke == termbox.KeyEsc {
 		return errQuitGame
 	}
 
-	if s, changed, submitted := it.doTextEdit(g.name); changed {
+	mid := ui.Size.Div(2)
+
+	w := 5
+	box := image.Rectangle{mid.Sub(image.Pt(w, 1)), mid.Add(image.Pt(w, 0))}
+	drawLabel(ui, box, "Who Are You?")
+
+	box = box.Add(image.Pt(0, 1))
+	if s, changed, submitted := doTextEdit(
+		ui,
+		box,
+		g.name,
+	); changed {
 		g.name = s
 	} else if submitted {
 		log.Printf("hello %q", s)
@@ -275,11 +301,10 @@ func (g *game) draw(it *imtui) error {
 }
 
 func main() {
-	var it imtui
-	if err := it.run(drawFunc(func(it *imtui) error {
+	if err := runUI(clientFunc(func(ui *ui) error {
 		for {
 			var g game
-			if err := it.run(&g); err == errGameOver {
+			if err := ui.run(&g); err == errGameOver {
 				// TODO prompt for again / present a postmortem
 				continue
 			} else if err == errQuitGame {
