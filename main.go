@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"image"
 	"log"
 
@@ -17,6 +18,11 @@ var (
 	floorColors = []termbox.Attribute{232, 233, 234}
 )
 
+var (
+	errQuitGame = errors.New("quit game")
+	errGameOver = errors.New("game over")
+)
+
 type game struct {
 	world world
 	name  []byte
@@ -28,50 +34,6 @@ type world struct {
 	char []rune
 	attr []termbox.Attribute
 	pos  []image.Point
-}
-
-type imid int
-
-type imtui struct {
-	ev   termbox.Event
-	size image.Point
-
-	next   imid
-	active imid
-}
-
-func (it *imtui) nextID() imid {
-	id := it.next
-	it.next++
-	return id
-}
-
-func (it *imtui) do(ev *termbox.Event, draw func(*imtui)) {
-	const coldef = termbox.ColorDefault
-
-	if ev == nil {
-		it.ev = termbox.Event{
-			// NOTE not the zero value, so we have to specify it
-			Type: termbox.EventNone,
-		}
-	} else {
-		it.ev = *ev
-	}
-
-	it.next = 1
-
-	termbox.Clear(coldef, coldef)
-	defer termbox.Flush()
-
-	it.size.X, it.size.Y = termbox.Size()
-	draw(it)
-}
-
-func (it *imtui) keyPressed() (termbox.Key, rune, bool) {
-	if it.ev.Type != termbox.EventKey {
-		return 0, 0, false
-	}
-	return it.ev.Key, it.ev.Ch, true
 }
 
 /*
@@ -297,39 +259,36 @@ func (it *imtui) doTextEdit(s []byte) (_ []byte, changed, submitted bool) {
 	return s, false, false
 }
 
-func (g *game) draw(it *imtui) {
+func (g *game) draw(it *imtui) error {
+	if ke, _, ok := it.keyPressed(); ok && ke == termbox.KeyEsc {
+		return errQuitGame
+	}
+
 	if s, changed, submitted := it.doTextEdit(g.name); changed {
 		g.name = s
 	} else if submitted {
 		log.Printf("hello %q", s)
 		g.name = s[:0]
 	}
-}
 
-func run() error {
-	if err := termbox.Init(); err != nil {
-		return err
-	}
-	defer termbox.Close()
-	termbox.SetInputMode(termbox.InputEsc)
-	var (
-		g  game
-		it imtui
-	)
-	it.do(nil, g.draw)
-	for {
-		ev := termbox.PollEvent()
-		if ev.Type == termbox.EventKey && ev.Key == termbox.KeyEsc {
-			return nil
-		} else if ev.Type == termbox.EventError {
-			return ev.Err
-		}
-		it.do(&ev, g.draw)
-	}
+	return nil
 }
 
 func main() {
-	if err := run(); err != nil {
+	var it imtui
+	if err := it.run(drawFunc(func(it *imtui) error {
+		for {
+			var g game
+			if err := it.run(&g); err == errGameOver {
+				// TODO prompt for again / present a postmortem
+				continue
+			} else if err == errQuitGame {
+				return nil
+			} else if err != nil {
+				return err
+			}
+		}
+	})); err != nil {
 		panic(err)
 	}
 }
