@@ -7,6 +7,7 @@ import (
 
 	termbox "github.com/nsf/termbox-go"
 
+	"github.com/jcorbin/execs/internal/cops/display"
 	"github.com/jcorbin/execs/internal/ecs"
 )
 
@@ -188,12 +189,6 @@ func (eb *EditBox) CursorX() int {
 }
 */
 
-func drawLabel(
-	ui *ui,
-	box image.Rectangle,
-	s string,
-)
-
 func doTextEdit(
 	ui *ui,
 	box image.Rectangle,
@@ -275,6 +270,11 @@ func doTextEdit(
 }
 
 func (g *game) draw(ui *ui) error {
+	ui.Swear(
+		display.Cursor.Home,
+		display.Cursor.Clear,
+		display.Cursor.Hide)
+
 	if ke, _, ok := ui.KeyPressed(); ok && ke == termbox.KeyEsc {
 		return errQuitGame
 	}

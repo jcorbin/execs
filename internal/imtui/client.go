@@ -1,19 +1,31 @@
 package imtui
 
+import "os"
+
 // Drawable is a client of a Core to be ran by Run().
 type Drawable interface {
 	Draw(c *Core) error
 }
 
-// Run a drawable client under a core in an event polling loop. Calls core
-// Clear and Flush for convenience around the client. Ensures that the core is
-// opened before entering the event loop, and that the core is closed before
-// returning, if it was closed beforehand.
-//
-// TODO if we eliminate Flush from the core, then clear also can probably go...
-// except for the size update in Core, so we probably still want some sort of a
-// Core.Init() that gets called here...
-func Run(c *Core, client Drawable) (rerr error) {
+// Run the given client under a core initialized with the given input/output
+// file pair (which defaults to os.Stdin/os.Stdout respectively).
+func Run(in, out *os.File, client Drawable) error {
+	c := Core{
+		In:  in,
+		Out: out,
+	}
+	if in != nil || out != nil {
+		c.Init(in, out)
+	}
+	return c.Run(client)
+}
+
+// Run a drawable client under a core in an event polling loop. If no input or
+// output file have been given, they default to os.Stdin / os.Stdout
+// respectively. Ensures that the core is opened before entering the event
+// loop, and that the core is closed before returning, if it was closed
+// beforehand.
+func (c *Core) Run(client Drawable) (rerr error) {
 	if opened, err := c.Open(); err != nil {
 		if opened {
 			_ = c.Close()
@@ -26,21 +38,13 @@ func Run(c *Core, client Drawable) (rerr error) {
 			}
 		}()
 	}
-
-	c.ClearEvent()
-	for {
-		err := c.Clear()
-		if err == nil {
-			err = client.Draw(c)
-			if ferr := c.Flush(); err == nil {
-				err = ferr
-			}
-		}
-		if err == nil {
+	err := c.Reset()
+	for err == nil {
+		if err = client.Draw(c); err == nil {
 			err = c.PollEvent()
 		}
-		return err
 	}
+	return err
 }
 
 // DrawFunc is a convenient way to implement Drawable to call Run().
