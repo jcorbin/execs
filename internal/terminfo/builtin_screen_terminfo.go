@@ -3,6 +3,7 @@ package terminfo
 var screen = Terminfo{
 	Name: "screen",
 	Keys: [maxKeys]string{
+		"",
 		"\x1bOP",
 		"\x1bOQ",
 		"\x1bOR",
@@ -27,6 +28,7 @@ var screen = Terminfo{
 		"\x1bOC",
 	},
 	Funcs: [maxFuncs]string{
+		"",
 		"\x1b[?1049h",
 		"\x1b[?1049l",
 		"\x1b[34h\x1b[?25h",

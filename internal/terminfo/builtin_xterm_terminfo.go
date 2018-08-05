@@ -3,6 +3,7 @@ package terminfo
 var xterm = Terminfo{
 	Name: "xterm",
 	Keys: [maxKeys]string{
+		"",
 		"\x1bOP",
 		"\x1bOQ",
 		"\x1bOR",
@@ -27,6 +28,7 @@ var xterm = Terminfo{
 		"\x1bOC",
 	},
 	Funcs: [maxFuncs]string{
+		"",
 		"\x1b[?1049h",
 		"\x1b[?1049l",
 		"\x1b[?12l\x1b[?25h",

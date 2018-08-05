@@ -13,6 +13,7 @@ var (
 	// "Maps" the Key* constants from terminfo.go to the number of the
 	// respective string capability in the terminfo file.
 	tiKeys = [maxKeys]uint16{
+		0,   // XXX invalid
 		66,  // KeyF1
 		68,  // KeyF2 NOTE not a typo; 67 is F10
 		69,  // KeyF3
@@ -40,6 +41,7 @@ var (
 	// "Maps" the Func* constants from terminfo.go to the number of the
 	// respective string capability in the terminfo file.
 	tiFuncs = [maxFuncs - 2]uint16{
+		0,  // XXX invalid
 		28, // FuncEnterCA
 		40, // FuncExitCA
 		16, // FuncShowCursor
@@ -90,7 +92,7 @@ func (ti *Terminfo) ReadFrom(rs io.ReadSeeker) error {
 	strOffset := headerLength + uint16(header[1]+header[2]+2*header[3])
 	tableOffset := strOffset + 2*uint16(header[4])
 
-	for i := 0; i < len(tiKeys); i++ {
+	for i := 1; i < len(tiKeys); i++ {
 		key, err := readTableString(rs, strOffset+2*tiKeys[i], tableOffset)
 		if err != nil {
 			return err
@@ -98,7 +100,7 @@ func (ti *Terminfo) ReadFrom(rs io.ReadSeeker) error {
 		ti.Keys[i] = key
 	}
 
-	for i := 0; i < len(tiFuncs); i++ {
+	for i := 1; i < len(tiFuncs); i++ {
 		fnc, err := readTableString(rs, strOffset+2*tiFuncs[i], tableOffset)
 		if err != nil {
 			return err

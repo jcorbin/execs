@@ -21,14 +21,14 @@ var (
 )
 
 // KeyCode indexes Terminfo.Keys
-type KeyCode uint16
+type KeyCode uint8
 
 // FuncCode indexes Terminfo.Funcs
-type FuncCode uint16
+type FuncCode uint8
 
 // These constants provide convenient aliases for accessing function strings.
 const (
-	FuncEnterCA FuncCode = iota
+	FuncEnterCA FuncCode = iota + 1
 	FuncExitCA
 	FuncShowCursor
 	FuncHideCursor
@@ -48,7 +48,7 @@ const (
 
 // These constants provide convenient aliases for accessing key strings.
 const (
-	KeyF1 KeyCode = iota
+	KeyF1 KeyCode = iota + 1
 	KeyF2
 	KeyF3
 	KeyF4

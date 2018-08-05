@@ -3,6 +3,7 @@ package terminfo
 var rxvt256color = Terminfo{
 	Name: "rxvt-256color",
 	Keys: [maxKeys]string{
+		"",
 		"\x1b[11~",
 		"\x1b[12~",
 		"\x1b[13~",
@@ -27,6 +28,7 @@ var rxvt256color = Terminfo{
 		"\x1b[C",
 	},
 	Funcs: [maxFuncs]string{
+		"",
 		"\x1b7\x1b[?47h",
 		"\x1b[2J\x1b[?47l\x1b8",
 		"\x1b[?25h",

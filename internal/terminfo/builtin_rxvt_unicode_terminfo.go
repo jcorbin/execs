@@ -3,6 +3,7 @@ package terminfo
 var rxvtUnicode = Terminfo{
 	Name: "rxvt-unicode",
 	Keys: [maxKeys]string{
+		"",
 		"\x1b[11~",
 		"\x1b[12~",
 		"\x1b[13~",
@@ -27,6 +28,7 @@ var rxvtUnicode = Terminfo{
 		"\x1b[C",
 	},
 	Funcs: [maxFuncs]string{
+		"",
 		"\x1b[?1049h",
 		"\x1b[r\x1b[?1049l",
 		"\x1b[?25h",

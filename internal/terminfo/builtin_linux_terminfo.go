@@ -3,6 +3,7 @@ package terminfo
 var linux = Terminfo{
 	Name: "linux",
 	Keys: [maxKeys]string{
+		"",
 		"\x1b[[A",
 		"\x1b[[B",
 		"\x1b[[C",
@@ -27,6 +28,7 @@ var linux = Terminfo{
 		"\x1b[C",
 	},
 	Funcs: [maxFuncs]string{
+		"",
 		"",
 		"",
 		"\x1b[?25h\x1b[?0c",
