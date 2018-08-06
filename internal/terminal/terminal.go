@@ -3,7 +3,6 @@ package terminal
 import (
 	"errors"
 	"image"
-	"log"
 	"os"
 	"os/signal"
 
@@ -55,7 +54,6 @@ type Terminal struct {
 // If the user wants to process input, they should call term.Notify() shortly
 // after Open() to start event processing.
 func Open(in, out *os.File, opt Option) (*Terminal, error) {
-	log.Printf("open option: %v", opt)
 	if in == nil {
 		in = os.Stdin
 	}

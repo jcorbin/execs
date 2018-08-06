@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/jcorbin/execs/internal/terminfo"
 )
@@ -14,6 +15,36 @@ const (
 	ModAlt Modifier = 1 << iota
 	ModMotion
 )
+
+func (mod Modifier) stringParts(parts []string) int {
+	// TODO maybe codegen this, and as more direct code
+	i := 0
+	for _, mp := range []struct {
+		mask Modifier
+		part string
+	}{
+		{ModAlt, "Alt"},
+		{ModMotion, "Motion"},
+	} {
+		if mod&mp.mask != 0 {
+			parts[i] = mp.part
+			i++
+		}
+	}
+	return i
+}
+
+func (mod Modifier) String() string {
+	var parts [8]string
+	switch i := mod.stringParts(parts[:]); i {
+	case 0:
+		return ""
+	case 1:
+		return parts[0]
+	default:
+		return strings.Join(parts[:i], "+")
+	}
+}
 
 // Key encodes control and special key events.
 type Key uint8

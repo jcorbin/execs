@@ -3,7 +3,6 @@ package terminal
 import (
 	"fmt"
 	"io"
-	"log"
 	"runtime"
 	"syscall"
 )
@@ -17,11 +16,9 @@ func (term *Terminal) synthesize(events chan<- Event, errs chan<- error, stop <-
 		case <-stop:
 			return
 		case sig := <-term.signals:
-			log.Printf("synthesize received %v", sig)
 			var ev Event
 			switch sig {
 			case syscall.SIGTERM:
-				log.Printf("synthesize terminated")
 				errs <- ErrTerm
 				return
 			case syscall.SIGINT:
@@ -32,7 +29,6 @@ func (term *Terminal) synthesize(events chan<- Event, errs chan<- error, stop <-
 				ev.Type = EventSignal
 				ev.Signal = sig
 			}
-			log.Printf("synthesize sending %v", sig)
 			select {
 			case events <- ev:
 			default:
@@ -175,7 +171,6 @@ func (term *Terminal) parse() (n int, ev Event) {
 		if len(buf) > 16 && n == 0 {
 			panic(fmt.Sprintf("FIXME broken terminal parsing; making no progress on %q", buf))
 		}
-		log.Printf("parsed event %v", ev)
 	}()
 	return term.parser.parse(buf)
 }

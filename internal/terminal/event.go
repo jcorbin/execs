@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"image"
 	"os"
+	"strconv"
+	"strings"
 )
 
 // TODO event stolen from termbox; reconcile with tcell
@@ -44,12 +46,9 @@ func (ev Event) String() string {
 	case EventNone:
 		return "NilEvent"
 	case EventKey:
-		if ev.Key != 0 {
-			return fmt.Sprintf("KeyEvent{Mod:%v, Key:%v}", ev.Mod, ev.Key)
-		}
-		return fmt.Sprintf("KeyEvent{Mod:%v, Ch:%q}", ev.Mod, ev.Ch)
+		return fmt.Sprintf("KeyEvent(%s)", ev.keyString())
 	case EventMouse:
-		return fmt.Sprintf("MouseEvent{Mod:%v, Key:%v, Point:%v}", ev.Mod, ev.Key, ev.Mouse)
+		return fmt.Sprintf("MouseEvent(%s)", ev.mouseString())
 	case EventEOF:
 		return "EOFEvent"
 	case EventResize:
@@ -59,6 +58,48 @@ func (ev Event) String() string {
 	case EventInterrupt:
 		return "InterruptEvent"
 	default:
-		return fmt.Sprintf("UserEvent<%d>", ev.Type)
+		return fmt.Sprintf("UserEvent{Type:%d}", ev.Type)
 	}
+}
+
+func (ev Event) keyString() string {
+	var parts [8 + 3]string
+	i := 0
+	if ev.Mod != 0 {
+		i += ev.Mod.stringParts(parts[i:])
+	}
+	if ev.Key != 0 {
+		parts[i] = ev.Key.String()
+		i++
+		if ev.Ch != 0 {
+			parts[i] = "WITH_INVALID_CHAR"
+			i++
+		}
+	}
+	if ev.Ch != 0 {
+		if strconv.IsPrint(ev.Ch) {
+			parts[i] = string(ev.Ch)
+		} else {
+			s := strconv.QuoteRune(ev.Ch)
+			parts[i] = s[1 : len(s)-1]
+		}
+		i++
+	}
+	switch i {
+	case 0:
+		return ""
+	case 1:
+		return parts[0]
+	default:
+		return strings.Join(parts[:i], "+")
+	}
+}
+
+func (ev Event) mouseString() string {
+	parts := [6]string{
+		ev.keyString(), "@<",
+		strconv.Itoa(ev.Mouse.X), ",",
+		strconv.Itoa(ev.Mouse.Y), ">",
+	}
+	return strings.Join(parts[:], "")
 }

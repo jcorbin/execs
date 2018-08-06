@@ -1,7 +1,6 @@
 package terminal
 
 import (
-	"log"
 	"os"
 	"os/signal"
 	"runtime"
@@ -201,7 +200,6 @@ func Terminfo(info *terminfo.Terminfo) Option {
 // - other events are passed through as EventSignal
 func Signals(sigs ...os.Signal) Option {
 	return postOpenFunc(func(term *Terminal) error {
-		log.Printf("terminal handling signals %v", sigs)
 		signal.Notify(term.signals, sigs...)
 		return nil
 	})
