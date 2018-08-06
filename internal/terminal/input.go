@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"log"
 	"runtime"
 	"strconv"
 	"syscall"
@@ -15,16 +16,19 @@ import (
 )
 
 // synthesize signals into special events.
-func (term *Terminal) synthesize(events chan<- Event, stop <-chan struct{}) {
+func (term *Terminal) synthesize(events chan<- Event, errs chan<- error, stop <-chan struct{}) {
 	runtime.LockOSThread() // dedicate this thread to signal processing
 	for {
 		select {
 		case <-stop:
 			return
 		case sig := <-term.signals:
+			log.Printf("synthesize received %v", sig)
 			var ev Event
 			switch sig {
 			case syscall.SIGTERM:
+				log.Printf("synthesize terminated")
+				errs <- ErrTerm
 				return
 			case syscall.SIGINT:
 				ev.Type = EventInterrupt
@@ -34,6 +38,7 @@ func (term *Terminal) synthesize(events chan<- Event, stop <-chan struct{}) {
 				ev.Type = EventSignal
 				ev.Signal = sig
 			}
+			log.Printf("synthesize sending %v", sig)
 			select {
 			case events <- ev:
 			default:
@@ -166,7 +171,11 @@ func (term *Terminal) readMore(n int) (int, error) {
 }
 
 func (term *Terminal) parse() (n int, ev Event) {
-	buf := term.inbuf[term.parseOffset:]
+	buf := term.inbuf[term.parseOffset:term.readOffset]
+	log.Printf("parsing event in %q", buf)
+	defer func() {
+		log.Printf("parsed event %v", ev)
+	}()
 	if len(buf) == 0 {
 		return 0, Event{}
 	}

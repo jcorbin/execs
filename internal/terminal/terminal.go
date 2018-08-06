@@ -3,6 +3,7 @@ package terminal
 import (
 	"errors"
 	"image"
+	"log"
 	"os"
 	"os/signal"
 
@@ -54,6 +55,7 @@ type Terminal struct {
 // If the user wants to process input, they should call term.Notify() shortly
 // after Open() to start event processing.
 func Open(in, out *os.File, opt Option) (*Terminal, error) {
+	log.Printf("open option: %v", opt)
 	if in == nil {
 		in = os.Stdin
 	}
@@ -90,8 +92,8 @@ func (term *Terminal) Close() error {
 	term.closed = true
 	signal.Stop(term.signals)
 	var err error
-	if cerr := term.closeOption.preClose(term); err == nil {
-		err = cerr
+	if term.closeOption != nil {
+		err = term.closeOption.preClose(term)
 	}
 	if ferr := term.Flush(); err == nil {
 		err = ferr
@@ -104,36 +106,3 @@ func (term *Terminal) Size() (image.Point, error) {
 	// TODO cache last known good? hide error?
 	return term.term.Size()
 }
-
-// TODO event stolen from termbox; reconcile with tcell
-
-type (
-	// EventType is the type of a terminal input event.
-	EventType uint8
-
-	// Event is a terminal input event, either read from the input file, or
-	// delivered by a relevant signal.
-	Event struct {
-		Type EventType // one of Event* constants
-
-		Mod Modifier // one of Mod* constants or 0
-		Key Key      // one of Key* constants, invalid if 'Ch' is not 0
-		Ch  rune     // a unicode character
-
-		Mouse  image.Point // EventMouse
-		Signal os.Signal   // EventSignal
-	}
-)
-
-// Event types.
-const (
-	EventNone EventType = iota
-	EventKey
-	EventMouse
-	EventEOF
-	EventResize
-	EventSignal
-	EventInterrupt
-
-	FirstUserEvent
-)

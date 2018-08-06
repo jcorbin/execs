@@ -1,7 +1,14 @@
 package terminal
 
 import (
+	"errors"
 	"time"
+)
+
+// Signaling errors.
+var (
+	ErrTerm = errors.New("terminate")
+	ErrStop = errors.New("stop")
 )
 
 // Client of a Terminal that get ran by polling for events one at a time, and
@@ -93,7 +100,7 @@ func (cr *clientRunner) runClient(term *Terminal, client Client) error {
 		errs   = make(chan error, 1)
 	)
 
-	go term.synthesize(events, stop)
+	go term.synthesize(events, errs, stop)
 	go term.readEvents(events, errs, stop)
 	defer func() { close(stop) }()
 
@@ -104,6 +111,9 @@ func (cr *clientRunner) runClient(term *Terminal, client Client) error {
 		case ev := <-events:
 			err = cr.draw(term, client, ev)
 		}
+	}
+	if err == ErrStop || err == ErrTerm {
+		err = nil
 	}
 	return err
 }
@@ -118,7 +128,7 @@ func (cr *clientRunner) runBatchClient(term *Terminal, client BatchClient) error
 	)
 
 	free <- make([]Event, 0, cr.eventBatchSize)
-	go term.synthesize(events, stop)
+	go term.synthesize(events, errs, stop)
 	go term.readEventBatches(batches, free, errs, stop)
 	defer func() { close(stop) }()
 
@@ -138,6 +148,9 @@ func (cr *clientRunner) runBatchClient(term *Terminal, client BatchClient) error
 				last, err = evs, cr.drawBatch(term, client, evs)
 			}
 		}
+	}
+	if err == ErrStop || err == ErrTerm {
+		err = nil
 	}
 	return err
 }

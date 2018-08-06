@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"log"
 	"os"
 	"os/signal"
 	"runtime"
@@ -46,11 +47,12 @@ func Options(opts ...Option) Option {
 	}
 	a := opts[0]
 	opts = opts[1:]
-	for len(opts) > 1 {
+	for len(opts) > 0 {
 		b := opts[0]
 		opts = opts[1:]
 		if a == nil {
 			a = b
+			continue
 		} else if b == nil {
 			continue
 		}
@@ -62,6 +64,8 @@ func Options(opts ...Option) Option {
 			a = append(as, b)
 		} else if haveBs {
 			a = append(options{a}, bs)
+		} else {
+			a = options{a, b}
 		}
 	}
 	return a
@@ -197,6 +201,7 @@ func Terminfo(info *terminfo.Terminfo) Option {
 // - other events are passed through as EventSignal
 func Signals(sigs ...os.Signal) Option {
 	return postOpenFunc(func(term *Terminal) error {
+		log.Printf("terminal handling signals %v", sigs)
 		signal.Notify(term.signals, sigs...)
 		return nil
 	})
@@ -230,10 +235,7 @@ func (rm rawMode) preClose(term *Terminal) error { return term.term.Restore() }
 
 // RawMode will put the terminal into raw mode when opening, and restore it
 // during close.
-func RawMode() Option {
-	// TODO should hide/show cursor automatically?
-	return rawMode{}
-}
+var RawMode Option = rawMode{}
 
 // CursorOption specified cursor manipulator(s) to apply during open and close.
 func CursorOption(enter, exit []Curse) Option {
@@ -319,16 +321,15 @@ func (fa *FlushAfter) preOpen(term *Terminal) error {
 }
 func (fa *FlushAfter) postOpen(term *Terminal) error { return nil }
 func (fa *FlushAfter) preWrite(term *Terminal, n int) error {
+	fa.term = term
 	fa.Start()
 	return nil
 }
 func (fa *FlushAfter) postWrite(term *Terminal, n int) error { return nil }
 
 // Start the flush timer, allocating and spawn its monitor goroutine if
-// necessary.
+// necessary. Should only be called by the user in a locked section.
 func (fa *FlushAfter) Start() {
-	fa.Lock()
-	defer fa.Unlock()
 	if fa.t == nil {
 		fa.t = time.NewTimer(fa.Duration)
 		fa.stop = make(chan struct{})
@@ -339,10 +340,9 @@ func (fa *FlushAfter) Start() {
 	fa.set = true
 }
 
-// Stop the flush timer and any monitor goroutine.
+// Stop the flush timer and any monitor goroutine. Should only be called by the
+// user in a locked section.
 func (fa *FlushAfter) Stop() {
-	fa.Lock()
-	defer fa.Unlock()
 	if fa.stop != nil {
 		close(fa.stop)
 		fa.t.Stop()
@@ -353,10 +353,9 @@ func (fa *FlushAfter) Stop() {
 }
 
 // Cancel any flush timer, returning true if one was canceled; users should
-// call this method after any manual terminal flush.
+// call this method after any manual terminal flush. Should only be called by
+// the user in a locked section.
 func (fa *FlushAfter) Cancel() bool {
-	fa.Lock()
-	defer fa.Unlock()
 	fa.set = false
 	if fa.t == nil {
 		return false

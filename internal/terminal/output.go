@@ -1,6 +1,9 @@
 package terminal
 
-import "unicode/utf8"
+import (
+	"log"
+	"unicode/utf8"
+)
 
 // Curse is a single cursor manipulator; NOTE the type asymmetry is due to
 // complying with the shape of Cursor methods like Cursor.Show.
@@ -66,6 +69,7 @@ func (term *Terminal) WriteString(s string) (n int, err error) {
 // cursor state, triggering any Flush* options.
 func (term *Terminal) WriteCursor(curses ...Curse) (n int, err error) {
 	n, term.tmp, term.cur = writeCursor(term.cur, term.tmp[:0])
+	log.Printf("write cursor %q", term.tmp)
 	n, err = term.Write(term.tmp)
 	return n, err
 }
