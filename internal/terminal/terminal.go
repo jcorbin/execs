@@ -106,6 +106,15 @@ func (term *Terminal) Close() error {
 	return err
 }
 
+func (term *Terminal) closeOnPanic() {
+	if e := recover(); e != nil {
+		if !term.closed {
+			term.Close()
+		}
+		panic(e)
+	}
+}
+
 // Size reads and returns the current terminal size.
 func (term *Terminal) Size() (image.Point, error) {
 	// TODO cache last known good? hide error?

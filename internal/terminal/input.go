@@ -18,6 +18,7 @@ import (
 // synthesize signals into special events.
 func (term *Terminal) synthesize(events chan<- Event, errs chan<- error, stop <-chan struct{}) {
 	runtime.LockOSThread() // dedicate this thread to signal processing
+	defer term.closeOnPanic()
 	for {
 		select {
 		case <-stop:
@@ -49,6 +50,7 @@ func (term *Terminal) synthesize(events chan<- Event, errs chan<- error, stop <-
 
 func (term *Terminal) readEvents(events chan<- Event, errs chan<- error, stop <-chan struct{}) {
 	runtime.LockOSThread() // dedicate this thread to event reading
+	defer term.closeOnPanic()
 	for {
 		ev, err := term.ReadEvent()
 		if err != nil {
@@ -74,6 +76,7 @@ func (term *Terminal) readEventBatches(
 	stop <-chan struct{},
 ) {
 	runtime.LockOSThread() // dedicate this thread to event reading
+	defer term.closeOnPanic()
 	for {
 		var evs []Event
 		select {
@@ -174,6 +177,9 @@ func (term *Terminal) parse() (n int, ev Event) {
 	buf := term.inbuf[term.parseOffset:term.readOffset]
 	log.Printf("parsing event in %q", buf)
 	defer func() {
+		if len(buf) > 16 && ev.Type == EventNone {
+			panic("FIXME broken terminal parsing")
+		}
 		log.Printf("parsed event %v", ev)
 	}()
 	if len(buf) == 0 {
