@@ -1,4 +1,4 @@
-package terminal
+package termkey
 
 import (
 	"bytes"
@@ -11,43 +11,55 @@ import (
 	"github.com/jcorbin/execs/internal/terminfo"
 )
 
-type parser struct {
-	ea *escapeAutomaton
+// Event represents a keyboard or mouse event.
+type Event struct {
+	Mod         Modifier // one of Mod* constants or 0
+	Key         Key      // one of Key* constants, invalid if 'Ch' is not 0
+	Ch          rune     // a unicode character
+	image.Point          // if Key is one of Mouse*
 }
 
-func (p parser) parse(buf []byte) (n int, ev Event) {
-	if len(buf) == 0 {
-		return 0, Event{}
+// Decoder supports decoding Events under some terminfo encoding.
+type Decoder struct {
+	ea escapeAutomaton
+}
+
+// NewDecoder creates a new Decoder for a given set of terminfo definitions.
+func NewDecoder(info *terminfo.Terminfo) *Decoder {
+	dec := &Decoder{}
+	for i, s := range info.Keys {
+		if len(s) > 0 {
+			dec.ea.addChain([]byte(s), terminfo.KeyCode(i))
+		}
 	}
+	return dec
+}
+
+func (dec Decoder) decodeKeyEvent(buf []byte) (ev Event, n int) {
+	if len(buf) == 0 {
+		return ev, 0
+	}
+	defer func() {
+		if len(buf) > 16 && n == 0 {
+			panic(fmt.Sprintf("FIXME broken key parsing; making no progress on %q", buf))
+		}
+	}()
 	switch c := buf[0]; {
 	case c == 0x1b: // escape (maybe sequence)
-		return p.ea.parse(buf)
-
+		ev, n = dec.ea.decode(buf)
 	case c < 0x20, c == 0x7f: // ASCII control character
-		return 1, Event{Type: EventKey, Key: Key(c)}
-
+		ev.Key, n = Key(c), 1
 	case c < utf8.RuneSelf: // printable ASCII rune
-		return 1, Event{Type: EventKey, Ch: rune(c)}
-
+		ev.Ch, n = rune(c), 1
 	default: // non-trivial rune
-		r, n := utf8.DecodeRune(buf)
-		return n, Event{Type: EventKey, Ch: r}
+		ev.Ch, n = utf8.DecodeRune(buf)
 	}
+	return ev, n
 }
 
 type escapeAutomaton struct {
 	term [256]terminfo.KeyCode
 	next [256]*escapeAutomaton
-}
-
-func newEscapeAutomaton(ti *terminfo.Terminfo) *escapeAutomaton {
-	var ea escapeAutomaton
-	for i, s := range ti.Keys {
-		if len(s) > 0 {
-			ea.addChain([]byte(s), terminfo.KeyCode(i))
-		}
-	}
-	return &ea
 }
 
 func (ea *escapeAutomaton) addChain(bs []byte, kc terminfo.KeyCode) {
@@ -65,114 +77,112 @@ func (ea *escapeAutomaton) addChain(bs []byte, kc terminfo.KeyCode) {
 	ea.term[b] = kc
 }
 
-func (ea *escapeAutomaton) lookup(bs []byte) (n int, _ terminfo.KeyCode) {
+func (ea *escapeAutomaton) lookup(bs []byte) (_ terminfo.KeyCode, n int) {
 	for ea != nil && len(bs) > 1 {
 		b := bs[0]
 		if kc := ea.term[b]; kc != 0 {
-			return n + 1, kc
+			return kc, n + 1
 		}
 		ea = ea.next[b]
 	}
 	return 0, 0
 }
 
-func (ea *escapeAutomaton) parse(buf []byte) (n int, ev Event) {
-	if n, kc := ea.lookup(buf); kc != 0 {
-		return n, Event{
-			Type: EventKey,
-			Key:  Key(0x80 | kc),
-		}
+func (ea *escapeAutomaton) decode(buf []byte) (ev Event, n int) {
+	if kc, m := ea.lookup(buf); kc != 0 {
+		ev.Key, n = Key(0x80|kc), m
+	} else if bytes.HasPrefix(buf, []byte("\x1b[")) {
+		ev, n = decodeMouseEvent(buf)
 	}
-	if bytes.HasPrefix(buf, []byte("\033[")) {
-		if n, ev := parseMouseEvent(buf); n > 0 {
-			return n, ev
-		}
+	if n == 0 && buf[0] == 0x1b {
+		ev.Key, n = KeyEsc, 1
 	}
-	return 1, Event{Type: EventKey, Key: KeyEsc}
+	return ev, n
 }
 
 // TODO unify mouse escape sequence parsing and the escapeAutomaton
 
 var errNoSemicolon = errors.New("missing ; in xterm mouse code")
 
-func parseMouseEvent(buf []byte) (n int, ev Event) {
+func decodeMouseEvent(buf []byte) (ev Event, n int) {
 	if len(buf) < 4 {
-		return 0, ev
+		return ev, 0
 	}
 	switch buf[2] {
 	case 'M':
 		if len(buf) < 6 {
-			return 0, ev
+			return ev, 0
 		}
-		n, ev = parseX10MouseEvent(buf[3:6])
+		ev, n = decodeX10MouseEvent(buf[3:6])
 		n += 3
 	case '<':
 		if len(buf) < 8 {
-			return 0, ev
+			return ev, 0
 		}
-		n, ev = parseXtermMouseEvent(buf[3:])
+		ev, n = decodeXtermMouseEvent(buf[3:])
 		n += 3
 	default:
 		if len(buf) < 7 {
-			return 0, ev
+			return ev, 0
 		}
-		n, ev = parseUrxvtMouseEvent(buf[2:])
+		ev, n = decodeUrxvtMouseEvent(buf[2:])
 		n += 2
 	}
-	ev.Mouse = ev.Mouse.Sub(image.Pt(1, 1)) // the coord is 1,1 for upper left
-	return n, ev
+	ev.X-- // the coord is 1,1
+	ev.Y-- // for upper left
+	return ev, n
 }
 
 // X10 mouse encoding, the simplest one: \033 [ M Cb Cx Cy
-func parseX10MouseEvent(buf []byte) (n int, ev Event) {
-	ev = parseX10MouseEventByte(int64(buf[0]) - 32)
-	ev.Mouse = image.Pt(int(buf[1])-32, int(buf[2])-32)
-	return 3, ev
+func decodeX10MouseEvent(buf []byte) (ev Event, n int) {
+	ev = decodeX10MouseEventByte(int64(buf[0]) - 32)
+	ev.X = int(buf[1]) - 32
+	ev.Y = int(buf[2]) - 32
+	return ev, 3
 }
 
 // xterm 1006 extended mode: \033 [ < Cb ; Cx ; Cy (M or m)
-func parseXtermMouseEvent(buf []byte) (n int, ev Event) {
+func decodeXtermMouseEvent(buf []byte) (ev Event, n int) {
 	mi := bytes.IndexAny(buf, "Mm")
 	if mi == -1 {
-		return 0, ev
+		return ev, 0
 	}
 
 	b, x, y, err := parseXtermMouseComponents(buf[:mi])
 	if err != nil {
-		return 0, ev
+		return ev, 0
 	}
 
 	// unlike x10 and urxvt, in xterm Cb is already zero-based
-	ev = parseX10MouseEventByte(b)
+	ev = decodeX10MouseEventByte(b)
 	if buf[mi] != 'M' {
 		// on xterm mouse release is signaled by lowercase m
 		ev.Key = MouseRelease
 	}
-	ev.Mouse = image.Pt(int(x), int(y))
-	return mi + 1, ev
+	ev.Point = image.Pt(int(x), int(y))
+	return ev, mi + 1
 }
 
 // urxvt 1015 extended mode: \033 [ Cb ; Cx ; Cy M
-func parseUrxvtMouseEvent(buf []byte) (n int, ev Event) {
+func decodeUrxvtMouseEvent(buf []byte) (ev Event, n int) {
 	mi := bytes.IndexByte(buf, 'M')
 	if mi == -1 {
-		return 0, ev
+		return ev, 0
 	}
 
 	b, x, y, err := parseXtermMouseComponents(buf[:mi])
 	if err != nil {
-		return 0, ev
+		return ev, 0
 	}
 
-	ev = parseX10MouseEventByte(b - 32)
-	ev.Mouse = image.Pt(int(x), int(y))
+	ev = decodeX10MouseEventByte(b - 32)
+	ev.X = int(x)
+	ev.Y = int(y)
 
-	return mi + 1, ev
+	return ev, mi + 1
 }
 
-func parseX10MouseEventByte(b int64) (ev Event) {
-	ev.Type = EventMouse
-
+func decodeX10MouseEventByte(b int64) (ev Event) {
 	switch b & 3 {
 	case 0:
 		if b&64 != 0 {

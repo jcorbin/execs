@@ -7,6 +7,7 @@ import (
 	"os/signal"
 
 	copsTerm "github.com/jcorbin/execs/internal/cops/terminal"
+	"github.com/jcorbin/execs/internal/termkey"
 
 	"github.com/jcorbin/execs/internal/terminfo"
 )
@@ -45,7 +46,7 @@ type Terminal struct {
 	readOffset  int
 	inbuf       []byte
 	inerr       error
-	parser
+	*termkey.Decoder
 }
 
 // Open a terminal on the given input/output file pair (defaults to os.Stdin
@@ -74,7 +75,10 @@ func Open(in, out *os.File, opt Option) (*Terminal, error) {
 	if err := opt.preOpen(term); err != nil {
 		return nil, err
 	}
+
+	term.Decoder = termkey.NewDecoder(term.info)
 	term.term = copsTerm.New(uintptr(term.out.Fd()))
+
 	if err := opt.postOpen(term); err != nil {
 		_ = term.Close()
 		return nil, err

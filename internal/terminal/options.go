@@ -179,7 +179,6 @@ var DefaultTerminfo = preOpenFunc(func(term *Terminal) error {
 	info, err := terminfo.Load(os.Getenv("TERM"))
 	if err == nil {
 		term.info = info
-		term.ea = newEscapeAutomaton(term.info)
 	}
 	return err
 })
@@ -188,7 +187,6 @@ var DefaultTerminfo = preOpenFunc(func(term *Terminal) error {
 func Terminfo(info *terminfo.Terminfo) Option {
 	return preOpenFunc(func(term *Terminal) error {
 		term.info = info
-		term.ea = newEscapeAutomaton(term.info)
 		return nil
 	})
 }

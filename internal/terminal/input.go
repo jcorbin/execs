@@ -1,7 +1,6 @@
 package terminal
 
 import (
-	"fmt"
 	"io"
 	"runtime"
 	"syscall"
@@ -96,7 +95,7 @@ func (term *Terminal) readEventBatches(
 // NOTE this is a lower level method, most users should use term.Run() instead.
 func (term *Terminal) ReadEvent() (Event, error) {
 	for {
-		if n, ev := term.parse(); ev.Type != EventNone {
+		if n, ev := term.decodeEvent(); ev.Type != EventNone {
 			term.parseOffset += n
 			return ev, nil
 		}
@@ -151,7 +150,7 @@ func (term *Terminal) readMore(n int) (int, error) {
 func (term *Terminal) parseEvents(evs []Event) int {
 	i := 0
 	for i < len(evs) {
-		n, ev := term.parse()
+		n, ev := term.decodeEvent()
 		if n == 0 {
 			break
 		}
@@ -162,17 +161,21 @@ func (term *Terminal) parseEvents(evs []Event) int {
 	return i
 }
 
-func (term *Terminal) parse() (n int, ev Event) {
+func (term *Terminal) decodeEvent() (n int, ev Event) {
 	if term.parseOffset >= term.readOffset {
 		return 0, Event{}
 	}
 	buf := term.inbuf[term.parseOffset:term.readOffset]
-	defer func() {
-		if len(buf) > 16 && n == 0 {
-			panic(fmt.Sprintf("FIXME broken terminal parsing; making no progress on %q", buf))
-		}
-	}()
-	return term.parser.parse(buf)
+	ev.KeyEvent, n = term.decodeKeyEvent(buf)
+	if n == 0 {
+		return 0, Event{}
+	}
+	if ev.Key.IsMouse() {
+		ev.Type = EventMouse
+	} else {
+		ev.Type = EventKey
+	}
+	return n, ev
 }
 
 /*
@@ -209,7 +212,7 @@ func (term *Terminal) parse() (n int, ev Event) {
 
 	// XXX historical readEvents
 	for done := false; ; {
-		if n, ev := term.parse(); ev.Type != EventNone {
+		if ev, n := term.decodeEvent(); ev.Type != EventNone {
 			term.parseOffset += n
 			select {
 			case events <- ev:

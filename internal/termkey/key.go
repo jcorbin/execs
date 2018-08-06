@@ -144,6 +144,8 @@ const (
 	// TODO if these were better aligned with X10's first byte, the parser
 	// could be simpler.
 
+	minMouseKey   = MouseLeft
+	maxMouseKey   = MouseWheelDown
 	maxSpecialKey = MouseWheelDown
 )
 
@@ -153,6 +155,11 @@ const (
 // defined extended Key* constant.
 func (k Key) IsSpecial() bool {
 	return (k&0x80) != 0 && k < maxSpecialKey
+}
+
+// IsMouse returns true if the key codes a mouse key event.
+func (k Key) IsMouse() bool {
+	return minMouseKey <= k && k <= maxMouseKey
 }
 
 func (k Key) String() string {

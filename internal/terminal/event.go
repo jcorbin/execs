@@ -2,7 +2,6 @@ package terminal
 
 import (
 	"fmt"
-	"image"
 	"os"
 	"strconv"
 	"strings"
@@ -12,17 +11,12 @@ import (
 
 // Event is a terminal input event, either read from the input file, or
 // delivered by a relevant signal.
+//
+// TODO event stolen from termbox; reconcile with tcell
 type Event struct {
-	// TODO event stolen from termbox; reconcile with tcell
-
-	Type EventType // one of Event* constants
-
-	Mod Modifier // one of Mod* constants or 0
-	Key Key      // one of Key* constants, invalid if 'Ch' is not 0
-	Ch  rune     // a unicode character
-
-	Mouse  image.Point // EventMouse
-	Signal os.Signal   // EventSignal
+	Type          EventType // one of Event* constants
+	termkey.Event           // EventKey and EventMouse
+	Signal        os.Signal // EventSignal
 }
 
 // Modifier during a key or mouse event.
@@ -107,8 +101,8 @@ func (ev Event) keyString() string {
 func (ev Event) mouseString() string {
 	parts := [6]string{
 		ev.keyString(), "@<",
-		strconv.Itoa(ev.Mouse.X), ",",
-		strconv.Itoa(ev.Mouse.Y), ">",
+		strconv.Itoa(ev.X), ",",
+		strconv.Itoa(ev.Y), ">",
 	}
 	return strings.Join(parts[:], "")
 }
