@@ -339,6 +339,7 @@ func (fa *FlushAfter) Start() {
 	fa.set = true
 }
 
+// Stop the flush timer and any monitor goroutine.
 func (fa *FlushAfter) Stop() {
 	fa.Lock()
 	defer fa.Unlock()
@@ -365,10 +366,11 @@ func (fa *FlushAfter) Cancel() bool {
 
 func (fa *FlushAfter) monitor(ch <-chan time.Time, stop <-chan struct{}) {
 	runtime.LockOSThread() // dedicate this thread to terminal writing
-	for {
+	done := false
+	for !done {
 		select {
 		case <-stop:
-			break
+			done = true
 		case t := <-ch:
 			if fa.flush(t) != nil {
 				break
@@ -398,7 +400,7 @@ func (term *Terminal) setWriteOption(wo writeOption) {
 		fa.Stop()
 	}
 	if wo == nil {
-		term.writeOption = FlushWhenFull
+		term.writeOption = FlushWhenFull.(writeOption)
 	} else {
 		term.writeOption = wo
 	}

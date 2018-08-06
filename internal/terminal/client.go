@@ -145,13 +145,19 @@ func (cr *clientRunner) runBatchClient(term *Terminal, client BatchClient) error
 func (cr *clientRunner) draw(term *Terminal, client Client, ev Event) error {
 	cr.flushAfter.Lock()
 	defer cr.flushAfter.Unlock()
-	term.Discard()
-	return client.Draw(term, ev)
+	err := term.Discard()
+	if err == nil {
+		err = client.Draw(term, ev)
+	}
+	return err
 }
 
 func (cr *clientRunner) drawBatch(term *Terminal, client BatchClient, evs []Event) error {
 	cr.flushAfter.Lock()
 	defer cr.flushAfter.Unlock()
-	term.Discard()
-	return client.DrawBatch(term, evs...)
+	err := term.Discard()
+	if err == nil {
+		err = client.DrawBatch(term, evs...)
+	}
+	return err
 }
