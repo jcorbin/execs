@@ -52,6 +52,10 @@ var (
 */
 
 func draw(term *terminal.Terminal, ev terminal.Event) error {
+	if ev.Type != terminal.EventNone {
+		log.Printf("got %v", ev)
+	}
+
 	if ev.Type == terminal.EventKey && ev.Key == terminal.KeyCtrlC {
 		return terminal.ErrStop
 	}
@@ -68,21 +72,21 @@ func draw(term *terminal.Terminal, ev terminal.Event) error {
 
 	it.textbox("Logs", logBuf.Bytes())
 
-	// TODO game loop needs sub-runs
-	// for {
-	// 	var g game
-	// 	if err := ui.run(&g); err == errGameOver {
-	// 		// TODO prompt for again / present a postmortem
-	// 		continue
-	// 	} else if err == errQuitGame {
-	// 		return nil
-	// 	} else if err != nil {
-	// 		return err
-	// 	}
-	// }
-
 	return nil
 }
+
+// TODO game loop needs sub-runs
+// for {
+// 	var g game
+// 	if err := ui.run(&g); err == errGameOver {
+// 		// TODO prompt for again / present a postmortem
+// 		continue
+// 	} else if err == errQuitGame {
+// 		return nil
+// 	} else if err != nil {
+// 		return err
+// 	}
+// }
 
 func run() (rerr error) {
 	flog, err := os.Create("log")
@@ -95,7 +99,7 @@ func run() (rerr error) {
 	term, err := terminal.Open(nil, nil, terminal.Options(
 		terminal.RawMode,
 		terminal.HiddenCursor,
-		// terminal.MouseReporting,
+		terminal.MouseReporting,
 		terminal.Signals(syscall.SIGINT, syscall.SIGTERM, syscall.SIGWINCH),
 	))
 	if err != nil {
