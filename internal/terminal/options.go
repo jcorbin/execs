@@ -142,13 +142,15 @@ func (f preCloseFunc) preClose(term *Terminal) error { return f(term) }
 
 func (to termOption) preOpen(term *Terminal) error { return nil }
 func (to termOption) postOpen(term *Terminal) error {
-	fn := term.info.Funcs[to.enter]
-	term.outbuf = append(term.outbuf, fn...)
+	if fn := term.info.Funcs[to.enter]; fn != "" {
+		term.outbuf = append(term.outbuf, fn...)
+	}
 	return nil
 }
 func (to termOption) preClose(term *Terminal) error {
-	fn := term.info.Funcs[to.enter]
-	term.outbuf = append(term.outbuf, fn...)
+	if fn := term.info.Funcs[to.exit]; fn != "" {
+		term.outbuf = append(term.outbuf, fn...)
+	}
 	return nil
 }
 
