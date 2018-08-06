@@ -22,7 +22,7 @@ func (it *ui) init(term *terminal.Terminal) {
 }
 
 func (it *ui) header(label string, args ...interface{}) {
-	if len(args) > 1 {
+	if len(args) > 0 {
 		label = fmt.Sprintf(label, args...)
 	}
 	w := utf8.RuneCountInString(label)
