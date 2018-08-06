@@ -1,16 +1,11 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
-	"fmt"
-	"image"
 	"io"
 	"log"
 	"os"
-	"strings"
 	"syscall"
-	"unicode/utf8"
 
 	"github.com/jcorbin/execs/internal/cops/display"
 	"github.com/jcorbin/execs/internal/terminal"
@@ -56,31 +51,6 @@ var (
 
 */
 
-type ui struct {
-	*terminal.Terminal
-	size image.Point
-}
-
-func (it *ui) init(term *terminal.Terminal) {
-	it.Terminal = term
-	it.size, _ = term.Size()
-}
-
-func (it *ui) header(label string, args ...interface{}) {
-	if len(args) > 1 {
-		label = fmt.Sprintf(label, args...)
-	}
-	w := utf8.RuneCountInString(label)
-	it.WriteByte('|')
-	if max := it.size.X - 2; w < max {
-		it.WriteString(label)
-		it.WriteString(strings.Repeat("-", max-w))
-	} else {
-		it.WriteString(label[:max])
-	}
-	it.WriteByte('|')
-}
-
 func draw(term *terminal.Terminal, ev terminal.Event) error {
 	if ev.Type == terminal.EventKey && ev.Key == terminal.KeyCtrlC {
 		return terminal.ErrStop
@@ -96,37 +66,7 @@ func draw(term *terminal.Terminal, ev terminal.Event) error {
 		log.Printf("size is %v", it.size)
 	}
 
-	buf := logBuf.Bytes()
-	totalLines := bytes.Count(buf, []byte("\n"))
-	numLines := totalLines
-	if maxLines := it.size.Y - 1; numLines > maxLines {
-		numLines = maxLines
-	}
-
-	sc := bufio.NewScanner(bytes.NewReader(buf))
-	if numLines < totalLines {
-		it.header(" Logs (last %v of %v) ", numLines, totalLines)
-		for i := numLines; i < totalLines; i++ {
-			sc.Scan()
-		}
-	} else {
-		it.header(" Logs ")
-	}
-	for sc.Scan() {
-		term.WriteString("\r\n| ")
-		b := sc.Bytes()
-		if w, max := utf8.RuneCount(b), it.size.X-2; w > max {
-			drop := 3 + w - max
-			for i := 0; i < drop; i++ {
-				_, n := utf8.DecodeLastRune(b)
-				b = b[:len(b)-n]
-			}
-			term.Write(b)
-			term.WriteString("...")
-		} else {
-			term.Write(b)
-		}
-	}
+	it.textbox("Logs", logBuf.Bytes())
 
 	// TODO game loop needs sub-runs
 	// for {
