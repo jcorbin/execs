@@ -46,7 +46,7 @@ type Terminal struct {
 	readOffset  int
 	inbuf       []byte
 	inerr       error
-	ea          *escapeAutomaton
+	parser
 }
 
 // Open a terminal on the given input/output file pair (defaults to os.Stdin
