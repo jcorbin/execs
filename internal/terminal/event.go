@@ -31,6 +31,8 @@ type Modifier = termkey.Modifier
 // Key code during a key event.
 type Key = termkey.Key
 
+//go:generate sh -c "./scripts/copy_consts.sh ../termkey/key.go terminal | goimports >key.go"
+
 // EventType type of an Event.
 type EventType uint8
 
