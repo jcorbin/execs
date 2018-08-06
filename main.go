@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"syscall"
+	"unicode/utf8"
 
 	"github.com/jcorbin/execs/internal/cops/display"
 	"github.com/jcorbin/execs/internal/terminal"
@@ -65,36 +66,67 @@ func (it *ui) init(term *terminal.Terminal) {
 	it.size, _ = term.Size()
 }
 
-func (it *ui) header(label string) {
+func (it *ui) header(label string, args ...interface{}) {
+	if len(args) > 1 {
+		label = fmt.Sprintf(label, args...)
+	}
+	w := utf8.RuneCountInString(label)
 	it.WriteByte('|')
-	it.WriteString(label)
-	it.WriteString(strings.Repeat("-", it.size.X-len(label)))
+	if max := it.size.X - 2; w < max {
+		it.WriteString(label)
+		it.WriteString(strings.Repeat("-", max-w))
+	} else {
+		it.WriteString(label[:max])
+	}
 	it.WriteByte('|')
 }
 
 func draw(term *terminal.Terminal, ev terminal.Event) error {
-	if ev.Key == terminal.KeyCtrlC {
-		panic("bang")
-		// return terminal.ErrStop
+	if ev.Type == terminal.EventKey && ev.Key == terminal.KeyCtrlC {
+		return terminal.ErrStop
 	}
 
 	if _, err := term.WriteCursor(display.Cursor.Home, display.Cursor.Clear); err != nil {
 		return err
 	}
 
-	log.Printf("got event: %+v", ev)
-
 	var it ui
 	it.init(term)
-
-	it.header(" Logs ")
-
-	sc := bufio.NewScanner(bytes.NewReader(logBuf.Bytes()))
-	for sc.Scan() {
-		fmt.Fprintf(term, "\r\n| - %q", sc.Bytes())
+	if ev.Type == terminal.EventResize {
+		log.Printf("size is %v", it.size)
 	}
 
-	// display.Cursor.Hide,
+	buf := logBuf.Bytes()
+	totalLines := bytes.Count(buf, []byte("\n"))
+	numLines := totalLines
+	if maxLines := it.size.Y - 1; numLines > maxLines {
+		numLines = maxLines
+	}
+
+	sc := bufio.NewScanner(bytes.NewReader(buf))
+	if numLines < totalLines {
+		it.header(" Logs (last %v of %v) ", numLines, totalLines)
+		for i := numLines; i < totalLines; i++ {
+			sc.Scan()
+		}
+	} else {
+		it.header(" Logs ")
+	}
+	for sc.Scan() {
+		term.WriteString("\r\n| ")
+		b := sc.Bytes()
+		if w, max := utf8.RuneCount(b), it.size.X-2; w > max {
+			drop := 3 + w - max
+			for i := 0; i < drop; i++ {
+				_, n := utf8.DecodeLastRune(b)
+				b = b[:len(b)-n]
+			}
+			term.Write(b)
+			term.WriteString("...")
+		} else {
+			term.Write(b)
+		}
+	}
 
 	// TODO game loop needs sub-runs
 	// for {
