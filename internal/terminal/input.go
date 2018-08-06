@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"runtime"
@@ -166,11 +167,13 @@ func (term *Terminal) parseEvents(evs []Event) int {
 }
 
 func (term *Terminal) parse() (n int, ev Event) {
+	if term.parseOffset >= term.readOffset {
+		return 0, Event{}
+	}
 	buf := term.inbuf[term.parseOffset:term.readOffset]
-	log.Printf("parsing event in %q", buf)
 	defer func() {
-		if len(buf) > 16 && ev.Type == EventNone {
-			panic("FIXME broken terminal parsing")
+		if len(buf) > 16 && n == 0 {
+			panic(fmt.Sprintf("FIXME broken terminal parsing; making no progress on %q", buf))
 		}
 		log.Printf("parsed event %v", ev)
 	}()

@@ -20,15 +20,18 @@ func (p parser) parse(buf []byte) (n int, ev Event) {
 		return 0, Event{}
 	}
 	switch c := buf[0]; {
-	case c > utf8.RuneSelf: // non-trivial rune
-		r, n := utf8.DecodeRune(buf)
-		return n, Event{Type: EventKey, Ch: r}
-	case c > 0x1f && c < 0x7f: // normal non-control character
-		return 1, Event{Ch: rune(c)}
 	case c == 0x1b: // escape (maybe sequence)
 		return p.ea.parse(buf)
-	default: // control character
+
+	case c < 0x20, c == 0x7f: // ASCII control character
 		return 1, Event{Type: EventKey, Key: Key(c)}
+
+	case c < utf8.RuneSelf: // printable ASCII rune
+		return 1, Event{Type: EventKey, Ch: rune(c)}
+
+	default: // non-trivial rune
+		r, n := utf8.DecodeRune(buf)
+		return n, Event{Type: EventKey, Ch: r}
 	}
 }
 
@@ -77,7 +80,7 @@ func (ea *escapeAutomaton) parse(buf []byte) (n int, ev Event) {
 	if n, kc := ea.lookup(buf); kc != 0 {
 		return n, Event{
 			Type: EventKey,
-			Key:  Key(0xFFFF - (uint16(kc) - 1)),
+			Key:  Key(0x80 | kc),
 		}
 	}
 	if bytes.HasPrefix(buf, []byte("\033[")) {

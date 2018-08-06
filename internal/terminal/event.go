@@ -44,7 +44,10 @@ func (ev Event) String() string {
 	case EventNone:
 		return "NilEvent"
 	case EventKey:
-		return fmt.Sprintf("KeyEvent{Mod:%v, Key:%v, Ch:%q}", ev.Mod, ev.Key, ev.Ch)
+		if ev.Key != 0 {
+			return fmt.Sprintf("KeyEvent{Mod:%v, Key:%v}", ev.Mod, ev.Key)
+		}
+		return fmt.Sprintf("KeyEvent{Mod:%v, Ch:%q}", ev.Mod, ev.Ch)
 	case EventMouse:
 		return fmt.Sprintf("MouseEvent{Mod:%v, Key:%v, Point:%v}", ev.Mod, ev.Key, ev.Mouse)
 	case EventEOF:
