@@ -200,7 +200,9 @@ type escapeAutomaton struct {
 func newEscapeAutomaton(ti *terminfo.Terminfo) *escapeAutomaton {
 	var ea escapeAutomaton
 	for i, s := range ti.Keys {
-		ea.addChain([]byte(s), terminfo.KeyCode(i))
+		if len(s) > 0 {
+			ea.addChain([]byte(s), terminfo.KeyCode(i))
+		}
 	}
 	return &ea
 }

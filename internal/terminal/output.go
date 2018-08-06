@@ -1,7 +1,6 @@
 package terminal
 
 import (
-	"log"
 	"unicode/utf8"
 )
 
@@ -68,10 +67,19 @@ func (term *Terminal) WriteString(s string) (n int, err error) {
 // WriteCursor writes cursor control codes into the output buffer, and updates
 // cursor state, triggering any Flush* options.
 func (term *Terminal) WriteCursor(curses ...Curse) (n int, err error) {
-	n, term.tmp, term.cur = writeCursor(term.cur, term.tmp[:0])
-	log.Printf("write cursor %q", term.tmp)
-	n, err = term.Write(term.tmp)
-	return n, err
+	switch len(curses) {
+	case 0:
+		return 0, nil
+	case 1:
+		_, term.tmp, term.cur = writeCursor(term.cur, term.tmp[:0], curses[0])
+		return term.Write(term.tmp)
+	default:
+		term.tmp = term.tmp[:0]
+		for i := range curses {
+			_, term.tmp, term.cur = writeCursor(term.cur, term.tmp, curses[i])
+		}
+		return term.Write(term.tmp)
+	}
 }
 
 // Flush any buffered output.
@@ -93,11 +101,9 @@ func (term *Terminal) Discard() error {
 	return term.outerr
 }
 
-func writeCursor(cur Cursor, buf []byte, curses ...Curse) (n int, _ []byte, _ Cursor) {
-	for i := range curses {
-		m := len(buf)
-		buf, cur = curses[i](cur, buf)
-		n += len(buf) - m
-	}
+func writeCursor(cur Cursor, buf []byte, curse Curse) (n int, _ []byte, _ Cursor) {
+	m := len(buf)
+	buf, cur = curse(cur, buf)
+	n += len(buf) - m
 	return n, buf, cur
 }

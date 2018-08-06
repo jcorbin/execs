@@ -56,6 +56,7 @@ func (f coptFunc) apply(term *Terminal, cr *clientRunner) { f(term, cr) }
 
 type clientRunner struct {
 	flushAfter     FlushAfter
+	frameTicker    *time.Ticker
 	eventBatchSize int
 }
 
@@ -64,9 +65,27 @@ type clientRunner struct {
 func ClientFlushEvery(d time.Duration) ClientOption {
 	return coptFunc(func(term *Terminal, cr *clientRunner) {
 		cr.flushAfter.Duration = d
+		if cr.frameTicker != nil {
+			cr.frameTicker.Stop()
+			cr.frameTicker = time.NewTicker(d)
+		}
 		term.setWriteOption(&cr.flushAfter)
 	})
 }
+
+// ClientDrawTicker sets up a ticker that will deliver nil events every flush
+// duration, which defaults to time.Second/60 if none has been given yet.
+// ClientFlushEvery may also be specified to customize the interval.
+var ClientDrawTicker ClientOption = coptFunc(func(term *Terminal, cr *clientRunner) {
+	if cr.flushAfter.Duration == 0 {
+		cr.flushAfter.Duration = time.Second / 60
+		term.setWriteOption(&cr.flushAfter)
+	}
+	if cr.frameTicker != nil {
+		cr.frameTicker.Stop()
+	}
+	cr.frameTicker = time.NewTicker(cr.flushAfter.Duration)
+})
 
 // ClientEventBatchSize sets the client event batch size, this controls:
 // - the size of the event backlog when reading one event at a time
@@ -104,10 +123,12 @@ func (cr *clientRunner) runClient(term *Terminal, client Client) error {
 	go term.readEvents(events, errs, stop)
 	defer func() { close(stop) }()
 
-	err := cr.draw(term, client, Event{})
+	err := cr.redraw(term, client)
 	for err == nil {
 		select {
 		case err = <-errs:
+		case <-cr.frameTicker.C:
+			err = cr.redraw(term, client)
 		case ev := <-events:
 			err = cr.draw(term, client, ev)
 		}
@@ -133,12 +154,14 @@ func (cr *clientRunner) runBatchClient(term *Terminal, client BatchClient) error
 	defer func() { close(stop) }()
 
 	last := make([]Event, 0, cr.eventBatchSize) // TODO evaluate usefulness
-	err := cr.drawBatch(term, client, nil)
+	err := cr.redraw(term, client)
 	for err == nil {
 		select {
 		case err = <-errs:
 		case ev := <-events:
 			err = cr.draw(term, client, ev)
+		case <-cr.frameTicker.C:
+			err = cr.redraw(term, client)
 		case evs := <-batches:
 			if last == nil {
 				err = cr.drawBatch(term, client, evs)
@@ -155,9 +178,28 @@ func (cr *clientRunner) runBatchClient(term *Terminal, client BatchClient) error
 	return err
 }
 
+func (cr *clientRunner) redraw(term *Terminal, client Client) error {
+	cr.flushAfter.Lock()
+	defer cr.flushAfter.Unlock()
+	if !cr.flushAfter.set {
+		return cr.lockedDraw(term, client, Event{})
+	}
+	return nil
+}
+
 func (cr *clientRunner) draw(term *Terminal, client Client, ev Event) error {
 	cr.flushAfter.Lock()
 	defer cr.flushAfter.Unlock()
+	return cr.lockedDraw(term, client, ev)
+}
+
+func (cr *clientRunner) drawBatch(term *Terminal, client BatchClient, evs []Event) error {
+	cr.flushAfter.Lock()
+	defer cr.flushAfter.Unlock()
+	return cr.lockedDrawBatch(term, client, evs)
+}
+
+func (cr *clientRunner) lockedDraw(term *Terminal, client Client, ev Event) error {
 	err := term.Discard()
 	if err == nil {
 		err = client.Draw(term, ev)
@@ -165,9 +207,7 @@ func (cr *clientRunner) draw(term *Terminal, client Client, ev Event) error {
 	return err
 }
 
-func (cr *clientRunner) drawBatch(term *Terminal, client BatchClient, evs []Event) error {
-	cr.flushAfter.Lock()
-	defer cr.flushAfter.Unlock()
+func (cr *clientRunner) lockedDrawBatch(term *Terminal, client BatchClient, evs []Event) error {
 	err := term.Discard()
 	if err == nil {
 		err = client.DrawBatch(term, evs...)
