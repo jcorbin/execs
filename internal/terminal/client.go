@@ -2,6 +2,8 @@ package terminal
 
 import (
 	"errors"
+	"runtime"
+	"syscall"
 	"time"
 )
 
@@ -120,7 +122,7 @@ func (cr *clientRunner) runClient(term *Terminal, client Client) error {
 	)
 
 	go term.synthesize(events, errs, stop)
-	go term.readEvents(events, errs, stop)
+	go term.monitorEvents(events, errs, stop)
 	defer func() { close(stop) }()
 
 	err := cr.redraw(term, client)
@@ -150,7 +152,7 @@ func (cr *clientRunner) runBatchClient(term *Terminal, client BatchClient) error
 
 	free <- make([]Event, 0, cr.eventBatchSize)
 	go term.synthesize(events, errs, stop)
-	go term.readEventBatches(batches, free, errs, stop)
+	go term.monitorEventBatches(batches, free, errs, stop)
 	defer func() { close(stop) }()
 
 	last := make([]Event, 0, cr.eventBatchSize) // TODO evaluate usefulness
@@ -213,4 +215,90 @@ func (cr *clientRunner) lockedDrawBatch(term *Terminal, client BatchClient, evs 
 		err = client.DrawBatch(term, evs...)
 	}
 	return err
+}
+
+// synthesize signals into special events.
+func (term *Terminal) synthesize(events chan<- Event, errs chan<- error, stop <-chan struct{}) {
+	runtime.LockOSThread() // dedicate this thread to signal processing
+	defer term.closeOnPanic()
+	for {
+		select {
+		case <-stop:
+			return
+		case sig := <-term.signals:
+			var ev Event
+			switch sig {
+			case syscall.SIGTERM:
+				errs <- ErrTerm
+				return
+			case syscall.SIGINT:
+				ev.Type = EventInterrupt
+			case syscall.SIGWINCH:
+				ev.Type = EventResize
+			default:
+				ev.Type = EventSignal
+				ev.Signal = sig
+			}
+			select {
+			case events <- ev:
+			default:
+			}
+		}
+	}
+}
+
+func (term *Terminal) monitorEvents(
+	events chan<- Event,
+	errs chan<- error,
+	stop <-chan struct{},
+) {
+	runtime.LockOSThread() // dedicate this thread to event reading
+	defer term.closeOnPanic()
+	for {
+		ev, err := term.ReadEvent()
+		if err != nil {
+			select {
+			case errs <- err:
+			case <-stop:
+				return
+			}
+			return
+		}
+		select {
+		case events <- ev:
+		case <-stop:
+			return
+		}
+	}
+}
+
+func (term *Terminal) monitorEventBatches(
+	batches chan<- []Event, free <-chan []Event,
+	errs chan<- error,
+	stop <-chan struct{},
+) {
+	runtime.LockOSThread() // dedicate this thread to event reading
+	defer term.closeOnPanic()
+	for {
+		var evs []Event
+		select {
+		case evs = <-free:
+			evs = evs[:cap(evs)]
+		case <-stop:
+			return
+		}
+		n, err := term.ReadEvents(evs)
+		if err != nil {
+			select {
+			case errs <- err:
+			case <-stop:
+			}
+			return
+		}
+		select {
+		case batches <- evs[:n]:
+		case <-stop:
+			return
+		}
+	}
 }

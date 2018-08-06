@@ -35,7 +35,9 @@ func NewDecoder(info *terminfo.Terminfo) *Decoder {
 	return dec
 }
 
-func (dec Decoder) decodeKeyEvent(buf []byte) (ev Event, n int) {
+// Decode an event from the given bytes, returning it and the number of bytes
+// consumed.
+func (dec Decoder) Decode(buf []byte) (ev Event, n int) {
 	if len(buf) == 0 {
 		return ev, 0
 	}

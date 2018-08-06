@@ -46,7 +46,7 @@ type Terminal struct {
 	readOffset  int
 	inbuf       []byte
 	inerr       error
-	*termkey.Decoder
+	keyDecoder  *termkey.Decoder
 }
 
 // Open a terminal on the given input/output file pair (defaults to os.Stdin
@@ -76,7 +76,7 @@ func Open(in, out *os.File, opt Option) (*Terminal, error) {
 		return nil, err
 	}
 
-	term.Decoder = termkey.NewDecoder(term.info)
+	term.keyDecoder = termkey.NewDecoder(term.info)
 	term.term = copsTerm.New(uintptr(term.out.Fd()))
 
 	if err := opt.postOpen(term); err != nil {
