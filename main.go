@@ -4,11 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"image"
 	"io"
 	"log"
 	"os"
+	"strings"
 	"syscall"
-	"time"
 
 	"github.com/jcorbin/execs/internal/cops/display"
 	"github.com/jcorbin/execs/internal/terminal"
@@ -54,6 +55,23 @@ var (
 
 */
 
+type ui struct {
+	*terminal.Terminal
+	size image.Point
+}
+
+func (it *ui) init(term *terminal.Terminal) {
+	it.Terminal = term
+	it.size, _ = term.Size()
+}
+
+func (it *ui) header(label string) {
+	it.WriteByte('|')
+	it.WriteString(label)
+	it.WriteString(strings.Repeat("-", it.size.X-len(label)))
+	it.WriteByte('|')
+}
+
 func draw(term *terminal.Terminal, ev terminal.Event) error {
 	if ev.Key == terminal.KeyCtrlC {
 		return terminal.ErrStop
@@ -65,17 +83,14 @@ func draw(term *terminal.Terminal, ev terminal.Event) error {
 
 	log.Printf("got event: %+v", ev)
 
-	// size, err := term.Size()
-	// if err != nil {
-	// 	return err
-	// }
+	var it ui
+	it.init(term)
 
-	term.WriteString("| Logs |")
-	// term.WriteString(strings.Repeat("-", size.X-8))
-	term.WriteByte('\n')
+	it.header(" Logs ")
+
 	sc := bufio.NewScanner(bytes.NewReader(logBuf.Bytes()))
 	for sc.Scan() {
-		fmt.Fprintf(term, "| - %q\n", sc.Bytes())
+		fmt.Fprintf(term, "\r\n| - %q", sc.Bytes())
 	}
 
 	// display.Cursor.Hide,
@@ -119,9 +134,7 @@ func run() error {
 
 	log.Printf("running")
 
-	err = term.Run(terminal.DrawFunc(draw),
-		terminal.ClientFlushEvery(time.Second/60),
-	)
+	err = term.Run(terminal.DrawFunc(draw), terminal.ClientDrawTicker)
 	if cerr := term.Close(); err == nil {
 		err = cerr
 	}
