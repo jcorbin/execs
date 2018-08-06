@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"image"
 	"io"
-	"os/signal"
+	"runtime"
 	"strconv"
 	"syscall"
 	"unicode/utf8"
@@ -14,27 +14,12 @@ import (
 	"github.com/jcorbin/execs/internal/terminfo"
 )
 
-// Notify the given event and error channels of terminal input events (both
-// read in-band, and signal out-of-band).
-//
-// Starts multiple goroutines for reading events, and synthesizing os signals,
-// but does NOT call signal.Notify. User MUST enable any signals that they
-// want to receive events about by calling things like:
-//     signal.Notify(term.Signals, syscall.SIGINT, syscall.SIGWINCH)
-func (term *Terminal) Notify(events chan<- Event, errs chan<- error) {
-	done := make(chan struct{})
-	go term.readEvents(events, errs, done)
-	go term.synthesize(events, errs, done)
-}
-
-func (term *Terminal) synthesize(events chan<- Event, errs chan<- error, readDone <-chan struct{}) {
-	defer func() {
-		signal.Stop(term.signals)
-		_ = term.in.Close()
-	}()
+// synthesize signals into special events.
+func (term *Terminal) synthesize(events chan<- Event, stop <-chan struct{}) {
+	runtime.LockOSThread() // dedicate this thread to signal processing
 	for {
 		select {
-		case <-readDone:
+		case <-stop:
 			return
 		case sig := <-term.signals:
 			var ev Event
@@ -57,43 +42,110 @@ func (term *Terminal) synthesize(events chan<- Event, errs chan<- error, readDon
 	}
 }
 
-func (term *Terminal) readEvents(events chan<- Event, errs chan<- error, done chan<- struct{}) {
+func (term *Terminal) readEvents(events chan<- Event, errs chan<- error, stop <-chan struct{}) {
+	runtime.LockOSThread() // dedicate this thread to event reading
 	for {
-		if n, ev := term.parse(); ev.Type != EventNone {
-			term.parseOffset += n
-			events <- ev
-			continue
+		ev, err := term.ReadEvent()
+		if err != nil {
+			select {
+			case errs <- err:
+			case <-stop:
+				return
+			}
+			return
 		}
-		if err := term.readMore(minRead); err == io.EOF {
-			events <- Event{Type: EventEOF}
-			break
-		} else if err != nil {
-			errs <- err
-			break
+		select {
+		case events <- ev:
+		case <-stop:
+			return
 		}
 	}
-	close(done)
+}
+
+func (term *Terminal) readEventBatches(
+	batches chan<- []Event,
+	free <-chan []Event,
+	errs chan<- error,
+	stop <-chan struct{},
+) {
+	runtime.LockOSThread() // dedicate this thread to event reading
+	for {
+		var evs []Event
+		select {
+		case evs = <-free:
+			evs = evs[:cap(evs)]
+		case <-stop:
+			return
+		}
+		n, err := term.ReadEvents(evs)
+		if err != nil {
+			select {
+			case errs <- err:
+			case <-stop:
+			}
+			return
+		}
+		select {
+		case batches <- evs[:n]:
+		case <-stop:
+			return
+		}
+	}
 }
 
 // ReadEvent reads one event from the input file; this may happen from
 // previously read / in-buffer bytes, and may not necessarily block.
 //
-// NOTE this is a lower level method, most users should use the above Notify method.
+// NOTE this is a lower level method, most users should use term.Run() instead.
 func (term *Terminal) ReadEvent() (Event, error) {
 	for {
 		if n, ev := term.parse(); ev.Type != EventNone {
 			term.parseOffset += n
 			return ev, nil
 		}
-		if err := term.readMore(minRead); err != nil {
+		if _, err := term.readMore(minRead); err != nil {
 			return Event{}, err
 		}
 	}
 }
 
-func (term *Terminal) readMore(n int) error {
-	if term.err != nil {
-		return term.err
+// ReadEvents reads events into the given slice, stopping either when there are
+// no more buffered inputs bytes to parse, or the given events buffer is full.
+// Reads and blocks from the underlying file until at least one event can be
+// parsed. Returns the number of events read and any read error.
+//
+// NOTE this is a lower level method, most users should use term.Run() instead.
+func (term *Terminal) ReadEvents(evs []Event) (n int, _ error) {
+	n = term.parseEvents(evs)
+	for n == 0 {
+		_, err := term.readMore(minRead)
+		n = term.parseEvents(evs)
+		if err == io.EOF && n > 0 && n == len(evs) {
+			return n, nil
+		} else if err != nil {
+			return n, err
+		}
+	}
+	return n, nil
+}
+
+func (term *Terminal) parseEvents(evs []Event) int {
+	i := 0
+	for i < len(evs) {
+		pn, ev := term.parse()
+		if ev.Type == EventNone {
+			break
+		}
+		term.parseOffset += pn
+		evs[i] = ev
+		i++
+	}
+	return i
+}
+
+func (term *Terminal) readMore(n int) (int, error) {
+	if term.inerr != nil {
+		return 0, term.inerr
 	}
 	for len(term.inbuf)-term.readOffset < n {
 		if term.parseOffset > 0 {
@@ -108,9 +160,9 @@ func (term *Terminal) readMore(n int) error {
 			term.inbuf = buf
 		}
 	}
-	n, term.err = term.in.Read(term.inbuf[term.readOffset:])
+	n, term.inerr = term.in.Read(term.inbuf[term.readOffset:])
 	term.readOffset += n
-	return nil
+	return n, nil
 }
 
 func (term *Terminal) parse() (n int, ev Event) {
@@ -325,3 +377,60 @@ func parseXtermMouseComponents(buf []byte) (b, x, y int64, err error) {
 
 	return b, x, y, nil
 }
+
+/*
+
+	// XXX historical readEventBatches
+	for done := false; ; {
+		for {
+			var evs []Event
+			select {
+			case evs = <-free:
+				evs = evs[:cap(evs)]
+			case <-stop:
+				return
+			}
+			n := term.parseEvents(evs)
+			if n == 0 {
+				break
+			}
+			select {
+			case batches <- evs:
+			case <-stop:
+				return
+			}
+		}
+		if done {
+			break
+		} else if _, err := term.readMore(minRead); err == io.EOF {
+			done = true
+		} else if err != nil {
+			errs <- err
+			return
+		}
+	}
+
+	// XXX historical readEvents
+	for done := false; ; {
+		if n, ev := term.parse(); ev.Type != EventNone {
+			term.parseOffset += n
+			select {
+			case events <- ev:
+			case <-stop:
+				return
+			}
+			continue
+		}
+		if done {
+			break
+		} else if _, err := term.readMore(minRead); err == io.EOF {
+			done = true
+		} else if err != nil {
+			errs <- err
+			return
+		}
+	}
+	events <- Event{Type: EventEOF}
+
+
+*/

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"image"
 	"os"
+	"os/signal"
 
 	copsTerm "github.com/jcorbin/execs/internal/cops/terminal"
 
@@ -24,81 +25,78 @@ const (
 //   queue)
 type Terminal struct {
 	closed  bool
-	err     error
-	in, out *os.File
-	info    *terminfo.Terminfo
 	signals chan os.Signal
+	info    *terminfo.Terminfo
 
-	closeOptions []closeOption
+	closeOption
+	writeOption
 
 	// output
-	term   copsTerm.Terminal // TODO subsume this
-	outbuf []byte
+	out    *os.File
 	cur    Cursor
+	tmp    []byte
+	outbuf []byte
+	outerr error
+	term   copsTerm.Terminal // TODO subsume this
 
 	// input
+	in          *os.File
 	parseOffset int
 	readOffset  int
 	inbuf       []byte
+	inerr       error
 	ea          *escapeAutomaton
 }
 
-// Open a terminal with the given options.
-//
-// If the returned *Terminal is non-nil, the user MUST call term.Close() to restore
+// Open a terminal on the given input/output file pair (defaults to os.Stdin
+// and os.Stdout) with the given option(s).
 //
 // If the user wants to process input, they should call term.Notify() shortly
 // after Open() to start event processing.
-func Open(opts ...Option) (*Terminal, error) {
+func Open(in, out *os.File, opt Option) (*Terminal, error) {
+	if in == nil {
+		in = os.Stdin
+	}
+	if out == nil {
+		out = os.Stdout
+	}
+	opt = Options(opt, DefaultTerminfo)
 	term := &Terminal{
-		in:      os.Stdin,
-		out:     os.Stdout,
-		cur:     StartCursor,
-		inbuf:   make([]byte, minRead*2),
-		outbuf:  make([]byte, 0, 1024),
-		signals: make(chan os.Signal, signalCapacity),
+		in:          in,
+		out:         out,
+		cur:         StartCursor,
+		tmp:         make([]byte, 64),
+		inbuf:       make([]byte, minRead*2),
+		outbuf:      make([]byte, 0, 1024),
+		signals:     make(chan os.Signal, signalCapacity),
+		writeOption: FlushWhenFull.(writeOption),
 	}
-
-	for _, opt := range opts {
-		if err := opt.preOpen(term); err != nil {
-			return nil, err
-		}
+	if err := opt.preOpen(term); err != nil {
+		return nil, err
 	}
-
-	if term.info == nil {
-		info, err := terminfo.Load(os.Getenv("TERM"))
-		if err != nil {
-			return nil, err
-		}
-		term.info = info
-	}
-	term.ea = newEscapeAutomaton(term.info)
 	term.term = copsTerm.New(uintptr(term.out.Fd()))
-
-	for _, opt := range opts {
-		if err := opt.postOpen(term); err != nil {
-			return term, err
-		}
-		if co, ok := opt.(closeOption); ok {
-			term.closeOptions = append([]closeOption{co}, term.closeOptions...)
-		}
+	if err := opt.postOpen(term); err != nil {
+		_ = term.Close()
+		return nil, err
 	}
-
-	return term, term.Flush()
+	return term, nil
 }
 
-// Close resets the terminal if its been Open()ed, returning any error
-// encountered doing so.
+// Close resets the terminal, flushing any buffered output.
 func (term *Terminal) Close() error {
 	if term.closed {
 		return errors.New("terminal already closed")
 	}
 	term.closed = true
-	for _, co := range term.closeOptions {
-		// TODO support error handling
-		co.preClose(term)
+	signal.Stop(term.signals)
+	var err error
+	if cerr := term.closeOption.preClose(term); err == nil {
+		err = cerr
 	}
-	return term.Flush()
+	if ferr := term.Flush(); err == nil {
+		err = ferr
+	}
+	return err
 }
 
 // Size reads and returns the current terminal size.

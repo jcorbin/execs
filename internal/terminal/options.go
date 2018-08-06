@@ -3,26 +3,129 @@ package terminal
 import (
 	"os"
 	"os/signal"
+	"runtime"
+	"sync"
+	"time"
 
 	"github.com/jcorbin/execs/internal/terminfo"
 )
 
 // Option is an opaque option to pass to Open().
 type Option interface {
-	preOpen(*Terminal) error
-	postOpen(*Terminal) error
+	// preOpen gets called while initializing internal terminal state, but
+	// before actual external resource interaction.
+	preOpen(term *Terminal) error
+
+	// postOpen gets called during initial external resource interaction; it
+	// should do things like change terminal mode and initialize cursor state.
+	postOpen(term *Terminal) error
 }
 
 type closeOption interface {
-	Option
-	preClose(*Terminal) error
+	// preClose gets called while closing the terminal, it should do things
+	// like restore terminal mode and cursor state.
+	preClose(term *Terminal) error
 }
 
+type writeOption interface {
+	// preWrite gets called before a write to the output buffer giving a
+	// chance to flush; n is a best-effort size of the bytes about to be
+	// written. NOTE preWrite MUST avoid manipulating cursor state, as it may
+	// reflect state about to be implemented by the written bytes.
+	preWrite(term *Terminal, n int) error
+
+	// postWrite gets called after a write to the output buffer giving a chance to flush.
+	postWrite(term *Terminal, n int) error
+}
+
+// Options creates a compound option from 0 or more options (returns nil in the
+// 0 case).
+func Options(opts ...Option) Option {
+	if len(opts) == 0 {
+		return nil
+	}
+	a := opts[0]
+	opts = opts[1:]
+	for len(opts) > 1 {
+		b := opts[0]
+		opts = opts[1:]
+		if a == nil {
+			a = b
+		} else if b == nil {
+			continue
+		}
+		as, haveAs := a.(options)
+		bs, haveBs := b.(options)
+		if haveAs && haveBs {
+			a = append(as, bs...)
+		} else if haveAs {
+			a = append(as, b)
+		} else if haveBs {
+			a = append(options{a}, bs)
+		}
+	}
+	return a
+}
+
+type options []Option
+
+func (os options) preOpen(term *Terminal) error {
+	for i := range os {
+		if err := os[i].preOpen(term); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (os options) postOpen(term *Terminal) error {
+	for i := range os {
+		if err := os[i].postOpen(term); err != nil {
+			return err
+		}
+		if co, ok := os[i].(closeOption); ok {
+			term.closeOption = chainCloseOption(term.closeOption, co)
+		}
+		if wo, ok := os[i].(writeOption); ok {
+			term.setWriteOption(wo)
+		}
+	}
+	return nil
+}
+
+func chainCloseOption(a, b closeOption) closeOption {
+	if a == nil {
+		return b
+	}
+	if b == nil {
+		return a
+	}
+	as, haveAs := a.(closeOptions)
+	bs, haveBs := b.(closeOptions)
+	if haveAs && haveBs {
+		return append(as, bs...)
+	} else if haveAs {
+		return append(closeOptions{b}, as)
+	} else if haveBs {
+		return append(bs, a)
+	}
+	return a
+}
+
+type closeOptions []closeOption
 type preCloseFunc func(*Terminal) error
 type preOpenFunc func(*Terminal) error
 type postOpenFunc func(*Terminal) error
 type termOption struct{ enter, exit terminfo.FuncCode }
 type cursorOption struct{ enter, exit []Curse }
+
+func (cos closeOptions) preClose(term *Terminal) (err error) {
+	for i := range cos {
+		if cerr := cos[i].preClose(term); err == nil {
+			err = cerr
+		}
+	}
+	return err
+}
 
 func (f preOpenFunc) preOpen(term *Terminal) error  { return f(term) }
 func (f preOpenFunc) postOpen(term *Terminal) error { return nil }
@@ -49,39 +152,38 @@ func (to termOption) preClose(term *Terminal) error {
 func (co cursorOption) preOpen(term *Terminal) error { return nil }
 func (co cursorOption) postOpen(term *Terminal) error {
 	if len(co.enter) > 0 {
-		term.Swear(co.enter...)
+		_, err := term.WriteCursor(co.enter...)
+		return err
 	}
 	return nil
 }
 func (co cursorOption) preClose(term *Terminal) error {
 	if len(co.exit) > 0 {
-		term.Swear(co.exit...)
+		_, err := term.WriteCursor(co.exit...)
+		return err
 	}
 	return nil
 }
 
-// Input specifies an alternate file handle for reading in-band terminal from
-// the default os.Stdin.
-func Input(in *os.File) Option {
-	return preOpenFunc(func(term *Terminal) error {
-		term.in = in
+// DefaultTerminfo loads default terminfo based on the TERM environment
+// variable; basically it uses terminfo.Load(os.Getenv("TERM")).
+var DefaultTerminfo = preOpenFunc(func(term *Terminal) error {
+	if term.info != nil {
 		return nil
-	})
-}
+	}
+	info, err := terminfo.Load(os.Getenv("TERM"))
+	if err == nil {
+		term.info = info
+		term.ea = newEscapeAutomaton(term.info)
+	}
+	return err
+})
 
-// Output specifies an alternate file handle for writing terminal output from
-// the default os.Stdout.
-func Output(out *os.File) Option {
-	return preOpenFunc(func(term *Terminal) error {
-		term.out = out
-		return nil
-	})
-}
-
-// Terminfo overrides the default terminfo.Load(os.Getenv("TERM")).
+// Terminfo overrides any DefaultTerminfo with an explicit choice.
 func Terminfo(info *terminfo.Terminfo) Option {
 	return preOpenFunc(func(term *Terminal) error {
 		term.info = info
+		term.ea = newEscapeAutomaton(term.info)
 		return nil
 	})
 }
@@ -140,27 +242,164 @@ func CursorOption(enter, exit []Curse) Option {
 
 // HiddenCursor is a CursorOption that hides the cursor, homes it, and clears
 // the screen during open; the converse home/clear/show is done during close.
-func HiddenCursor() Option {
-	return cursorOption{
-		[]Curse{Cursor.Hide, Cursor.Home, Cursor.Clear},
-		[]Curse{Cursor.Home, Cursor.Clear, Cursor.Show},
-	}
+var HiddenCursor Option = cursorOption{
+	[]Curse{Cursor.Hide, Cursor.Home, Cursor.Clear},
+	[]Curse{Cursor.Home, Cursor.Clear, Cursor.Show},
 }
 
 // MouseReporting enables mouse reporting after opening the terminal, and
 // disables it when closing the terminal.
-func MouseReporting() Option {
-	return termOption{
-		terminfo.FuncEnterMouse,
-		terminfo.FuncExitMouse,
+var MouseReporting Option = termOption{
+	terminfo.FuncEnterMouse,
+	terminfo.FuncExitMouse,
+}
+
+// FlushWhenFull causes a terminal's output buffer to prefer to flush rather
+// than grow, similar to a bufio.Writer.
+//
+// TODO avoid writing large buffers and string indirectly, ability to pass
+// through does not exist currently.
+//
+// NOTE mutually exclusive with any other Flush* options; the last one wins.
+var FlushWhenFull Option = flushWhenFull{}
+
+type flushWhenFull struct{}
+
+func (fw flushWhenFull) preOpen(term *Terminal) error {
+	return nil
+}
+func (fw flushWhenFull) postOpen(term *Terminal) error { return nil }
+func (fw flushWhenFull) preWrite(term *Terminal, n int) error {
+	if m := len(term.outbuf); m > 0 && m+n >= cap(term.outbuf) {
+		return term.Flush()
+	}
+	return nil
+}
+func (fw flushWhenFull) postWrite(term *Terminal, n int) error {
+	if m := len(term.outbuf); m > 0 && m == cap(term.outbuf) {
+		return term.Flush()
+	}
+	return nil
+}
+
+// FlushAfter implements an Option that causes a terminal to flush its output
+// some specified time after the first write to it. The user should retain and
+// lock their FlushAfter instance during their drawing update routine so that
+// partial output does not get flushed. Example usage:
+//
+//	fa := terminal.FlushAfter{Duration: time.Second / 60}
+//	term, err := terminal.Open(nil, nil, terminal.Options(&fa))
+//	if term != nil {
+//		defer term.Close()
+//	}
+//	var ev terminal.Event
+//	for err == nil {
+//		fa.Lock()                  // exclude flushing partial output while...
+//		term.Discard()             // ... drop any undrawn output from last round
+//		draw(term, ev)             // ... call term.Write* to draw new output
+//		fa.Unlock()                // ... end exclusion
+//		ev, err = term.ReadEvent() // block for next input event
+//	}
+//	// TODO err handling
+//
+// NOTE mutually exclusive with any other Flush* options; the last one wins.
+type FlushAfter struct {
+	sync.Mutex
+	time.Duration
+
+	term *Terminal
+	set  bool
+	stop chan struct{}
+	t    *time.Timer
+}
+
+func (fa *FlushAfter) preOpen(term *Terminal) error {
+	fa.term = term
+	return nil
+}
+func (fa *FlushAfter) postOpen(term *Terminal) error { return nil }
+func (fa *FlushAfter) preWrite(term *Terminal, n int) error {
+	fa.Start()
+	return nil
+}
+func (fa *FlushAfter) postWrite(term *Terminal, n int) error { return nil }
+
+// Start the flush timer, allocating and spawn its monitor goroutine if
+// necessary.
+func (fa *FlushAfter) Start() {
+	fa.Lock()
+	defer fa.Unlock()
+	if fa.t == nil {
+		fa.t = time.NewTimer(fa.Duration)
+		fa.stop = make(chan struct{})
+		go fa.monitor(fa.t.C, fa.stop)
+	} else if !fa.set {
+		fa.t.Reset(fa.Duration)
+	}
+	fa.set = true
+}
+
+func (fa *FlushAfter) Stop() {
+	fa.Lock()
+	defer fa.Unlock()
+	if fa.stop != nil {
+		close(fa.stop)
+		fa.t.Stop()
+		fa.t = nil
+		fa.stop = nil
+		fa.set = false
 	}
 }
 
-// TODO a "flush policy" could delineate between:
-// - coalescing: "flush every N bytes"
-// - frame rate throttling: "flush after T time"; NOTE
-//   - needs to happen between user sessions of writing to output buffer
-//   - therefore probably implies an EventFlush type therefore
-//   - the timer probably wants to start at one of:
-//     a. the first write into the output buffer
-//     b. after delivery of an invalidating event (perhaps just EventFlush?)
+// Cancel any flush timer, returning true if one was canceled; users should
+// call this method after any manual terminal flush.
+func (fa *FlushAfter) Cancel() bool {
+	fa.Lock()
+	defer fa.Unlock()
+	fa.set = false
+	if fa.t == nil {
+		return false
+	}
+	return fa.t.Stop()
+}
+
+func (fa *FlushAfter) monitor(ch <-chan time.Time, stop <-chan struct{}) {
+	runtime.LockOSThread() // dedicate this thread to terminal writing
+	for {
+		select {
+		case <-stop:
+			break
+		case t := <-ch:
+			if fa.flush(t) != nil {
+				break
+			}
+		}
+	}
+	fa.Lock()
+	defer fa.Unlock()
+	if fa.t.C == ch {
+		fa.t = nil
+		fa.set = false
+	}
+	if fa.stop == stop {
+		fa.stop = nil
+	}
+}
+
+func (fa *FlushAfter) flush(_ time.Time) error {
+	fa.Lock()
+	defer fa.Unlock()
+	fa.set = false
+	return fa.term.Flush()
+}
+
+func (term *Terminal) setWriteOption(wo writeOption) {
+	if fa, ok := term.writeOption.(*FlushAfter); ok {
+		fa.Stop()
+	}
+	if wo == nil {
+		term.writeOption = FlushWhenFull
+	} else {
+		term.writeOption = wo
+	}
+}
