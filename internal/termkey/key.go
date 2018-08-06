@@ -1,4 +1,4 @@
-package terminal
+package termkey
 
 import (
 	"fmt"
@@ -147,7 +147,7 @@ const (
 	maxSpecialKey = MouseWheelDown
 )
 
-//go:generate sh -c "./scripts/gen_special_strings.sh key.go | gofmt >key_special_strings.go"
+//go:generate sh -c "./scripts/gen_special_strings.sh key.go termkey | gofmt >key_special_strings.go"
 
 // IsSpecial returns true if the key is outside of the ASCII plane and is a
 // defined extended Key* constant.

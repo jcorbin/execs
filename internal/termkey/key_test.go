@@ -1,4 +1,4 @@
-package terminal_test
+package termkey_test
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	. "github.com/jcorbin/execs/internal/terminal"
+	. "github.com/jcorbin/execs/internal/termkey"
 )
 
 func TestKey_String(t *testing.T) {

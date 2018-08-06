@@ -6,27 +6,33 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/jcorbin/execs/internal/termkey"
 )
 
-// TODO event stolen from termbox; reconcile with tcell
+// Event is a terminal input event, either read from the input file, or
+// delivered by a relevant signal.
+type Event struct {
+	// TODO event stolen from termbox; reconcile with tcell
 
-type (
-	// EventType is the type of a terminal input event.
-	EventType uint8
+	Type EventType // one of Event* constants
 
-	// Event is a terminal input event, either read from the input file, or
-	// delivered by a relevant signal.
-	Event struct {
-		Type EventType // one of Event* constants
+	Mod Modifier // one of Mod* constants or 0
+	Key Key      // one of Key* constants, invalid if 'Ch' is not 0
+	Ch  rune     // a unicode character
 
-		Mod Modifier // one of Mod* constants or 0
-		Key Key      // one of Key* constants, invalid if 'Ch' is not 0
-		Ch  rune     // a unicode character
+	Mouse  image.Point // EventMouse
+	Signal os.Signal   // EventSignal
+}
 
-		Mouse  image.Point // EventMouse
-		Signal os.Signal   // EventSignal
-	}
-)
+// Modifier during a key or mouse event.
+type Modifier = termkey.Modifier
+
+// Key code during a key event.
+type Key = termkey.Key
+
+// EventType type of an Event.
+type EventType uint8
 
 // Event types.
 const (
@@ -63,10 +69,11 @@ func (ev Event) String() string {
 }
 
 func (ev Event) keyString() string {
-	var parts [8 + 3]string
+	var parts [4]string
 	i := 0
 	if ev.Mod != 0 {
-		i += ev.Mod.stringParts(parts[i:])
+		parts[i] = ev.Mod.String()
+		i++
 	}
 	if ev.Key != 0 {
 		parts[i] = ev.Key.String()
