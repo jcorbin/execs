@@ -95,6 +95,11 @@ func (term *Terminal) Close() error {
 	if term.closeOption != nil {
 		err = term.closeOption.preClose(term)
 	}
+
+	// TODO do this only if the cursor isn't homed on a new row (requires
+	// cursor to have been parsing and following output all along...)?
+	term.WriteString("\r\n")
+
 	if ferr := term.Flush(); err == nil {
 		err = ferr
 	}

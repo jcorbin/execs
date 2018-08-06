@@ -378,7 +378,7 @@ func (fa *FlushAfter) monitor(ch <-chan time.Time, stop <-chan struct{}) {
 	}
 	fa.Lock()
 	defer fa.Unlock()
-	if fa.t.C == ch {
+	if fa.t != nil && fa.t.C == ch {
 		fa.t = nil
 		fa.set = false
 	}

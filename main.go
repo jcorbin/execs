@@ -74,7 +74,8 @@ func (it *ui) header(label string) {
 
 func draw(term *terminal.Terminal, ev terminal.Event) error {
 	if ev.Key == terminal.KeyCtrlC {
-		return terminal.ErrStop
+		panic("bang")
+		// return terminal.ErrStop
 	}
 
 	if _, err := term.WriteCursor(display.Cursor.Home, display.Cursor.Clear); err != nil {
@@ -111,12 +112,13 @@ func draw(term *terminal.Terminal, ev terminal.Event) error {
 	return nil
 }
 
-func run() error {
+func run() (rerr error) {
 	flog, err := os.Create("log")
 	if err != nil {
 		return err
 	}
 	defer flog.Close()
+	defer setLogOutput(io.MultiWriter(flog, &logBuf))()
 
 	term, err := terminal.Open(nil, nil, terminal.Options(
 		terminal.RawMode,
@@ -127,18 +129,14 @@ func run() error {
 	if err != nil {
 		return err
 	}
-
-	log.Printf("about to run")
-
-	defer setLogOutput(io.MultiWriter(flog, &logBuf))()
+	defer func() {
+		if cerr := term.Close(); rerr == nil {
+			rerr = cerr
+		}
+	}()
 
 	log.Printf("running")
-
-	err = term.Run(terminal.DrawFunc(draw), terminal.ClientDrawTicker)
-	if cerr := term.Close(); err == nil {
-		err = cerr
-	}
-	return err
+	return term.Run(terminal.DrawFunc(draw), terminal.ClientDrawTicker)
 }
 
 func main() {
