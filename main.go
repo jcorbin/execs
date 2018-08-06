@@ -1,70 +1,84 @@
 package main
 
 import (
-	"errors"
-	"image"
+	"bufio"
+	"bytes"
+	"fmt"
+	"io"
 	"log"
+	"os"
+	"syscall"
+	"time"
 
-	"github.com/jcorbin/execs/internal/ecs"
+	"github.com/jcorbin/execs/internal/cops/display"
 	"github.com/jcorbin/execs/internal/terminal"
 )
+
+func setLogOutput(w io.Writer) func() {
+	log.SetOutput(w)
+	return func() { log.SetOutput(os.Stderr) }
+}
+
+var logBuf bytes.Buffer
+
+/*
 
 var (
 	errQuitGame = errors.New("quit game")
 	errGameOver = errors.New("game over")
 )
 
-type game struct {
-	world world
-	name  []byte
-}
+	ui.next = 1
 
-type world struct {
-	ecs.Scope
+	if ke, _, ok := ui.KeyPressed(); ok && ke == termbox.KeyEsc {
+		return errQuitGame
+	}
 
-	char []rune
-	fg   []image.RGBA
-	pos  []image.Point
-}
+	mid := ui.Size.Div(2)
 
-func (g *game) draw(term *terimnal.Terminal, ev terminal.Event) error {
-	/*
+	w := 5
+	box := image.Rectangle{mid.Sub(image.Pt(w, 1)), mid.Add(image.Pt(w, 0))}
+	drawLabel(ui, box, "Who Are You?")
 
-		ui.Swear(
-			display.Cursor.Home,
-			display.Cursor.Clear,
-			display.Cursor.Hide)
+	box = box.Add(image.Pt(0, 1))
+	if s, changed, submitted := doTextEdit(
+		ui,
+		box,
+		g.name,
+	); changed {
+		g.name = s
+	} else if submitted {
+		log.Printf("hello %q", s)
+		g.name = s[:0]
+	}
 
-		ui.next = 1
+*/
 
-			if ke, _, ok := ui.KeyPressed(); ok && ke == termbox.KeyEsc {
-				return errQuitGame
-			}
+func draw(term *terminal.Terminal, ev terminal.Event) error {
+	if ev.Key == terminal.KeyCtrlC {
+		return terminal.ErrStop
+	}
 
-			mid := ui.Size.Div(2)
+	if _, err := term.WriteCursor(display.Cursor.Home, display.Cursor.Clear); err != nil {
+		return err
+	}
 
-			w := 5
-			box := image.Rectangle{mid.Sub(image.Pt(w, 1)), mid.Add(image.Pt(w, 0))}
-			drawLabel(ui, box, "Who Are You?")
+	log.Printf("got event: %+v", ev)
 
-			box = box.Add(image.Pt(0, 1))
-			if s, changed, submitted := doTextEdit(
-				ui,
-				box,
-				g.name,
-			); changed {
-				g.name = s
-			} else if submitted {
-				log.Printf("hello %q", s)
-				g.name = s[:0]
-			}
+	// size, err := term.Size()
+	// if err != nil {
+	// 	return err
+	// }
 
-	*/
+	term.WriteString("| Logs |")
+	// term.WriteString(strings.Repeat("-", size.X-8))
+	term.WriteByte('\n')
+	sc := bufio.NewScanner(bytes.NewReader(logBuf.Bytes()))
+	for sc.Scan() {
+		fmt.Fprintf(term, "| - %q\n", sc.Bytes())
+	}
 
-	return nil
-}
-
-func run(term *Terminal, ev Event) error {
+	// display.Cursor.Hide,
 
 	// TODO game loop needs sub-runs
 	// for {
@@ -82,19 +96,40 @@ func run(term *Terminal, ev Event) error {
 	return nil
 }
 
-func main() {
-	term, err := terminal.Open(nil, nil, terminal.Options(
-		terminal.HiddenCursor,
-		terminal.MouseReporting,
-	))
-	if err == nil {
-		// terminal.FlushAfter(time.Second / 60)
-		err = term.Run(terminal.DrawFunc(run))
+func run() error {
+	flog, err := os.Create("log")
+	if err != nil {
+		return err
 	}
+	defer flog.Close()
+
+	term, err := terminal.Open(nil, nil, terminal.Options(
+		terminal.RawMode,
+		terminal.HiddenCursor,
+		// terminal.MouseReporting,
+		terminal.Signals(syscall.SIGINT, syscall.SIGTERM, syscall.SIGWINCH),
+	))
+	if err != nil {
+		return err
+	}
+
+	log.Printf("about to run")
+
+	defer setLogOutput(io.MultiWriter(flog, &logBuf))()
+
+	log.Printf("running")
+
+	err = term.Run(terminal.DrawFunc(draw),
+		terminal.ClientFlushEvery(time.Second/60),
+	)
 	if cerr := term.Close(); err == nil {
 		err = cerr
 	}
-	if err != nil {
+	return err
+}
+
+func main() {
+	if err := run(); err != nil {
 		log.Fatal(err)
 	}
 }
