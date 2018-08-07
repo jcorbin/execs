@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"bytes"
 	"errors"
 	"image"
 	"os"
@@ -41,12 +42,10 @@ type Terminal struct {
 	term   copsTerm.Terminal // TODO subsume this
 
 	// input
-	in          *os.File
-	parseOffset int
-	readOffset  int
-	inbuf       []byte
-	inerr       error
-	keyDecoder  *termkey.Decoder
+	in         *os.File
+	inbuf      bytes.Buffer
+	inerr      error
+	keyDecoder *termkey.Decoder
 }
 
 // Open a terminal on the given input/output file pair (defaults to os.Stdin
@@ -67,7 +66,6 @@ func Open(in, out *os.File, opt Option) (*Terminal, error) {
 		out:         out,
 		cur:         StartCursor,
 		tmp:         make([]byte, 64),
-		inbuf:       make([]byte, minRead*2),
 		outbuf:      make([]byte, 0, 1024),
 		signals:     make(chan os.Signal, signalCapacity),
 		writeOption: FlushWhenFull.(writeOption),

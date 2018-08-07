@@ -7,32 +7,13 @@ import "io"
 //
 // NOTE this is a lower level method, most users should use term.Run() instead.
 func (term *Terminal) ReadEvent() (Event, error) {
-	for {
-		if n, ev := term.decodeEvent(); ev.Type != EventNone {
-			term.parseOffset += n
-			return ev, nil
-		}
-		if _, err := term.readMore(minRead); err != nil {
-			return Event{}, err
-		}
+	var tmp [1]Event
+	n, err := term.ReadEvents(tmp[:])
+	var ev Event
+	if n > 0 {
+		ev = tmp[0]
 	}
-}
-
-func (term *Terminal) decodeEvent() (n int, ev Event) {
-	if term.parseOffset >= term.readOffset {
-		return 0, Event{}
-	}
-	buf := term.inbuf[term.parseOffset:term.readOffset]
-	ev.Event, n = term.keyDecoder.Decode(buf)
-	if n == 0 {
-		return 0, Event{}
-	}
-	if ev.Key.IsMouse() {
-		ev.Type = EventMouse
-	} else {
-		ev.Type = EventKey
-	}
-	return n, ev
+	return ev, err
 }
 
 // ReadEvents reads events into the given slice, stopping either when there are
@@ -58,11 +39,19 @@ func (term *Terminal) ReadEvents(evs []Event) (n int, _ error) {
 func (term *Terminal) decodeEvents(evs []Event) int {
 	i := 0
 	for i < len(evs) {
-		n, ev := term.decodeEvent()
+		buf := term.inbuf.Bytes()
+		if len(buf) == 0 {
+			break
+		}
+		kev, n := term.keyDecoder.Decode(buf)
 		if n == 0 {
 			break
 		}
-		term.parseOffset += n
+		term.inbuf.Next(n)
+		ev := Event{Type: EventKey, Event: kev}
+		if kev.Key.IsMouse() {
+			ev.Type = EventMouse
+		}
 		evs[i] = ev
 		i++
 	}
@@ -73,20 +62,12 @@ func (term *Terminal) readMore(n int) (int, error) {
 	if term.inerr != nil {
 		return 0, term.inerr
 	}
-	for len(term.inbuf)-term.readOffset < n {
-		if term.parseOffset > 0 {
-			// try to free space by shifting down over parsed bytes
-			copy(term.inbuf, term.inbuf[term.parseOffset:])
-			term.readOffset -= term.parseOffset
-			term.parseOffset = 0
-		} else {
-			// reallocate a bigger buffer
-			buf := make([]byte, len(term.inbuf)*2)
-			copy(buf, term.inbuf)
-			term.inbuf = buf
-		}
+	term.inbuf.Grow(n)
+	buf := term.inbuf.Bytes()
+	buf = buf[len(buf):cap(buf)]
+	n, term.inerr = term.in.Read(buf)
+	if n > 0 {
+		_, _ = term.inbuf.Write(buf[:n])
 	}
-	n, term.inerr = term.in.Read(term.inbuf[term.readOffset:])
-	term.readOffset += n
-	return n, nil
+	return n, term.inerr
 }
