@@ -24,11 +24,11 @@ func chainTermContext(a, b termContext) termContext {
 	if haveAs && haveBs {
 		return append(as, bs...)
 	} else if haveAs {
-		return append(termContexts{b}, as)
+		return append(as, b)
 	} else if haveBs {
-		return append(bs, a)
+		return append(termContexts{a}, bs...)
 	}
-	return a
+	return termContexts{a, b}
 }
 
 type termContexts []termContext

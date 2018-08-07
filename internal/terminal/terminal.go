@@ -72,6 +72,7 @@ func Open(in, out *os.File, opt Option) (*Terminal, error) {
 		signals: make(chan os.Signal, signalCapacity),
 
 		writeObserver: flushWhenFull{},
+		eventFilter:   nopEventFilter{},
 	}
 	term.termContext = &term.Attr
 	if err := opt.init(term); err != nil {

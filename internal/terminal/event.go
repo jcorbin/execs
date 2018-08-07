@@ -32,33 +32,36 @@ type EventType uint8
 
 // Event types.
 const (
-	EventNone EventType = iota
-	EventKey
-	EventMouse
-	EventEOF
-	EventResize
-	EventSignal
-	EventInterrupt
+	NoEvent EventType = iota
+	KeyEvent
+	MouseEvent
+	ResizeEvent
+	RedrawEvent
+	SignalEvent
+	InterruptEvent
+	EOFEvent
 
 	FirstUserEvent
 )
 
 func (ev Event) String() string {
 	switch ev.Type {
-	case EventNone:
-		return "NilEvent"
-	case EventKey:
+	case NoEvent:
+		return "NoEvent"
+	case KeyEvent:
 		return fmt.Sprintf("KeyEvent(%s)", ev.keyString())
-	case EventMouse:
+	case MouseEvent:
 		return fmt.Sprintf("MouseEvent(%s)", ev.mouseString())
-	case EventEOF:
-		return "EOFEvent"
-	case EventResize:
+	case ResizeEvent:
 		return "ResizeEvent"
-	case EventSignal:
+	case RedrawEvent:
+		return "RedrawEvent"
+	case SignalEvent:
 		return fmt.Sprintf("SignalEvent(%v)", ev.Signal.String())
-	case EventInterrupt:
+	case InterruptEvent:
 		return "InterruptEvent"
+	case EOFEvent:
+		return "EOFEvent"
 	default:
 		return fmt.Sprintf("UserEvent{Type:%d}", ev.Type)
 	}
@@ -111,11 +114,17 @@ type eventFilter interface {
 	filterEvent(term *Terminal, ev Event) (Event, error)
 }
 
+type nopEventFilter struct{}
+
+func (nf nopEventFilter) filterEvent(term *Terminal, ev Event) (Event, error) {
+	return ev, nil
+}
+
 func chainEventFilter(a, b eventFilter) eventFilter {
-	if a == nil {
+	if _, anop := a.(nopEventFilter); anop || a == nil {
 		return b
 	}
-	if b == nil {
+	if _, bnop := b.(nopEventFilter); bnop || b == nil {
 		return a
 	}
 	as, haveAs := a.(eventFilters)
@@ -123,15 +132,19 @@ func chainEventFilter(a, b eventFilter) eventFilter {
 	if haveAs && haveBs {
 		return append(as, bs...)
 	} else if haveAs {
-		return append(eventFilters{b}, as)
+		return append(as, b)
 	} else if haveBs {
-		return append(bs, a)
+		return append(eventFilters{a}, bs...)
 	}
-	return a
+	return eventFilters{a, b}
 }
 
 type eventFilterFunc func(term *Terminal, ev Event) (Event, error)
 
+func (f eventFilterFunc) init(term *Terminal) error {
+	term.eventFilter = chainEventFilter(term.eventFilter, f)
+	return nil
+}
 func (f eventFilterFunc) filterEvent(term *Terminal, ev Event) (Event, error) { return f(term, ev) }
 
 type eventFilters []eventFilter
@@ -139,7 +152,7 @@ type eventFilters []eventFilter
 func (evfs eventFilters) filterEvent(term *Terminal, ev Event) (Event, error) {
 	for i := range evfs {
 		ev, err := evfs[i].filterEvent(term, ev)
-		if ev.Type == EventNone || err != nil {
+		if err != nil || ev.Type != NoEvent {
 			return ev, err
 		}
 	}

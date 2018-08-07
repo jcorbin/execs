@@ -10,53 +10,95 @@ import (
 // StandardApp encapsulates the expected default behavior of a standard
 // fullscreen terminal application:
 // - drawing to a raw mode terminal with the cursor hidden
-// - synthesize SIGINT into EventInterrupt
+// - synthesize SIGWINCH into ResizeEvent
+// - synthesize KeyCtrlL into RedrawEvent
+// - synthesize SIGINT into InterruptEvent
+// - synthesize KeyCtrlC into InterruptEvent
 // - synthesize SIGTERM into ErrTerm
-// - synthesize SIGWINCH into EventResize
-// - TODO stop when Ctrl-C is pressed
-// - TODO redraw when Ctrl-L is pressed
 // - suspend when Ctrl-Z is pressed
+// - synthesize SIGCONT into RedrawEvent
 var StandardApp = Options(
+	HandleCtrlC,
+	HandleCtrlL,
+	HandleSIGCONT,
+	// TODO HandleKey( KeyCtrlBackslash, send SIGQUIT ) ?
+	// TODO alt mode buffer?
 	HandleSIGINT,
 	HandleSIGTERM,
 	HandleSIGWINCH,
-	// TODO eventFilter for KeyCtrlC
-	// TODO eventFilter for KeyCtrlL
 	SuspendOn(KeyCtrlZ),
 	RawMode,
 	HiddenCursor,
 )
 
-// TODO HandleSIGCONT ?
+// HandleSIGCONT by turning it into RedrawEvent.
+var HandleSIGCONT = HandleSignal(syscall.SIGCONT, func(term *Terminal, ev Event) (Event, error) {
+	return Event{Type: RedrawEvent}, nil
+})
 
-// HandleSIGWINCH by turning it EventResize.
-var HandleSIGWINCH Option = signalHandler{
-	signal: syscall.SIGWINCH,
-	handle: func(term *Terminal, ev Event) (Event, error) {
-		return Event{Type: EventResize}, nil
-	},
+// HandleSIGWINCH by turning it into ResizeEvent.
+var HandleSIGWINCH Option = HandleSignal(syscall.SIGWINCH, func(term *Terminal, ev Event) (Event, error) {
+	return Event{Type: ResizeEvent}, nil
+})
+
+// HandleSIGINT by turning it into InterruptEvent.
+var HandleSIGINT Option = HandleSignal(syscall.SIGINT, func(term *Terminal, ev Event) (Event, error) {
+	return Event{Type: InterruptEvent}, nil
+})
+
+// HandleSIGTERM by turning it into ErrTerm.
+var HandleSIGTERM Option = HandleSignal(syscall.SIGTERM, func(term *Terminal, ev Event) (Event, error) {
+	return Event{}, ErrTerm
+})
+
+func HandleKey(
+	key Key,
+	handle func(term *Terminal, ev Event) (Event, error),
+) Option {
+	return keyHandler{key: key, handle: handle}
 }
 
-// HandleSIGINT by turning it EventInterrupt.
-var HandleSIGINT Option = signalHandler{
-	signal: syscall.SIGINT,
-	handle: func(term *Terminal, ev Event) (Event, error) {
-		return Event{Type: EventInterrupt}, nil
-	},
+type keyHandler struct {
+	key    Key
+	handle func(term *Terminal, ev Event) (Event, error)
 }
 
-// HandleSIGTERM by turning it ErrTerm.
-var HandleSIGTERM Option = signalHandler{
-	signal: syscall.SIGTERM,
-	handle: func(term *Terminal, ev Event) (Event, error) {
-		return Event{}, ErrTerm
-	},
+func (kh keyHandler) init(term *Terminal) error {
+	log.Printf("installing %v handler", kh.key)
+	term.eventFilter = chainEventFilter(term.eventFilter, kh)
+	return nil
+}
+
+func (kh keyHandler) filterEvent(term *Terminal, ev Event) (Event, error) {
+	if ev.Type == KeyEvent && ev.Key == kh.key {
+		return kh.handle(term, ev)
+	}
+	return Event{}, nil
+}
+
+// HandleCtrlC by by turning it into InterruptEvent.
+var HandleCtrlC = HandleKey(KeyCtrlC, func(term *Terminal, ev Event) (Event, error) {
+	return Event{Type: InterruptEvent}, nil
+})
+
+// HandleCtrlL by by turning it into RedrawEvent.
+var HandleCtrlL = HandleKey(KeyCtrlL, func(term *Terminal, ev Event) (Event, error) {
+	return Event{Type: RedrawEvent}, nil
+})
+
+// HandleSignal creates an option that a signal handling event filter during
+// terminal lifecycle.
+func HandleSignal(
+	signal os.Signal,
+	handle func(term *Terminal, ev Event) (Event, error),
+) Option {
+	return signalHandler{signal: signal, handle: handle}
 }
 
 type signalHandler struct {
-	active bool
 	signal os.Signal
 	handle func(term *Terminal, ev Event) (Event, error)
+	active bool
 }
 
 func (sh signalHandler) init(term *Terminal) error {
@@ -79,10 +121,10 @@ func (sh *signalHandler) exit(term *Terminal) error {
 }
 
 func (sh *signalHandler) filterEvent(term *Terminal, ev Event) (Event, error) {
-	if ev.Type == EventSignal && ev.Signal == sh.signal {
+	if ev.Type == SignalEvent && ev.Signal == sh.signal {
 		return sh.handle(term, ev)
 	}
-	return ev, nil
+	return Event{}, nil
 }
 
 // SuspendOn creates an Option that calls Terminal.Suspend() when the specified
@@ -105,7 +147,6 @@ func (sus *suspendOn) init(term *Terminal) error {
 }
 
 func (sus *suspendOn) enter(term *Terminal) error {
-	// TODO Synthesize SIGCONT into an EventRedraw
 	if !sus.active {
 		sus.active = true
 		signal.Notify(term.signals, syscall.SIGCONT)
@@ -118,10 +159,16 @@ func (sus *suspendOn) exit(term *Terminal) error {
 }
 
 func (sus suspendOn) filterEvent(term *Terminal, ev Event) (Event, error) {
-	log.Printf("viva la %v", ev)
-	if ev.Type == EventKey {
+	if ev.Type == SignalEvent {
+		if ev.Signal == syscall.SIGCONT {
+			return Event{Type: RedrawEvent}, nil
+		}
+		return ev, nil
+	}
+	if ev.Type == KeyEvent {
 		for i := range sus.keys {
 			if ev.Key == sus.keys[i] {
+				log.Printf("suspending on %v", ev)
 				if err := term.Suspend(); err != nil {
 					return ev, err
 				}

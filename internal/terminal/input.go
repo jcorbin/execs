@@ -13,11 +13,11 @@ import (
 func DecodeSignal(sig os.Signal) Event {
 	switch sig {
 	case syscall.SIGINT:
-		return Event{Type: EventInterrupt}
+		return Event{Type: InterruptEvent}
 	case syscall.SIGWINCH:
-		return Event{Type: EventResize}
+		return Event{Type: ResizeEvent}
 	default:
-		return Event{Type: EventSignal, Signal: sig}
+		return Event{Type: SignalEvent, Signal: sig}
 	}
 }
 
@@ -28,7 +28,7 @@ func DecodeSignal(sig os.Signal) Event {
 // term.Run() should suffice for most needs.
 func (term *Terminal) DecodeSignal(sig os.Signal) (Event, error) {
 	ev := DecodeSignal(sig)
-	if ev.Type == EventNone {
+	if ev.Type == NoEvent {
 		return Event{}, nil
 	}
 	return term.filterEvent(term, ev)
@@ -55,7 +55,7 @@ func (term *Terminal) DecodeEvent() (Event, error) {
 		if err == nil {
 			ev, err = term.filterEvent(term, ev)
 		}
-		if err != nil || ev.Type != EventNone {
+		if err != nil || ev.Type != NoEvent {
 			return ev, err
 		}
 	}
@@ -83,7 +83,7 @@ func (term *Terminal) DecodeEvents(evs []Event) (n int, _ error) {
 		j := 0
 		for i := 0; i < n; i++ {
 			ev, err := term.filterEvent(term, evs[i])
-			if ev.Type != EventNone {
+			if ev.Type != NoEvent {
 				evs[j] = ev
 				j++
 			}
@@ -154,9 +154,9 @@ func (term *Terminal) decodeEvents(evs []Event) int {
 			break
 		}
 		term.inbuf.Next(n)
-		ev := Event{Type: EventKey, Event: kev}
+		ev := Event{Type: KeyEvent, Event: kev}
 		if kev.Key.IsMouse() {
-			ev.Type = EventMouse
+			ev.Type = MouseEvent
 		}
 		evs[i] = ev
 		i++

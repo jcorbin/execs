@@ -51,11 +51,12 @@ var (
 */
 
 func draw(term *terminal.Terminal, ev terminal.Event) error {
-	if ev.Type != terminal.EventNone {
+	if ev.Type != terminal.NoEvent &&
+		ev.Type != terminal.RedrawEvent {
 		log.Printf("got %v", ev)
 	}
 
-	if ev.Type == terminal.EventKey && ev.Key == terminal.KeyCtrlC {
+	if ev.Type == terminal.InterruptEvent {
 		return terminal.ErrStop
 	}
 
@@ -65,7 +66,7 @@ func draw(term *terminal.Terminal, ev terminal.Event) error {
 
 	var it ui
 	it.init(term)
-	if ev.Type == terminal.EventResize {
+	if ev.Type == terminal.ResizeEvent {
 		log.Printf("size is %v", it.size)
 	}
 

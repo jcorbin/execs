@@ -25,13 +25,18 @@ func (it *ui) header(label string, args ...interface{}) {
 	if len(args) > 0 {
 		label = fmt.Sprintf(label, args...)
 	}
-	w := utf8.RuneCountInString(label)
+	max := it.size.X - 2
 	it.WriteByte('|')
-	if max := it.size.X - 2; w < max {
-		it.WriteString(label)
-		it.WriteString(strings.Repeat("-", max-w))
+	if label == "" {
+		it.WriteString(strings.Repeat("-", max))
 	} else {
-		it.WriteString(label[:max])
+		w := utf8.RuneCountInString(label)
+		if w < max {
+			it.WriteString(label)
+			it.WriteString(strings.Repeat("-", max-w))
+		} else {
+			it.WriteString(label[:max])
+		}
 	}
 	it.WriteByte('|')
 }
@@ -39,34 +44,37 @@ func (it *ui) header(label string, args ...interface{}) {
 func (it *ui) textbox(label string, buf []byte) {
 	totalLines := bytes.Count(buf, []byte("\n"))
 	numLines := totalLines
-	if maxLines := it.size.Y - 1; numLines > maxLines {
+	if maxLines := it.size.Y - 2; numLines > maxLines {
 		numLines = maxLines
 	}
 
 	sc := bufio.NewScanner(bytes.NewReader(buf))
 	if numLines < totalLines {
-		it.header(" %s (%v of %v) ", label, numLines, totalLines)
+		it.header(" %s (%v of %v) ]", label, numLines, totalLines)
 		for i := numLines; i < totalLines; i++ {
 			sc.Scan()
 		}
 	} else {
-		it.header(" %s ", label)
+		it.header(" %s ]", label)
 	}
 	for sc.Scan() {
 		it.WriteString("\r\n| ")
 		b := sc.Bytes()
-		if w, max := utf8.RuneCount(b), it.size.X-2; w > max {
+		if w, max := utf8.RuneCount(b), it.size.X-4; w > max {
 			drop := 3 + w - max
 			for i := 0; i < drop; i++ {
 				_, n := utf8.DecodeLastRune(b)
 				b = b[:len(b)-n]
 			}
 			it.Write(b)
-			it.WriteString("...")
+			it.WriteString("... |")
 		} else {
 			it.Write(b)
+			it.WriteString(strings.Repeat(" ", max-w))
+			it.WriteString(" |")
 		}
 	}
+	it.header("")
 }
 
 /*
