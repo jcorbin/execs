@@ -37,7 +37,7 @@ type Terminal struct {
 	out    *os.File
 	cur    Cursor
 	tmp    []byte
-	outbuf []byte
+	outbuf bytes.Buffer
 	outerr error
 	term   copsTerm.Terminal // TODO subsume this
 
@@ -66,7 +66,6 @@ func Open(in, out *os.File, opt Option) (*Terminal, error) {
 		out:         out,
 		cur:         StartCursor,
 		tmp:         make([]byte, 64),
-		outbuf:      make([]byte, 0, 1024),
 		signals:     make(chan os.Signal, signalCapacity),
 		writeOption: FlushWhenFull.(writeOption),
 	}
@@ -98,7 +97,7 @@ func (term *Terminal) Close() error {
 
 	// TODO do this only if the cursor isn't homed on a new row (requires
 	// cursor to have been parsing and following output all along...)?
-	term.WriteString("\r\n")
+	_, _ = term.WriteString("\r\n")
 
 	if ferr := term.Flush(); err == nil {
 		err = ferr
@@ -109,7 +108,7 @@ func (term *Terminal) Close() error {
 func (term *Terminal) closeOnPanic() {
 	if e := recover(); e != nil {
 		if !term.closed {
-			term.Close()
+			_ = term.Close()
 		}
 		panic(e)
 	}

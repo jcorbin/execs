@@ -143,13 +143,13 @@ func (f preCloseFunc) preClose(term *Terminal) error { return f(term) }
 func (to termOption) preOpen(term *Terminal) error { return nil }
 func (to termOption) postOpen(term *Terminal) error {
 	if fn := term.info.Funcs[to.enter]; fn != "" {
-		term.outbuf = append(term.outbuf, fn...)
+		_, _ = term.outbuf.WriteString(fn)
 	}
 	return nil
 }
 func (to termOption) preClose(term *Terminal) error {
 	if fn := term.info.Funcs[to.exit]; fn != "" {
-		term.outbuf = append(term.outbuf, fn...)
+		_, _ = term.outbuf.WriteString(fn)
 	}
 	return nil
 }
@@ -214,15 +214,6 @@ func SignalCapacity(n int) Option {
 	})
 }
 
-// OutbufCapacity sets the initial capacity of the output buffer, which
-// defaults to 1KiB.
-func OutbufCapacity(n int) Option {
-	return preOpenFunc(func(term *Terminal) error {
-		term.outbuf = make([]byte, 0, n)
-		return nil
-	})
-}
-
 // TODO more general termios mode option
 type rawMode struct {
 }
@@ -270,13 +261,13 @@ func (fw flushWhenFull) preOpen(term *Terminal) error {
 }
 func (fw flushWhenFull) postOpen(term *Terminal) error { return nil }
 func (fw flushWhenFull) preWrite(term *Terminal, n int) error {
-	if m := len(term.outbuf); m > 0 && m+n >= cap(term.outbuf) {
+	if m := term.outbuf.Len(); m > 0 && m+n >= term.outbuf.Cap() {
 		return term.Flush()
 	}
 	return nil
 }
 func (fw flushWhenFull) postWrite(term *Terminal, n int) error {
-	if m := len(term.outbuf); m > 0 && m == cap(term.outbuf) {
+	if m := term.outbuf.Len(); m > 0 && m == term.outbuf.Cap() {
 		return term.Flush()
 	}
 	return nil

@@ -16,8 +16,7 @@ func (term *Terminal) Write(p []byte) (n int, err error) {
 		// buffers through rather than append/growing them
 	}
 	if term.outerr == nil {
-		term.outbuf = append(term.outbuf, p...)
-		n = len(p)
+		n, _ = term.outbuf.Write(p)
 		term.outerr = term.writeOption.postWrite(term, n)
 	}
 	return n, term.outerr
@@ -29,7 +28,7 @@ func (term *Terminal) WriteByte(c byte) error {
 		term.outerr = term.writeOption.preWrite(term, 1)
 	}
 	if term.outerr == nil {
-		term.outbuf = append(term.outbuf, c)
+		_ = term.outbuf.WriteByte(c)
 		term.outerr = term.writeOption.postWrite(term, 1)
 	}
 	return term.outerr
@@ -41,9 +40,7 @@ func (term *Terminal) WriteRune(r rune) (n int, err error) {
 		term.outerr = term.writeOption.preWrite(term, utf8.RuneLen(r))
 	}
 	if term.outerr == nil {
-		var tmp [8]byte
-		n = utf8.EncodeRune(tmp[:], r)
-		term.outbuf = append(term.outbuf, tmp[:n]...)
+		n, _ = term.outbuf.WriteRune(r)
 		term.outerr = term.writeOption.postWrite(term, n)
 	}
 	return n, term.outerr
@@ -57,8 +54,7 @@ func (term *Terminal) WriteString(s string) (n int, err error) {
 		// strings through rather than append/growing them
 	}
 	if term.outerr == nil {
-		n = len(s)
-		term.outbuf = append(term.outbuf, s...)
+		n, _ = term.outbuf.WriteString(s)
 		term.outerr = term.writeOption.postWrite(term, n)
 	}
 	return n, term.outerr
@@ -72,22 +68,19 @@ func (term *Terminal) WriteCursor(curses ...Curse) (n int, err error) {
 		return 0, nil
 	case 1:
 		_, term.tmp, term.cur = writeCursor(term.cur, term.tmp[:0], curses[0])
-		return term.Write(term.tmp)
 	default:
 		term.tmp = term.tmp[:0]
 		for i := range curses {
 			_, term.tmp, term.cur = writeCursor(term.cur, term.tmp, curses[i])
 		}
-		return term.Write(term.tmp)
 	}
+	return term.Write(term.tmp)
 }
 
 // Flush any buffered output.
 func (term *Terminal) Flush() error {
-	for term.outerr == nil && len(term.outbuf) > 0 {
-		n, err := term.out.Write(term.outbuf)
-		term.outbuf = term.outbuf[:copy(term.outbuf, term.outbuf[n:])]
-		term.outerr = err
+	if term.outerr == nil && term.outbuf.Len() > 0 {
+		_, term.outerr = term.outbuf.WriteTo(term.out)
 	}
 	return term.outerr
 }
@@ -95,7 +88,7 @@ func (term *Terminal) Flush() error {
 // Discard any un-flushed output.
 func (term *Terminal) Discard() error {
 	if term.outerr == nil {
-		term.outbuf = term.outbuf[:0]
+		term.outbuf.Reset()
 		term.outerr = term.writeOption.preWrite(term, 0)
 	}
 	return term.outerr
