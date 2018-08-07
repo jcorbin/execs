@@ -1,8 +1,6 @@
 package terminal
 
 import (
-	"os"
-	"os/signal"
 	"syscall"
 
 	"github.com/jcorbin/execs/internal/terminfo"
@@ -204,38 +202,3 @@ var RawMode Option = optionFunc(func(term *Terminal) error {
 	term.Attr.raw = true
 	return nil
 })
-
-// Signals provides one or more signals that the terminal should be notified
-// of. Special handling is provided for:
-// - syscall.SIGWINCH will be synthesized into an EventResize
-// - syscall.SIGINT will be synthesized into an EventInterrupt
-// - syscall.SIGTERM will halt input event processing
-// - other events are passed through as EventSignal
-//
-// FIXME currently the user must use Terminal.Run for this to be true!
-func Signals(sigs ...os.Signal) Option {
-	return &signals{sigs: sigs}
-}
-
-type signals struct {
-	sigs   []os.Signal
-	active bool
-}
-
-func (sigs signals) init(term *Terminal) error {
-	term.termContext = chainTermContext(term.termContext, &sigs)
-	return nil
-}
-
-func (sigs *signals) enter(term *Terminal) error {
-	if !sigs.active {
-		sigs.active = true
-		signal.Notify(term.signals, sigs.sigs...)
-	}
-	return nil
-}
-
-func (sigs *signals) exit(term *Terminal) error {
-	// TODO useful to deregister / reset signals?
-	return nil
-}

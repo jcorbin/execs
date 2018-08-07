@@ -2,9 +2,7 @@ package terminal
 
 import (
 	"errors"
-	"log"
 	"runtime"
-	"syscall"
 	"time"
 )
 
@@ -227,17 +225,16 @@ func (term *Terminal) synthesize(events chan<- Event, errs chan<- error, stop <-
 		case <-stop:
 			return
 		case sig := <-term.signals:
-			ev := DecodeSignal(sig)
-			if ev.Type == EventSignal {
-				switch sig {
-				case syscall.SIGTERM:
-					errs <- ErrTerm
+			if ev, err := term.DecodeSignal(sig); err != nil {
+				errs <- err
+				if err == ErrTerm {
+					return
 				}
-			}
-			log.Printf("mapped signal(%v) => %v", sig, ev)
-			select {
-			case events <- ev:
-			default:
+			} else if ev.Type != EventNone {
+				select {
+				case events <- ev:
+				default:
+				}
 			}
 		}
 	}
@@ -251,7 +248,7 @@ func (term *Terminal) monitorEvents(
 	runtime.LockOSThread() // dedicate this thread to event reading
 	defer term.closeOnPanic()
 	for {
-		ev, err := term.ReadEvent()
+		ev, err := term.DecodeEvent()
 		if err != nil {
 			select {
 			case errs <- err:
@@ -283,7 +280,7 @@ func (term *Terminal) monitorEventBatches(
 		case <-stop:
 			return
 		}
-		n, err := term.ReadEvents(evs)
+		n, err := term.DecodeEvents(evs)
 		if err != nil {
 			select {
 			case errs <- err:

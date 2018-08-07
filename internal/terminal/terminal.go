@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"image"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -153,4 +154,28 @@ func (term *Terminal) Size() (size image.Point, err error) {
 		size.Y = int(dim.rows)
 	}
 	return size, err
+}
+
+// Suspend the terminal program: restore terminal state, send SIGSTOP, then
+// re-setup terminal state once we're back from a SIGCONT ( XXX TODO ).
+func (term *Terminal) Suspend() error {
+	if term == nil {
+		return errors.New("SuspendOption not attached to any Terminal")
+	}
+	proc, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		return err
+	}
+	if err := term.termContext.exit(term); err != nil {
+		return err
+	}
+	log.Printf("seding SIGSTOP to self")
+	if err := proc.Signal(syscall.SIGSTOP); err != nil {
+		return err
+	}
+	if err == nil {
+		log.Printf("and we're back, re-setting-up terminal")
+	}
+	return term.termContext.enter(term)
+	// TODO re-setup in SIGCONT handler instead?
 }

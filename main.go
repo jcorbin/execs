@@ -5,7 +5,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"syscall"
 
 	"github.com/jcorbin/execs/internal/cops/display"
 	"github.com/jcorbin/execs/internal/terminal"
@@ -97,10 +96,8 @@ func run() (rerr error) {
 	defer setLogOutput(io.MultiWriter(flog, &logBuf))()
 
 	term, err := terminal.Open(nil, nil, terminal.Options(
-		terminal.RawMode,
-		terminal.HiddenCursor,
+		terminal.StandardApp,
 		terminal.MouseReporting,
-		terminal.Signals(syscall.SIGINT, syscall.SIGTERM, syscall.SIGWINCH),
 	))
 	if err != nil {
 		return err

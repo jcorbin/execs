@@ -130,6 +130,10 @@ func chainEventFilter(a, b eventFilter) eventFilter {
 	return a
 }
 
+type eventFilterFunc func(term *Terminal, ev Event) (Event, error)
+
+func (f eventFilterFunc) filterEvent(term *Terminal, ev Event) (Event, error) { return f(term, ev) }
+
 type eventFilters []eventFilter
 
 func (evfs eventFilters) filterEvent(term *Terminal, ev Event) (Event, error) {

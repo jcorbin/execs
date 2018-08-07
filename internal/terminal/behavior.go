@@ -1,73 +1,128 @@
 package terminal
 
 import (
-	"errors"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
 )
 
-// SuspendOn creates a SuspendOption triggered by the given terminal key(s).
-// For example the usual semantic can be had with SuspendOn(KeyCtrlZ).
-func SuspendOn(keys ...Key) SuspendOption {
-	return SuspendOption{on: keys}
+// StandardApp encapsulates the expected default behavior of a standard
+// fullscreen terminal application:
+// - drawing to a raw mode terminal with the cursor hidden
+// - synthesize SIGINT into EventInterrupt
+// - synthesize SIGTERM into ErrTerm
+// - synthesize SIGWINCH into EventResize
+// - TODO stop when Ctrl-C is pressed
+// - TODO redraw when Ctrl-L is pressed
+// - suspend when Ctrl-Z is pressed
+var StandardApp = Options(
+	HandleSIGINT,
+	HandleSIGTERM,
+	HandleSIGWINCH,
+	// TODO eventFilter for KeyCtrlC
+	// TODO eventFilter for KeyCtrlL
+	SuspendOn(KeyCtrlZ),
+	RawMode,
+	HiddenCursor,
+)
+
+// TODO HandleSIGCONT ?
+
+// HandleSIGWINCH by turning it EventResize.
+var HandleSIGWINCH Option = signalHandler{
+	signal: syscall.SIGWINCH,
+	handle: func(term *Terminal, ev Event) (Event, error) {
+		return Event{Type: EventResize}, nil
+	},
 }
 
-// SuspendOption supports the usual terminal suspension behavior.
-type SuspendOption struct {
-	on   []Key
-	term *Terminal
+// HandleSIGINT by turning it EventInterrupt.
+var HandleSIGINT Option = signalHandler{
+	signal: syscall.SIGINT,
+	handle: func(term *Terminal, ev Event) (Event, error) {
+		return Event{Type: EventInterrupt}, nil
+	},
 }
 
-func (sus *SuspendOption) init(term *Terminal) error {
-	// TODO logic to prevent incorrect usage like if term.out == os.Stdout { }
+// HandleSIGTERM by turning it ErrTerm.
+var HandleSIGTERM Option = signalHandler{
+	signal: syscall.SIGTERM,
+	handle: func(term *Terminal, ev Event) (Event, error) {
+		return Event{}, ErrTerm
+	},
+}
+
+type signalHandler struct {
+	active bool
+	signal os.Signal
+	handle func(term *Terminal, ev Event) (Event, error)
+}
+
+func (sh signalHandler) init(term *Terminal) error {
+	term.eventFilter = chainEventFilter(term.eventFilter, &sh)
+	term.termContext = chainTermContext(term.termContext, &sh)
+	return nil
+}
+
+func (sh *signalHandler) enter(term *Terminal) error {
+	if !sh.active {
+		sh.active = true
+		signal.Notify(term.signals, sh.signal)
+	}
+	return nil
+}
+
+func (sh *signalHandler) exit(term *Terminal) error {
+	// TODO support (optional) deregistration (e.g. when suspending)?
+	return nil
+}
+
+func (sh *signalHandler) filterEvent(term *Terminal, ev Event) (Event, error) {
+	if ev.Type == EventSignal && ev.Signal == sh.signal {
+		return sh.handle(term, ev)
+	}
+	return ev, nil
+}
+
+// SuspendOn creates an Option that calls Terminal.Suspend() when the specified
+// key(s) are pressed. The corresponding KeyEvents are filtered out, never seen
+// by the client.
+func SuspendOn(keys ...Key) Option {
+	return &suspendOn{keys: keys}
+}
+
+type suspendOn struct {
+	keys   []Key
+	active bool
+}
+
+func (sus *suspendOn) init(term *Terminal) error {
 	term.eventFilter = chainEventFilter(term.eventFilter, sus)
 	term.termContext = chainTermContext(term.termContext, sus)
+	log.Printf("installed suspendOn")
 	return nil
 }
 
-func (sus *SuspendOption) enter(term *Terminal) error {
-	if sus.term == nil {
-		sus.term = term
-		// TODO Synthesize SIGCONT into an EventRedraw
+func (sus *suspendOn) enter(term *Terminal) error {
+	// TODO Synthesize SIGCONT into an EventRedraw
+	if !sus.active {
+		sus.active = true
 		signal.Notify(term.signals, syscall.SIGCONT)
-	} else if term != sus.term {
-		return errors.New("SuspendOption cannot be shared between Terminals")
 	}
 	return nil
 }
 
-func (sus *SuspendOption) exit(term *Terminal) error {
+func (sus *suspendOn) exit(term *Terminal) error {
 	return nil
 }
 
-// Suspend the terminal program.
-//
-// Will be called when any key given to SuspendOn is seen; user may call this
-// to suspend otherwise.
-func (sus SuspendOption) Suspend() error {
-	if sus.term == nil {
-		return errors.New("SuspendOption not attached to any Terminal")
-	}
-	proc, err := os.FindProcess(os.Getpid())
-	if err != nil {
-		return err
-	}
-	if err := sus.term.termContext.exit(sus.term); err != nil {
-		return err
-	}
-	if err := proc.Signal(syscall.SIGSTOP); err != nil {
-		return err
-	}
-	return sus.term.termContext.enter(sus.term)
-	// TODO re-setup in SIGCONT handler instead?
-}
-
-func (sus SuspendOption) filterEvent(term *Terminal, ev Event) (Event, error) {
+func (sus suspendOn) filterEvent(term *Terminal, ev Event) (Event, error) {
+	log.Printf("viva la %v", ev)
 	if ev.Type == EventKey {
-		for i := range sus.on {
-			if ev.Key == sus.on[i] {
-				if err := sus.Suspend(); err != nil {
+		for i := range sus.keys {
+			if ev.Key == sus.keys[i] {
+				if err := term.Suspend(); err != nil {
 					return ev, err
 				}
 				return Event{}, nil
