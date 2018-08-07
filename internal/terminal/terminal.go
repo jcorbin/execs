@@ -6,11 +6,11 @@ import (
 	"image"
 	"os"
 	"os/signal"
-
-	copsTerm "github.com/jcorbin/execs/internal/cops/terminal"
-	"github.com/jcorbin/execs/internal/termkey"
+	"syscall"
+	"unsafe"
 
 	"github.com/jcorbin/execs/internal/terminfo"
+	"github.com/jcorbin/execs/internal/termkey"
 )
 
 const (
@@ -26,12 +26,15 @@ const (
 //   flipping is required or implied; the buffer serves as more of a command
 //   queue)
 type Terminal struct {
+	Attr
+
 	closed  bool
 	signals chan os.Signal
 	info    *terminfo.Terminfo
 
-	closeOption
-	writeOption
+	termContext
+	writeObserver
+	eventFilter
 
 	// output
 	out    *os.File
@@ -39,7 +42,6 @@ type Terminal struct {
 	tmp    []byte
 	outbuf bytes.Buffer
 	outerr error
-	term   copsTerm.Terminal // TODO subsume this
 
 	// input
 	in         *os.File
@@ -62,24 +64,26 @@ func Open(in, out *os.File, opt Option) (*Terminal, error) {
 	}
 	opt = Options(opt, DefaultTerminfo)
 	term := &Terminal{
-		in:          in,
-		out:         out,
-		cur:         StartCursor,
-		tmp:         make([]byte, 64),
-		signals:     make(chan os.Signal, signalCapacity),
-		writeOption: FlushWhenFull.(writeOption),
+		in:      in,
+		out:     out,
+		cur:     StartCursor,
+		tmp:     make([]byte, 64),
+		signals: make(chan os.Signal, signalCapacity),
+
+		writeObserver: flushWhenFull{},
 	}
-	if err := opt.preOpen(term); err != nil {
+	term.termContext = &term.Attr
+	if err := opt.init(term); err != nil {
 		return nil, err
 	}
 
 	term.keyDecoder = termkey.NewDecoder(term.info)
-	term.term = copsTerm.New(uintptr(term.out.Fd()))
 
-	if err := opt.postOpen(term); err != nil {
+	if err := term.termContext.enter(term); err != nil {
 		_ = term.Close()
 		return nil, err
 	}
+
 	return term, nil
 }
 
@@ -90,10 +94,8 @@ func (term *Terminal) Close() error {
 	}
 	term.closed = true
 	signal.Stop(term.signals)
-	var err error
-	if term.closeOption != nil {
-		err = term.closeOption.preClose(term)
-	}
+
+	err := term.termContext.exit(term)
 
 	// TODO do this only if the cursor isn't homed on a new row (requires
 	// cursor to have been parsing and following output all along...)?
@@ -114,8 +116,41 @@ func (term *Terminal) closeOnPanic() {
 	}
 }
 
+func (term *Terminal) ioctl(request, argp uintptr) error {
+	if _, _, e := syscall.Syscall6(syscall.SYS_IOCTL, term.out.Fd(), request, argp, 0, 0, 0); e != 0 {
+		return e
+	}
+	return nil
+}
+
+// GetAttr retrieves terminal attributes.
+//
+// NOTE this is a low level method, most users should use the Attr Option.
+func (term *Terminal) GetAttr() (attr syscall.Termios, err error) {
+	err = term.ioctl(syscall.TIOCGETA, uintptr(unsafe.Pointer(&attr)))
+	return
+}
+
+// SetAttr sets terminal attributes.
+//
+// NOTE this is a low level method, most users should use the Attr Option.
+func (term *Terminal) SetAttr(attr syscall.Termios) error {
+	return term.ioctl(syscall.TIOCSETA, uintptr(unsafe.Pointer(&attr)))
+}
+
 // Size reads and returns the current terminal size.
-func (term *Terminal) Size() (image.Point, error) {
+func (term *Terminal) Size() (size image.Point, err error) {
 	// TODO cache last known good? hide error?
-	return term.term.Size()
+	var dim struct {
+		rows    uint16
+		cols    uint16
+		xpixels uint16
+		ypixels uint16
+	}
+	err = term.ioctl(syscall.TIOCGWINSZ, uintptr(unsafe.Pointer(&dim)))
+	if err == nil {
+		size.X = int(dim.cols)
+		size.Y = int(dim.rows)
+	}
+	return size, err
 }

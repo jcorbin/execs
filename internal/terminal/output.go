@@ -11,13 +11,13 @@ type Curse func(Cursor, []byte) ([]byte, Cursor)
 // Write into the output buffer, triggering any Flush* options.
 func (term *Terminal) Write(p []byte) (n int, err error) {
 	if term.outerr == nil {
-		term.outerr = term.writeOption.preWrite(term, len(p))
+		term.outerr = term.writeObserver.preWrite(term, len(p))
 		// TODO would be nice to give writeOption a choice to pass large
 		// buffers through rather than append/growing them
 	}
 	if term.outerr == nil {
 		n, _ = term.outbuf.Write(p)
-		term.outerr = term.writeOption.postWrite(term, n)
+		term.outerr = term.writeObserver.postWrite(term, n)
 	}
 	return n, term.outerr
 }
@@ -25,11 +25,11 @@ func (term *Terminal) Write(p []byte) (n int, err error) {
 // WriteByte into the output buffer, triggering any Flush* options.
 func (term *Terminal) WriteByte(c byte) error {
 	if term.outerr == nil {
-		term.outerr = term.writeOption.preWrite(term, 1)
+		term.outerr = term.writeObserver.preWrite(term, 1)
 	}
 	if term.outerr == nil {
 		_ = term.outbuf.WriteByte(c)
-		term.outerr = term.writeOption.postWrite(term, 1)
+		term.outerr = term.writeObserver.postWrite(term, 1)
 	}
 	return term.outerr
 }
@@ -37,11 +37,11 @@ func (term *Terminal) WriteByte(c byte) error {
 // WriteRune into the output buffer, triggering any Flush* options.
 func (term *Terminal) WriteRune(r rune) (n int, err error) {
 	if term.outerr == nil {
-		term.outerr = term.writeOption.preWrite(term, utf8.RuneLen(r))
+		term.outerr = term.writeObserver.preWrite(term, utf8.RuneLen(r))
 	}
 	if term.outerr == nil {
 		n, _ = term.outbuf.WriteRune(r)
-		term.outerr = term.writeOption.postWrite(term, n)
+		term.outerr = term.writeObserver.postWrite(term, n)
 	}
 	return n, term.outerr
 }
@@ -49,13 +49,13 @@ func (term *Terminal) WriteRune(r rune) (n int, err error) {
 // WriteString into the output buffer, triggering any Flush* options.
 func (term *Terminal) WriteString(s string) (n int, err error) {
 	if term.outerr == nil {
-		term.outerr = term.writeOption.preWrite(term, len(s))
+		term.outerr = term.writeObserver.preWrite(term, len(s))
 		// TODO would be nice to give writeOption a choice to pass large
 		// strings through rather than append/growing them
 	}
 	if term.outerr == nil {
 		n, _ = term.outbuf.WriteString(s)
-		term.outerr = term.writeOption.postWrite(term, n)
+		term.outerr = term.writeObserver.postWrite(term, n)
 	}
 	return n, term.outerr
 }
@@ -89,7 +89,7 @@ func (term *Terminal) Flush() error {
 func (term *Terminal) Discard() error {
 	if term.outerr == nil {
 		term.outbuf.Reset()
-		term.outerr = term.writeOption.preWrite(term, 0)
+		term.outerr = term.writeObserver.preWrite(term, 0)
 	}
 	return term.outerr
 }

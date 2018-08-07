@@ -106,3 +106,38 @@ func (ev Event) mouseString() string {
 	}
 	return strings.Join(parts[:], "")
 }
+
+type eventFilter interface {
+	filterEvent(term *Terminal, ev Event) (Event, error)
+}
+
+func chainEventFilter(a, b eventFilter) eventFilter {
+	if a == nil {
+		return b
+	}
+	if b == nil {
+		return a
+	}
+	as, haveAs := a.(eventFilters)
+	bs, haveBs := b.(eventFilters)
+	if haveAs && haveBs {
+		return append(as, bs...)
+	} else if haveAs {
+		return append(eventFilters{b}, as)
+	} else if haveBs {
+		return append(bs, a)
+	}
+	return a
+}
+
+type eventFilters []eventFilter
+
+func (evfs eventFilters) filterEvent(term *Terminal, ev Event) (Event, error) {
+	for i := range evfs {
+		ev, err := evfs[i].filterEvent(term, ev)
+		if ev.Type == EventNone || err != nil {
+			return ev, err
+		}
+	}
+	return ev, nil
+}

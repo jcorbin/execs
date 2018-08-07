@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"runtime"
+	"syscall"
 	"time"
 )
 
@@ -34,11 +35,11 @@ type BatchClient interface {
 
 // Run the given Client under the terminal with options.
 func (term *Terminal) Run(client Client, copts ...ClientOption) error {
-	defer func(wo writeOption) {
-		if term.writeOption != wo {
+	defer func(wo writeObserver) {
+		if term.writeObserver != wo {
 			term.setWriteOption(wo)
 		}
-	}(term.writeOption)
+	}(term.writeObserver)
 	// TODO other forms of state restore? maybe this should be a sub-terminal instead?
 	cr := clientRunner{
 		eventBatchSize: 128,
@@ -226,15 +227,14 @@ func (term *Terminal) synthesize(events chan<- Event, errs chan<- error, stop <-
 		case <-stop:
 			return
 		case sig := <-term.signals:
-			ev, err := DecodeSignal(sig)
-			log.Printf("mapped signal(%v) => %v, %v", sig, ev, err)
-			if err != nil {
-				select {
-				case errs <- err:
-				default:
+			ev := DecodeSignal(sig)
+			if ev.Type == EventSignal {
+				switch sig {
+				case syscall.SIGTERM:
+					errs <- ErrTerm
 				}
-				return
 			}
+			log.Printf("mapped signal(%v) => %v", sig, ev)
 			select {
 			case events <- ev:
 			default:

@@ -76,20 +76,14 @@ func (term *Terminal) readMore(n int) (int, error) {
 	return n, term.inerr
 }
 
-// DecodeSignal decodes an os Signal into either an Event or an error; maps
-// SIGTERM to ErrTerm.
-func DecodeSignal(sig os.Signal) (Event, error) {
-	var ev Event
+// DecodeSignal decodes an os Signal into an Event.
+func DecodeSignal(sig os.Signal) Event {
 	switch sig {
-	case syscall.SIGTERM:
-		return Event{}, ErrTerm
 	case syscall.SIGINT:
-		ev.Type = EventInterrupt
+		return Event{Type: EventInterrupt}
 	case syscall.SIGWINCH:
-		ev.Type = EventResize
+		return Event{Type: EventResize}
 	default:
-		ev.Type = EventSignal
-		ev.Signal = sig
+		return Event{Type: EventSignal, Signal: sig}
 	}
-	return ev, nil
 }
