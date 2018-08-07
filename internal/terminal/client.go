@@ -2,8 +2,8 @@ package terminal
 
 import (
 	"errors"
+	"log"
 	"runtime"
-	"syscall"
 	"time"
 )
 
@@ -226,18 +226,14 @@ func (term *Terminal) synthesize(events chan<- Event, errs chan<- error, stop <-
 		case <-stop:
 			return
 		case sig := <-term.signals:
-			var ev Event
-			switch sig {
-			case syscall.SIGTERM:
-				errs <- ErrTerm
+			ev, err := DecodeSignal(sig)
+			log.Printf("mapped signal(%v) => %v, %v", sig, ev, err)
+			if err != nil {
+				select {
+				case errs <- err:
+				default:
+				}
 				return
-			case syscall.SIGINT:
-				ev.Type = EventInterrupt
-			case syscall.SIGWINCH:
-				ev.Type = EventResize
-			default:
-				ev.Type = EventSignal
-				ev.Signal = sig
 			}
 			select {
 			case events <- ev:

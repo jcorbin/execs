@@ -1,6 +1,10 @@
 package terminal
 
-import "io"
+import (
+	"io"
+	"os"
+	"syscall"
+)
 
 // ReadEvent reads one event from the input file; this may happen from
 // previously read / in-buffer bytes, and may not necessarily block.
@@ -70,4 +74,22 @@ func (term *Terminal) readMore(n int) (int, error) {
 		_, _ = term.inbuf.Write(buf[:n])
 	}
 	return n, term.inerr
+}
+
+// DecodeSignal decodes an os Signal into either an Event or an error; maps
+// SIGTERM to ErrTerm.
+func DecodeSignal(sig os.Signal) (Event, error) {
+	var ev Event
+	switch sig {
+	case syscall.SIGTERM:
+		return Event{}, ErrTerm
+	case syscall.SIGINT:
+		ev.Type = EventInterrupt
+	case syscall.SIGWINCH:
+		ev.Type = EventResize
+	default:
+		ev.Type = EventSignal
+		ev.Signal = sig
+	}
+	return ev, nil
 }
