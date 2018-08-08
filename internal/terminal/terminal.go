@@ -21,7 +21,7 @@ import (
 //   queue)
 type Terminal struct {
 	Attr
-	Decoder
+	Processor
 
 	closed bool
 	info   *terminfo.Terminfo
@@ -64,9 +64,9 @@ func Open(in, out *os.File, opt Option) (*Terminal, error) {
 		return nil, err
 	}
 
-	ef := term.Decoder.EventFilter // TODO jank
-	term.Decoder = MakeDecoder(in, term.info)
-	term.Decoder.EventFilter = ef
+	ef := term.Processor.EventFilter // TODO jank
+	term.Processor = MakeProcessor(in, term.info)
+	term.Processor.EventFilter = ef
 
 	if err := term.termContext.enter(term); err != nil {
 		_ = term.Close()
@@ -82,7 +82,7 @@ func (term *Terminal) Close() error {
 		return errors.New("terminal already closed")
 	}
 	term.closed = true
-	err := term.Decoder.Close()
+	err := term.Processor.Close()
 	if cerr := term.termContext.exit(term); err == nil {
 		err = cerr
 	}

@@ -104,7 +104,7 @@ func (sh signalHandler) init(term *Terminal) error {
 func (sh *signalHandler) enter(term *Terminal) error {
 	if !sh.active {
 		sh.active = true
-		signal.Notify(term.Decoder.Signals, sh.signal)
+		signal.Notify(term.Processor.Signals, sh.signal)
 	}
 	return nil
 }

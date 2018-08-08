@@ -122,7 +122,7 @@ func (cr *clientRunner) runClient(term *Terminal, client Client) error {
 	go func() {
 		runtime.LockOSThread() // dedicate this thread to signal processing
 		defer term.closeOnPanic()
-		err := term.Decoder.ProcessSignals(events)
+		err := term.Processor.ProcessSignals(events)
 		if err != ErrTerm {
 			errs <- err
 		}
@@ -130,7 +130,7 @@ func (cr *clientRunner) runClient(term *Terminal, client Client) error {
 	go func() {
 		runtime.LockOSThread() // dedicate this thread to event reading
 		defer term.closeOnPanic()
-		if err := term.Decoder.ProcessInput(events); err != nil {
+		if err := term.Processor.ProcessInput(events); err != nil {
 			errs <- err
 		}
 	}()
@@ -162,7 +162,7 @@ func (cr *clientRunner) runBatchClient(term *Terminal, client BatchClient) error
 	go func() {
 		runtime.LockOSThread() // dedicate this thread to signal processing
 		defer term.closeOnPanic()
-		err := term.Decoder.ProcessSignals(events)
+		err := term.Processor.ProcessSignals(events)
 		if err != ErrTerm {
 			errs <- err
 		}
@@ -170,7 +170,7 @@ func (cr *clientRunner) runBatchClient(term *Terminal, client BatchClient) error
 	go func() {
 		runtime.LockOSThread() // dedicate this thread to event reading
 		defer term.closeOnPanic()
-		err := term.Decoder.ProcessInputBatches(batches, free)
+		err := term.Processor.ProcessInputBatches(batches, free)
 		if err != nil {
 			errs <- err
 		}

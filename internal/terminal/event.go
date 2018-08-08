@@ -36,6 +36,7 @@ const (
 	KeyEvent
 	MouseEvent
 	ResizeEvent
+	TickEvent // TODO probably wants a time field
 	RedrawEvent
 	SignalEvent
 	InterruptEvent
@@ -54,6 +55,8 @@ func (ev Event) String() string {
 		return fmt.Sprintf("MouseEvent(%s)", ev.mouseString())
 	case ResizeEvent:
 		return "ResizeEvent"
+	case TickEvent:
+		return "TickEvent"
 	case RedrawEvent:
 		s := "RedrawEvent"
 		var parts [2]string
