@@ -116,13 +116,24 @@ func (cr *clientRunner) run(term *Terminal, client Client) error {
 func (cr *clientRunner) runClient(term *Terminal, client Client) error {
 	var (
 		events = make(chan Event, cr.eventBatchSize)
-		stop   = make(chan struct{})
 		errs   = make(chan error, 1)
 	)
 
-	go term.synthesize(events, errs, stop)
-	go term.monitorEvents(events, errs, stop)
-	defer func() { close(stop) }()
+	go func() {
+		runtime.LockOSThread() // dedicate this thread to signal processing
+		defer term.closeOnPanic()
+		err := term.Decoder.ProcessSignals(events)
+		if err != ErrTerm {
+			errs <- err
+		}
+	}()
+	go func() {
+		runtime.LockOSThread() // dedicate this thread to event reading
+		defer term.closeOnPanic()
+		if err := term.Decoder.ProcessInput(events); err != nil {
+			errs <- err
+		}
+	}()
 
 	err := cr.redraw(term, client)
 	for err == nil {
@@ -145,15 +156,27 @@ func (cr *clientRunner) runBatchClient(term *Terminal, client BatchClient) error
 		events  = make(chan Event, cr.eventBatchSize)
 		batches = make(chan []Event, 1)
 		free    = make(chan []Event, 1)
-		stop    = make(chan struct{})
 		errs    = make(chan error, 1)
 	)
 
-	free <- make([]Event, 0, cr.eventBatchSize)
-	go term.synthesize(events, errs, stop)
-	go term.monitorEventBatches(batches, free, errs, stop)
-	defer func() { close(stop) }()
+	go func() {
+		runtime.LockOSThread() // dedicate this thread to signal processing
+		defer term.closeOnPanic()
+		err := term.Decoder.ProcessSignals(events)
+		if err != ErrTerm {
+			errs <- err
+		}
+	}()
+	go func() {
+		runtime.LockOSThread() // dedicate this thread to event reading
+		defer term.closeOnPanic()
+		err := term.Decoder.ProcessInputBatches(batches, free)
+		if err != nil {
+			errs <- err
+		}
+	}()
 
+	free <- make([]Event, 0, cr.eventBatchSize)
 	last := make([]Event, 0, cr.eventBatchSize) // TODO evaluate usefulness
 	err := cr.redraw(term, client)
 	for err == nil {
@@ -208,84 +231,4 @@ func (cr *clientRunner) drawBatch(term *Terminal, client BatchClient, evs []Even
 		err = client.DrawBatch(term, evs...)
 	}
 	return err
-}
-
-// synthesize signals into special events.
-func (term *Terminal) synthesize(events chan<- Event, errs chan<- error, stop <-chan struct{}) {
-	runtime.LockOSThread() // dedicate this thread to signal processing
-	defer term.closeOnPanic()
-	for {
-		select {
-		case <-stop:
-			return
-		case sig := <-term.signals:
-			if ev, err := term.DecodeSignal(sig); err != nil {
-				errs <- err
-				if err == ErrTerm {
-					return
-				}
-			} else if ev.Type != NoEvent {
-				select {
-				case events <- ev:
-				default:
-				}
-			}
-		}
-	}
-}
-
-func (term *Terminal) monitorEvents(
-	events chan<- Event,
-	errs chan<- error,
-	stop <-chan struct{},
-) {
-	runtime.LockOSThread() // dedicate this thread to event reading
-	defer term.closeOnPanic()
-	for {
-		ev, err := term.DecodeEvent()
-		if err != nil {
-			select {
-			case errs <- err:
-			case <-stop:
-				return
-			}
-			return
-		}
-		select {
-		case events <- ev:
-		case <-stop:
-			return
-		}
-	}
-}
-
-func (term *Terminal) monitorEventBatches(
-	batches chan<- []Event, free <-chan []Event,
-	errs chan<- error,
-	stop <-chan struct{},
-) {
-	runtime.LockOSThread() // dedicate this thread to event reading
-	defer term.closeOnPanic()
-	for {
-		var evs []Event
-		select {
-		case evs = <-free:
-			evs = evs[:cap(evs)]
-		case <-stop:
-			return
-		}
-		n, err := term.DecodeEvents(evs)
-		if err != nil {
-			select {
-			case errs <- err:
-			case <-stop:
-			}
-			return
-		}
-		select {
-		case batches <- evs[:n]:
-		case <-stop:
-			return
-		}
-	}
 }

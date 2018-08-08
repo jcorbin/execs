@@ -58,11 +58,11 @@ type keyHandler struct {
 }
 
 func (kh keyHandler) init(term *Terminal) error {
-	term.eventFilter = chainEventFilter(term.eventFilter, kh)
+	term.EventFilter = chainEventFilter(term.EventFilter, kh)
 	return nil
 }
 
-func (kh keyHandler) filterEvent(ev Event) (Event, error) {
+func (kh keyHandler) FilterEvent(ev Event) (Event, error) {
 	if ev.Type == KeyEvent && ev.Key == kh.key {
 		return kh.handle(ev)
 	}
@@ -96,7 +96,7 @@ type signalHandler struct {
 }
 
 func (sh signalHandler) init(term *Terminal) error {
-	term.eventFilter = chainEventFilter(term.eventFilter, &sh)
+	term.EventFilter = chainEventFilter(term.EventFilter, &sh)
 	term.termContext = chainTermContext(term.termContext, &sh)
 	return nil
 }
@@ -104,7 +104,7 @@ func (sh signalHandler) init(term *Terminal) error {
 func (sh *signalHandler) enter(term *Terminal) error {
 	if !sh.active {
 		sh.active = true
-		signal.Notify(term.signals, sh.signal)
+		signal.Notify(term.Decoder.Signals, sh.signal)
 	}
 	return nil
 }
@@ -114,7 +114,7 @@ func (sh *signalHandler) exit(term *Terminal) error {
 	return nil
 }
 
-func (sh *signalHandler) filterEvent(ev Event) (Event, error) {
+func (sh *signalHandler) FilterEvent(ev Event) (Event, error) {
 	if ev.Type == SignalEvent && ev.Signal == sh.signal {
 		return sh.handle(ev)
 	}
@@ -135,11 +135,11 @@ type suspendOn struct {
 
 func (sus suspendOn) init(term *Terminal) error {
 	sus.pend = term.Suspend
-	term.eventFilter = chainEventFilter(term.eventFilter, &sus)
+	term.EventFilter = chainEventFilter(term.EventFilter, &sus)
 	return nil
 }
 
-func (sus suspendOn) filterEvent(ev Event) (Event, error) {
+func (sus suspendOn) FilterEvent(ev Event) (Event, error) {
 	if ev.Type == KeyEvent {
 		for i := range sus.keys {
 			if ev.Key == sus.keys[i] {

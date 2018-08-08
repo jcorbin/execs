@@ -124,19 +124,16 @@ func (ev Event) mouseString() string {
 	return strings.Join(parts[:], "")
 }
 
-type eventFilter interface {
-	filterEvent(ev Event) (Event, error)
+// EventFilter represents a piece of event processing middleware.
+type EventFilter interface {
+	FilterEvent(ev Event) (Event, error)
 }
 
-type nopEventFilter struct{}
-
-func (nf nopEventFilter) filterEvent(ev Event) (Event, error) { return ev, nil }
-
-func chainEventFilter(a, b eventFilter) eventFilter {
-	if _, anop := a.(nopEventFilter); anop || a == nil {
+func chainEventFilter(a, b EventFilter) EventFilter {
+	if a == nil {
 		return b
 	}
-	if _, bnop := b.(nopEventFilter); bnop || b == nil {
+	if b == nil {
 		return a
 	}
 	as, haveAs := a.(eventFilters)
@@ -154,16 +151,16 @@ func chainEventFilter(a, b eventFilter) eventFilter {
 type eventFilterFunc func(ev Event) (Event, error)
 
 func (f eventFilterFunc) init(term *Terminal) error {
-	term.eventFilter = chainEventFilter(term.eventFilter, f)
+	term.EventFilter = chainEventFilter(term.EventFilter, f)
 	return nil
 }
-func (f eventFilterFunc) filterEvent(ev Event) (Event, error) { return f(ev) }
+func (f eventFilterFunc) FilterEvent(ev Event) (Event, error) { return f(ev) }
 
-type eventFilters []eventFilter
+type eventFilters []EventFilter
 
-func (evfs eventFilters) filterEvent(ev Event) (Event, error) {
+func (evfs eventFilters) FilterEvent(ev Event) (Event, error) {
 	for i := range evfs {
-		ev, err := evfs[i].filterEvent(ev)
+		ev, err := evfs[i].FilterEvent(ev)
 		if err != nil || ev.Type != NoEvent {
 			return ev, err
 		}

@@ -10,12 +10,6 @@ import (
 	"unsafe"
 
 	"github.com/jcorbin/execs/internal/terminfo"
-	"github.com/jcorbin/execs/internal/termkey"
-)
-
-const (
-	signalCapacity = 16
-	minRead        = 128
 )
 
 // Terminal supports interacting with a terminal:
@@ -27,10 +21,10 @@ const (
 //   queue)
 type Terminal struct {
 	Attr
+	Decoder
 
-	closed  bool
-	signals chan os.Signal
-	info    *terminfo.Terminfo
+	closed bool
+	info   *terminfo.Terminfo
 
 	termContext
 	writeObserver
@@ -42,8 +36,6 @@ type Terminal struct {
 	tmp    []byte
 	outbuf bytes.Buffer
 	outerr error
-
-	Decoder
 }
 
 // Open a terminal on the given input/output file pair (defaults to os.Stdin
@@ -60,25 +52,21 @@ func Open(in, out *os.File, opt Option) (*Terminal, error) {
 	}
 	opt = Options(opt, DefaultTerminfo)
 	term := &Terminal{
-		out:     out,
-		tcur:    StartCursor,
-		bcur:    StartCursor,
-		tmp:     make([]byte, 64),
-		signals: make(chan os.Signal, signalCapacity),
+		out:  out,
+		tcur: StartCursor,
+		bcur: StartCursor,
+		tmp:  make([]byte, 64),
 
 		writeObserver: flushWhenFull{},
-
-		Decoder: Decoder{
-			in:          in,
-			eventFilter: nopEventFilter{},
-		},
 	}
 	term.termContext = &term.Attr
 	if err := opt.init(term); err != nil {
 		return nil, err
 	}
 
-	term.keyDecoder = termkey.NewDecoder(term.info)
+	ef := term.Decoder.EventFilter // TODO jank
+	term.Decoder = MakeDecoder(in, term.info)
+	term.Decoder.EventFilter = ef
 
 	if err := term.termContext.enter(term); err != nil {
 		_ = term.Close()
@@ -94,9 +82,10 @@ func (term *Terminal) Close() error {
 		return errors.New("terminal already closed")
 	}
 	term.closed = true
-	signal.Stop(term.signals)
-
-	err := term.termContext.exit(term)
+	err := term.Decoder.Close()
+	if cerr := term.termContext.exit(term); err == nil {
+		err = cerr
+	}
 
 	// TODO do this only if the cursor isn't homed on a new row (requires
 	// cursor to have been parsing and following output all along...)?

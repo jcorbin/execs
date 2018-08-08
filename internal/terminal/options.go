@@ -81,12 +81,3 @@ func Terminfo(info *terminfo.Terminfo) Option {
 		return nil
 	})
 }
-
-// SignalCapacity sets the buffer capacity for backlogged signals; the default
-// is 16.
-func SignalCapacity(n int) Option {
-	return optionFunc(func(term *Terminal) error {
-		term.signals = make(chan os.Signal, n)
-		return nil
-	})
-}
