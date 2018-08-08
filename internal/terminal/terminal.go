@@ -34,7 +34,6 @@ type Terminal struct {
 
 	termContext
 	writeObserver
-	eventFilter
 
 	// output
 	out    *os.File
@@ -44,11 +43,7 @@ type Terminal struct {
 	outbuf bytes.Buffer
 	outerr error
 
-	// input
-	in         *os.File
-	inbuf      bytes.Buffer
-	inerr      error
-	keyDecoder *termkey.Decoder
+	Decoder
 }
 
 // Open a terminal on the given input/output file pair (defaults to os.Stdin
@@ -65,7 +60,6 @@ func Open(in, out *os.File, opt Option) (*Terminal, error) {
 	}
 	opt = Options(opt, DefaultTerminfo)
 	term := &Terminal{
-		in:      in,
 		out:     out,
 		tcur:    StartCursor,
 		bcur:    StartCursor,
@@ -73,7 +67,11 @@ func Open(in, out *os.File, opt Option) (*Terminal, error) {
 		signals: make(chan os.Signal, signalCapacity),
 
 		writeObserver: flushWhenFull{},
-		eventFilter:   nopEventFilter{},
+
+		Decoder: Decoder{
+			in:          in,
+			eventFilter: nopEventFilter{},
+		},
 	}
 	term.termContext = &term.Attr
 	if err := opt.init(term); err != nil {

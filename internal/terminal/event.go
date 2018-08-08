@@ -125,14 +125,12 @@ func (ev Event) mouseString() string {
 }
 
 type eventFilter interface {
-	filterEvent(term *Terminal, ev Event) (Event, error)
+	filterEvent(ev Event) (Event, error)
 }
 
 type nopEventFilter struct{}
 
-func (nf nopEventFilter) filterEvent(term *Terminal, ev Event) (Event, error) {
-	return ev, nil
-}
+func (nf nopEventFilter) filterEvent(ev Event) (Event, error) { return ev, nil }
 
 func chainEventFilter(a, b eventFilter) eventFilter {
 	if _, anop := a.(nopEventFilter); anop || a == nil {
@@ -153,19 +151,19 @@ func chainEventFilter(a, b eventFilter) eventFilter {
 	return eventFilters{a, b}
 }
 
-type eventFilterFunc func(term *Terminal, ev Event) (Event, error)
+type eventFilterFunc func(ev Event) (Event, error)
 
 func (f eventFilterFunc) init(term *Terminal) error {
 	term.eventFilter = chainEventFilter(term.eventFilter, f)
 	return nil
 }
-func (f eventFilterFunc) filterEvent(term *Terminal, ev Event) (Event, error) { return f(term, ev) }
+func (f eventFilterFunc) filterEvent(ev Event) (Event, error) { return f(ev) }
 
 type eventFilters []eventFilter
 
-func (evfs eventFilters) filterEvent(term *Terminal, ev Event) (Event, error) {
+func (evfs eventFilters) filterEvent(ev Event) (Event, error) {
 	for i := range evfs {
-		ev, err := evfs[i].filterEvent(term, ev)
+		ev, err := evfs[i].filterEvent(ev)
 		if err != nil || ev.Type != NoEvent {
 			return ev, err
 		}

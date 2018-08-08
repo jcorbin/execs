@@ -30,31 +30,31 @@ var FullscreenApp = Options(
 )
 
 // HandleSIGWINCH by turning it into ResizeEvent.
-var HandleSIGWINCH Option = HandleSignal(syscall.SIGWINCH, func(term *Terminal, ev Event) (Event, error) {
+var HandleSIGWINCH Option = HandleSignal(syscall.SIGWINCH, func(ev Event) (Event, error) {
 	return Event{Type: ResizeEvent}, nil
 })
 
 // HandleSIGINT by turning it into InterruptEvent.
-var HandleSIGINT Option = HandleSignal(syscall.SIGINT, func(term *Terminal, ev Event) (Event, error) {
+var HandleSIGINT Option = HandleSignal(syscall.SIGINT, func(ev Event) (Event, error) {
 	return Event{Type: InterruptEvent}, nil
 })
 
 // HandleSIGTERM by turning it into ErrTerm.
-var HandleSIGTERM Option = HandleSignal(syscall.SIGTERM, func(term *Terminal, ev Event) (Event, error) {
+var HandleSIGTERM Option = HandleSignal(syscall.SIGTERM, func(ev Event) (Event, error) {
 	return Event{}, ErrTerm
 })
 
 // HandleKey creates an option that adds a key handling event filter.
 func HandleKey(
 	key Key,
-	handle func(term *Terminal, ev Event) (Event, error),
+	handle func(ev Event) (Event, error),
 ) Option {
 	return keyHandler{key: key, handle: handle}
 }
 
 type keyHandler struct {
 	key    Key
-	handle func(term *Terminal, ev Event) (Event, error)
+	handle func(ev Event) (Event, error)
 }
 
 func (kh keyHandler) init(term *Terminal) error {
@@ -62,20 +62,20 @@ func (kh keyHandler) init(term *Terminal) error {
 	return nil
 }
 
-func (kh keyHandler) filterEvent(term *Terminal, ev Event) (Event, error) {
+func (kh keyHandler) filterEvent(ev Event) (Event, error) {
 	if ev.Type == KeyEvent && ev.Key == kh.key {
-		return kh.handle(term, ev)
+		return kh.handle(ev)
 	}
 	return Event{}, nil
 }
 
 // HandleCtrlC by by turning it into InterruptEvent.
-var HandleCtrlC = HandleKey(KeyCtrlC, func(term *Terminal, ev Event) (Event, error) {
+var HandleCtrlC = HandleKey(KeyCtrlC, func(ev Event) (Event, error) {
 	return Event{Type: InterruptEvent}, nil
 })
 
 // HandleCtrlL by by turning it into RedrawEvent.
-var HandleCtrlL = HandleKey(KeyCtrlL, func(term *Terminal, ev Event) (Event, error) {
+var HandleCtrlL = HandleKey(KeyCtrlL, func(ev Event) (Event, error) {
 	ev.Type = RedrawEvent
 	return ev, nil
 })
@@ -84,14 +84,14 @@ var HandleCtrlL = HandleKey(KeyCtrlL, func(term *Terminal, ev Event) (Event, err
 // during terminal lifecycle.
 func HandleSignal(
 	signal os.Signal,
-	handle func(term *Terminal, ev Event) (Event, error),
+	handle func(ev Event) (Event, error),
 ) Option {
 	return signalHandler{signal: signal, handle: handle}
 }
 
 type signalHandler struct {
 	signal os.Signal
-	handle func(term *Terminal, ev Event) (Event, error)
+	handle func(ev Event) (Event, error)
 	active bool
 }
 
@@ -114,9 +114,9 @@ func (sh *signalHandler) exit(term *Terminal) error {
 	return nil
 }
 
-func (sh *signalHandler) filterEvent(term *Terminal, ev Event) (Event, error) {
+func (sh *signalHandler) filterEvent(ev Event) (Event, error) {
 	if ev.Type == SignalEvent && ev.Signal == sh.signal {
-		return sh.handle(term, ev)
+		return sh.handle(ev)
 	}
 	return Event{}, nil
 }
@@ -125,22 +125,26 @@ func (sh *signalHandler) filterEvent(term *Terminal, ev Event) (Event, error) {
 // key(s) are pressed. The corresponding KeyEvents are filtered out, never seen
 // by the client.
 func SuspendOn(keys ...Key) Option {
-	return suspendOn(keys)
+	return suspendOn{keys: keys}
 }
 
-type suspendOn []Key
+type suspendOn struct {
+	keys []Key
+	pend func() (os.Signal, error)
+}
 
 func (sus suspendOn) init(term *Terminal) error {
-	term.eventFilter = chainEventFilter(term.eventFilter, sus)
+	sus.pend = term.Suspend
+	term.eventFilter = chainEventFilter(term.eventFilter, &sus)
 	return nil
 }
 
-func (sus suspendOn) filterEvent(term *Terminal, ev Event) (Event, error) {
+func (sus suspendOn) filterEvent(ev Event) (Event, error) {
 	if ev.Type == KeyEvent {
-		for i := range sus {
-			if ev.Key == sus[i] {
+		for i := range sus.keys {
+			if ev.Key == sus.keys[i] {
 				log.Printf("suspending on %v", ev)
-				sig, err := term.Suspend()
+				sig, err := sus.pend()
 				if err == nil {
 					ev.Type = RedrawEvent
 					ev.Signal = sig
