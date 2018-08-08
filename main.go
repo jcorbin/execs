@@ -51,8 +51,11 @@ var (
 */
 
 func draw(term *terminal.Terminal, ev terminal.Event) error {
-	if ev.Type != terminal.NoEvent &&
-		ev.Type != terminal.RedrawEvent {
+	if ev.Type == terminal.RedrawEvent {
+		if ev.Key != 0 || ev.Signal != nil {
+			log.Printf("got %v", ev)
+		}
+	} else if ev.Type != terminal.NoEvent {
 		log.Printf("got %v", ev)
 	}
 

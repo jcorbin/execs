@@ -16,11 +16,9 @@ import (
 // - synthesize KeyCtrlC into InterruptEvent
 // - synthesize SIGTERM into ErrTerm
 // - suspend when Ctrl-Z is pressed
-// - synthesize SIGCONT into RedrawEvent
 var StandardApp = Options(
 	HandleCtrlC,
 	HandleCtrlL,
-	HandleSIGCONT,
 	// TODO HandleKey( KeyCtrlBackslash, send SIGQUIT ) ?
 	// TODO alt mode buffer?
 	HandleSIGINT,
@@ -30,11 +28,6 @@ var StandardApp = Options(
 	RawMode,
 	HiddenCursor,
 )
-
-// HandleSIGCONT by turning it into RedrawEvent.
-var HandleSIGCONT = HandleSignal(syscall.SIGCONT, func(term *Terminal, ev Event) (Event, error) {
-	return Event{Type: RedrawEvent}, nil
-})
 
 // HandleSIGWINCH by turning it into ResizeEvent.
 var HandleSIGWINCH Option = HandleSignal(syscall.SIGWINCH, func(term *Terminal, ev Event) (Event, error) {
@@ -51,6 +44,7 @@ var HandleSIGTERM Option = HandleSignal(syscall.SIGTERM, func(term *Terminal, ev
 	return Event{}, ErrTerm
 })
 
+// HandleKey creates an option that adds a key handling event filter.
 func HandleKey(
 	key Key,
 	handle func(term *Terminal, ev Event) (Event, error),
@@ -83,11 +77,12 @@ var HandleCtrlC = HandleKey(KeyCtrlC, func(term *Terminal, ev Event) (Event, err
 
 // HandleCtrlL by by turning it into RedrawEvent.
 var HandleCtrlL = HandleKey(KeyCtrlL, func(term *Terminal, ev Event) (Event, error) {
-	return Event{Type: RedrawEvent}, nil
+	ev.Type = RedrawEvent
+	return ev, nil
 })
 
-// HandleSignal creates an option that a signal handling event filter during
-// terminal lifecycle.
+// HandleSignal creates an option that adds a signal handling event filter
+// during terminal lifecycle.
 func HandleSignal(
 	signal os.Signal,
 	handle func(term *Terminal, ev Event) (Event, error),
@@ -131,48 +126,27 @@ func (sh *signalHandler) filterEvent(term *Terminal, ev Event) (Event, error) {
 // key(s) are pressed. The corresponding KeyEvents are filtered out, never seen
 // by the client.
 func SuspendOn(keys ...Key) Option {
-	return &suspendOn{keys: keys}
+	return suspendOn(keys)
 }
 
-type suspendOn struct {
-	keys   []Key
-	active bool
-}
+type suspendOn []Key
 
-func (sus *suspendOn) init(term *Terminal) error {
+func (sus suspendOn) init(term *Terminal) error {
 	term.eventFilter = chainEventFilter(term.eventFilter, sus)
-	term.termContext = chainTermContext(term.termContext, sus)
-	log.Printf("installed suspendOn")
-	return nil
-}
-
-func (sus *suspendOn) enter(term *Terminal) error {
-	if !sus.active {
-		sus.active = true
-		signal.Notify(term.signals, syscall.SIGCONT)
-	}
-	return nil
-}
-
-func (sus *suspendOn) exit(term *Terminal) error {
 	return nil
 }
 
 func (sus suspendOn) filterEvent(term *Terminal, ev Event) (Event, error) {
-	if ev.Type == SignalEvent {
-		if ev.Signal == syscall.SIGCONT {
-			return Event{Type: RedrawEvent}, nil
-		}
-		return ev, nil
-	}
 	if ev.Type == KeyEvent {
-		for i := range sus.keys {
-			if ev.Key == sus.keys[i] {
+		for i := range sus {
+			if ev.Key == sus[i] {
 				log.Printf("suspending on %v", ev)
-				if err := term.Suspend(); err != nil {
-					return ev, err
+				sig, err := term.Suspend()
+				if err == nil {
+					ev.Type = RedrawEvent
+					ev.Signal = sig
 				}
-				return Event{}, nil
+				return ev, err
 			}
 		}
 	}

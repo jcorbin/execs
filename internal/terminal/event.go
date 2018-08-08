@@ -55,7 +55,21 @@ func (ev Event) String() string {
 	case ResizeEvent:
 		return "ResizeEvent"
 	case RedrawEvent:
-		return "RedrawEvent"
+		s := "RedrawEvent"
+		var parts [2]string
+		i := 0
+		if ev.Key != 0 {
+			parts[i] = "key=" + ev.keyString()
+			i++
+		}
+		if ev.Signal != nil {
+			parts[i] = "signal=" + ev.Signal.String()
+			i++
+		}
+		if i > 0 {
+			s = fmt.Sprintf("%s(%s)", s, strings.Join(parts[:i], " "))
+		}
+		return s
 	case SignalEvent:
 		return fmt.Sprintf("SignalEvent(%v)", ev.Signal.String())
 	case InterruptEvent:
