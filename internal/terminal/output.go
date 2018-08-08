@@ -67,11 +67,11 @@ func (term *Terminal) WriteCursor(curses ...Curse) (n int, err error) {
 	case 0:
 		return 0, nil
 	case 1:
-		_, term.tmp, term.cur = writeCursor(term.cur, term.tmp[:0], curses[0])
+		_, term.tmp, term.bcur = writeCursor(term.bcur, term.tmp[:0], curses[0])
 	default:
 		term.tmp = term.tmp[:0]
 		for i := range curses {
-			_, term.tmp, term.cur = writeCursor(term.cur, term.tmp, curses[i])
+			_, term.tmp, term.bcur = writeCursor(term.bcur, term.tmp, curses[i])
 		}
 	}
 	return term.Write(term.tmp)
@@ -81,6 +81,7 @@ func (term *Terminal) WriteCursor(curses ...Curse) (n int, err error) {
 func (term *Terminal) Flush() error {
 	if term.outerr == nil && term.outbuf.Len() > 0 {
 		_, term.outerr = term.outbuf.WriteTo(term.out)
+		term.tcur = term.bcur
 	}
 	return term.outerr
 }
@@ -90,6 +91,7 @@ func (term *Terminal) Discard() error {
 	if term.outerr == nil {
 		term.outbuf.Reset()
 		term.outerr = term.writeObserver.preWrite(term, 0)
+		term.bcur = term.tcur
 	}
 	return term.outerr
 }

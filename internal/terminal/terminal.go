@@ -38,7 +38,8 @@ type Terminal struct {
 
 	// output
 	out    *os.File
-	cur    Cursor
+	tcur   Cursor
+	bcur   Cursor
 	tmp    []byte
 	outbuf bytes.Buffer
 	outerr error
@@ -66,7 +67,8 @@ func Open(in, out *os.File, opt Option) (*Terminal, error) {
 	term := &Terminal{
 		in:      in,
 		out:     out,
-		cur:     StartCursor,
+		tcur:    StartCursor,
+		bcur:    StartCursor,
 		tmp:     make([]byte, 64),
 		signals: make(chan os.Signal, signalCapacity),
 

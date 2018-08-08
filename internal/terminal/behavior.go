@@ -7,7 +7,7 @@ import (
 	"syscall"
 )
 
-// StandardApp encapsulates the expected default behavior of a standard
+// FullscreenApp encapsulates the expected default behavior of a standard
 // fullscreen terminal application:
 // - drawing to a raw mode terminal with the cursor hidden
 // - synthesize SIGWINCH into ResizeEvent
@@ -16,11 +16,11 @@ import (
 // - synthesize KeyCtrlC into InterruptEvent
 // - synthesize SIGTERM into ErrTerm
 // - suspend when Ctrl-Z is pressed
-var StandardApp = Options(
+var FullscreenApp = Options(
 	HandleCtrlC,
 	HandleCtrlL,
 	// TODO HandleKey( KeyCtrlBackslash, send SIGQUIT ) ?
-	// TODO alt mode buffer?
+	// TODO enter alternate screen
 	HandleSIGINT,
 	HandleSIGTERM,
 	HandleSIGWINCH,
@@ -58,7 +58,6 @@ type keyHandler struct {
 }
 
 func (kh keyHandler) init(term *Terminal) error {
-	log.Printf("installing %v handler", kh.key)
 	term.eventFilter = chainEventFilter(term.eventFilter, kh)
 	return nil
 }

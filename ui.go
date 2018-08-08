@@ -11,14 +11,73 @@ import (
 	"github.com/jcorbin/execs/internal/terminal"
 )
 
-type ui struct {
-	*terminal.Terminal
-	size image.Point
+type uid uint32
+
+func (id uid) next() uid      { return id + 1 }
+func (id uid) String() string { return fmt.Sprintf("uid<%d>", uint32(id)) }
+
+type uiState struct {
+	focus  uid
+	active uid
+	maxID  uid
+	arg    int // XXX
 }
 
-func (it *ui) init(term *terminal.Terminal) {
-	it.Terminal = term
-	it.size, _ = term.Size()
+type ui struct {
+	// TODO only needs the output / encoder side
+	// TODO also need more Cursor access
+	*terminal.Terminal
+	terminal.Event
+	*uiState
+	size   image.Point
+	lastID uid
+}
+
+func startUI(term *terminal.Terminal, state *uiState, ev terminal.Event) (*ui, error) {
+	size, err := term.Size()
+	if err != nil {
+		return nil, err
+	}
+	it := &ui{
+		Terminal: term,
+		Event:    ev,
+		uiState:  state,
+		size:     size,
+	}
+
+	if it.isKey(terminal.KeyTab) {
+		it.focus = (it.focus + 1) % (it.maxID + 1)
+	}
+
+	return it, nil
+}
+
+func (it *ui) isKey(key terminal.Key) bool {
+	return it.Event.Type == terminal.KeyEvent && it.Event.Key == key
+}
+
+func (it *ui) nextID() uid {
+	it.lastID = it.lastID.next()
+	it.maxID = it.lastID
+	return it.lastID
+}
+
+func (it *ui) activated(id uid) (focused, activated, changed bool) {
+	focused, activated = it.focus == id, it.active == id
+	if activated {
+		if it.isKey(terminal.KeyEsc) {
+			it.active = 0 // TODO pop a stack
+			changed = true
+			activated = false
+		}
+	} else if focused {
+		if it.isKey(terminal.KeyEnter) {
+			it.active = id
+			changed = true
+			activated = true
+		}
+	}
+	return focused, activated, changed
 }
 
 func (it *ui) header(label string, args ...interface{}) {
@@ -41,14 +100,33 @@ func (it *ui) header(label string, args ...interface{}) {
 	it.WriteByte('|')
 }
 
-func (it *ui) textbox(label string, buf []byte) {
-	totalLines := bytes.Count(buf, []byte("\n"))
+func (it *ui) textbox(label string, buf *bytes.Buffer) {
+	id := it.nextID()
+
+	if focused, activated, changed := it.activated(id); !activated {
+		if focused {
+			it.WriteString(fmt.Sprintf("[_%s_]", label))
+		} else {
+			it.WriteString(fmt.Sprintf("[ %s ]", label))
+		}
+		return
+	} else if changed {
+		it.arg = 2
+	}
+
+	if it.arg < it.size.Y {
+		it.arg++
+	}
+
+	b := logBuf.Bytes()
+	sc := bufio.NewScanner(bytes.NewReader(b))
+
+	totalLines := bytes.Count(b, []byte("\n"))
 	numLines := totalLines
-	if maxLines := it.size.Y - 2; numLines > maxLines {
+	if maxLines := it.arg - 2; numLines > maxLines {
 		numLines = maxLines
 	}
 
-	sc := bufio.NewScanner(bytes.NewReader(buf))
 	if numLines < totalLines {
 		it.header(" %s (%v of %v) ]", label, numLines, totalLines)
 		for i := numLines; i < totalLines; i++ {
@@ -57,6 +135,7 @@ func (it *ui) textbox(label string, buf []byte) {
 	} else {
 		it.header(" %s ]", label)
 	}
+
 	for sc.Scan() {
 		it.WriteString("\r\n| ")
 		b := sc.Bytes()

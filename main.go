@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 
-	"github.com/jcorbin/execs/internal/cops/display"
 	"github.com/jcorbin/execs/internal/terminal"
 )
 
@@ -50,11 +49,34 @@ var (
 
 */
 
-func draw(term *terminal.Terminal, ev terminal.Event) error {
+type app struct {
+	uiState
+}
+
+func (ap *app) Draw(term *terminal.Terminal, ev terminal.Event) error {
+	if ap.uiState.maxID == 0 && ev.Type != terminal.NoEvent {
+		log.Printf("doing a first dry-run draw %v", ev)
+		err := ap.Draw(term, terminal.Event{})
+		if err == nil {
+			err = term.Discard()
+		}
+		if err != nil {
+			return err
+		}
+		log.Printf("initial maxID %v", ap.uiState.maxID)
+	}
+
+	it, err := startUI(term, &ap.uiState, ev)
+	if err != nil {
+		return err
+	}
+
 	if ev.Type == terminal.RedrawEvent {
 		if ev.Key != 0 || ev.Signal != nil {
 			log.Printf("got %v", ev)
 		}
+	} else if ev.Type == terminal.ResizeEvent {
+		log.Printf("resized to %v", it.size)
 	} else if ev.Type != terminal.NoEvent {
 		log.Printf("got %v", ev)
 	}
@@ -63,17 +85,13 @@ func draw(term *terminal.Terminal, ev terminal.Event) error {
 		return terminal.ErrStop
 	}
 
-	if _, err := term.WriteCursor(display.Cursor.Home, display.Cursor.Clear); err != nil {
-		return err
-	}
+	term.WriteCursor(
+		terminal.Cursor.Hide,
+		terminal.Cursor.Home,
+		terminal.Cursor.Clear,
+	)
 
-	var it ui
-	it.init(term)
-	if ev.Type == terminal.ResizeEvent {
-		log.Printf("size is %v", it.size)
-	}
-
-	it.textbox("Logs", logBuf.Bytes())
+	it.textbox("Logs", &logBuf)
 
 	return nil
 }
@@ -100,7 +118,7 @@ func run() (rerr error) {
 	defer setLogOutput(io.MultiWriter(flog, &logBuf))()
 
 	term, err := terminal.Open(nil, nil, terminal.Options(
-		terminal.StandardApp,
+		terminal.FullscreenApp,
 		terminal.MouseReporting,
 	))
 	if err != nil {
@@ -112,8 +130,9 @@ func run() (rerr error) {
 		}
 	}()
 
+	var ap app
 	log.Printf("running")
-	return term.Run(terminal.DrawFunc(draw), terminal.ClientDrawTicker)
+	return term.Run(&ap, terminal.ClientDrawTicker)
 }
 
 func main() {
