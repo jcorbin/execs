@@ -64,20 +64,21 @@ func (os options) init(term *Terminal) error {
 // DefaultTerminfo loads default terminfo based on the TERM environment
 // variable; basically it uses terminfo.Load(os.Getenv("TERM")).
 var DefaultTerminfo = optionFunc(func(term *Terminal) error {
-	if term.info != nil {
+	if term.Decoder.Terminfo() != nil {
 		return nil
 	}
 	info, err := terminfo.Load(os.Getenv("TERM"))
 	if err == nil {
-		term.info = info
+		term.Decoder.SetTerminfo(info)
 	}
 	return err
 })
 
-// Terminfo overrides any DefaultTerminfo with an explicit choice.
+// Terminfo provides a terminfo definition selected explicitly, rather than
+// relying on the Decoder's default loading mechanism.
 func Terminfo(info *terminfo.Terminfo) Option {
 	return optionFunc(func(term *Terminal) error {
-		term.info = info
+		term.Decoder.SetTerminfo(info)
 		return nil
 	})
 }

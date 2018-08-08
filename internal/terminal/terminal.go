@@ -1,15 +1,10 @@
 package terminal
 
 import (
-	"bytes"
 	"errors"
-	"image"
 	"os"
 	"os/signal"
 	"syscall"
-	"unsafe"
-
-	"github.com/jcorbin/execs/internal/terminfo"
 )
 
 // Terminal supports interacting with a terminal:
@@ -22,20 +17,10 @@ import (
 type Terminal struct {
 	Attr
 	Processor
+	Output
 
 	closed bool
-	info   *terminfo.Terminfo
-
 	termContext
-	writeObserver
-
-	// output
-	out    *os.File
-	tcur   Cursor
-	bcur   Cursor
-	tmp    []byte
-	outbuf bytes.Buffer
-	outerr error
 }
 
 // Open a terminal on the given input/output file pair (defaults to os.Stdin
@@ -51,22 +36,18 @@ func Open(in, out *os.File, opt Option) (*Terminal, error) {
 		out = os.Stdout
 	}
 	opt = Options(opt, DefaultTerminfo)
-	term := &Terminal{
-		out:  out,
-		tcur: StartCursor,
-		bcur: StartCursor,
-		tmp:  make([]byte, 64),
 
-		writeObserver: flushWhenFull{},
-	}
+	term := &Terminal{}
+	term.Decoder.File = in
+	term.Output.File = out
 	term.termContext = &term.Attr
+
+	term.Processor.Init()
+	term.Output.Init()
+
 	if err := opt.init(term); err != nil {
 		return nil, err
 	}
-
-	ef := term.Processor.EventFilter // TODO jank
-	term.Processor = MakeProcessor(in, term.info)
-	term.Processor.EventFilter = ef
 
 	if err := term.termContext.enter(term); err != nil {
 		_ = term.Close()
@@ -104,45 +85,6 @@ func (term *Terminal) closeOnPanic() {
 		}
 		panic(e)
 	}
-}
-
-func (term *Terminal) ioctl(request, argp uintptr) error {
-	if _, _, e := syscall.Syscall6(syscall.SYS_IOCTL, term.out.Fd(), request, argp, 0, 0, 0); e != 0 {
-		return e
-	}
-	return nil
-}
-
-// GetAttr retrieves terminal attributes.
-//
-// NOTE this is a low level method, most users should use the Attr Option.
-func (term *Terminal) GetAttr() (attr syscall.Termios, err error) {
-	err = term.ioctl(syscall.TIOCGETA, uintptr(unsafe.Pointer(&attr)))
-	return
-}
-
-// SetAttr sets terminal attributes.
-//
-// NOTE this is a low level method, most users should use the Attr Option.
-func (term *Terminal) SetAttr(attr syscall.Termios) error {
-	return term.ioctl(syscall.TIOCSETA, uintptr(unsafe.Pointer(&attr)))
-}
-
-// Size reads and returns the current terminal size.
-func (term *Terminal) Size() (size image.Point, err error) {
-	// TODO cache last known good? hide error?
-	var dim struct {
-		rows    uint16
-		cols    uint16
-		xpixels uint16
-		ypixels uint16
-	}
-	err = term.ioctl(syscall.TIOCGWINSZ, uintptr(unsafe.Pointer(&dim)))
-	if err == nil {
-		size.X = int(dim.cols)
-		size.Y = int(dim.rows)
-	}
-	return size, err
 }
 
 // Suspend the terminal program: restore terminal state, send SIGTSTP, wait for

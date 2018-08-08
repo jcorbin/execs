@@ -58,14 +58,14 @@ func (to termOption) init(term *Terminal) error {
 	return nil
 }
 func (to termOption) enter(term *Terminal) error {
-	if fn := term.info.Funcs[to.enterFunc]; fn != "" {
-		_, _ = term.outbuf.WriteString(fn)
+	if fn := term.Terminfo().Funcs[to.enterFunc]; fn != "" {
+		_, _ = term.Output.buf.WriteString(fn)
 	}
 	return nil
 }
 func (to termOption) exit(term *Terminal) error {
-	if fn := term.info.Funcs[to.exitFunc]; fn != "" {
-		_, _ = term.outbuf.WriteString(fn)
+	if fn := term.Terminfo().Funcs[to.exitFunc]; fn != "" {
+		_, _ = term.Output.buf.WriteString(fn)
 	}
 	return nil
 }

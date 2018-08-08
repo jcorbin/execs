@@ -30,22 +30,46 @@ func DecodeSignal(sig os.Signal) Event {
 
 // Decoder supports reading terminal input events from a file handle.
 type Decoder struct {
-	in         *os.File
+	File *os.File
+
 	info       *terminfo.Terminfo
 	buf        bytes.Buffer
 	err        error
 	keyDecoder *termkey.Decoder
 }
 
+// Terminfo returns the currently set terminfo that the decoder will use; may
+// be nil, in which case the first ReadEvents() call will try to load the
+// correct terminfo based on environment.
+func (dec *Decoder) Terminfo() *terminfo.Terminfo {
+	return dec.info
+}
+
+// SetTerminfo sets the terminfo definitions that the encoder will use going
+// forward.
+func (dec *Decoder) SetTerminfo(info *terminfo.Terminfo) {
+	dec.info = info
+	dec.keyDecoder = termkey.NewDecoder(info)
+}
+
 // ReadEvents reads events into the given slice, stopping either when there are
 // no more buffered inputs bytes to parse, or the given events buffer is full.
 // Reads and blocks from the underlying file until at least one event can be
 // parsed. Returns the number of events read and any read error.
-func (proc *Processor) ReadEvents(evs []Event) (n int, _ error) {
-	n = proc.decodeEvents(evs)
+func (dec *Decoder) ReadEvents(evs []Event) (n int, _ error) {
+	if dec.err != nil {
+		return 0, dec.err
+	}
+	if dec.keyDecoder == nil {
+		if dec.info == nil {
+			panic("Decoder: no terminfo set")
+		}
+		dec.keyDecoder = termkey.NewDecoder(dec.info)
+	}
+	n = dec.decodeEvents(evs)
 	for n == 0 {
-		_, err := proc.readMore(minRead)
-		n = proc.decodeEvents(evs)
+		_, err := dec.readMore(minRead)
+		n = dec.decodeEvents(evs)
 		if err == io.EOF && n > 0 && n == len(evs) {
 			return n, nil
 		} else if err != nil {
@@ -55,23 +79,45 @@ func (proc *Processor) ReadEvents(evs []Event) (n int, _ error) {
 	return n, nil
 }
 
-func (proc *Processor) readMore(n int) (int, error) {
-	if proc.err != nil {
-		return 0, proc.err
+func (dec *Decoder) decodeEvents(evs []Event) int {
+	i := 0
+	for i < len(evs) {
+		buf := dec.buf.Bytes()
+		if len(buf) == 0 {
+			break
+		}
+		kev, n := dec.keyDecoder.Decode(buf)
+		if n == 0 {
+			break
+		}
+		dec.buf.Next(n)
+		ev := Event{Type: KeyEvent, Event: kev}
+		if kev.Key.IsMouse() {
+			ev.Type = MouseEvent
+		}
+		evs[i] = ev
+		i++
 	}
-	proc.buf.Grow(n)
-	buf := proc.buf.Bytes()
+	return i
+}
+
+func (dec *Decoder) readMore(n int) (int, error) {
+	if dec.err != nil {
+		return 0, dec.err
+	}
+	dec.buf.Grow(n)
+	buf := dec.buf.Bytes()
 	buf = buf[len(buf):cap(buf)]
-	n, proc.err = proc.in.Read(buf)
+	n, dec.err = dec.File.Read(buf)
 	if n > 0 {
-		_, _ = proc.buf.Write(buf[:n])
+		_, _ = dec.buf.Write(buf[:n])
 	}
-	return n, proc.err
+	return n, dec.err
 }
 
 // Err returns any read error encountered so far; if this is non-nill, all
 // future reads will fail, and the processor is dead.
-func (proc *Processor) Err() error { return proc.err }
+func (dec *Decoder) Err() error { return dec.err }
 
 // Processor combines a low level event decoder with optional event filtering
 // middleware. It also supports concurrent processing of os signaled events and
@@ -85,32 +131,11 @@ type Processor struct {
 	stop    chan struct{}
 }
 
-// MakeProcessor creates a terminal event processor around the given file handle.
-//
-// Panics if given nil terminfo.
-//
-// See the ProcessSignals for what's necessary to handle out-of-band signals.
-//
-// For in-band event processing the user may choose to either:
-// - to poll for events using DecodeEvent or DecodeEvents to one or a batch at
-//   a time
-// - to process events concurrently to their decoding using ProcessInput or
-//   ProcessInputBatches depending on whether they want to be batch oriented
-func MakeProcessor(f *os.File, info *terminfo.Terminfo) Processor {
-	if info == nil {
-		panic("must provide terminfo")
-	}
-	sigs := make(chan os.Signal, signalCapacity)
-	return Processor{
-		Decoder: Decoder{
-			in:         f,
-			info:       info,
-			keyDecoder: termkey.NewDecoder(info),
-		},
-		Signals: sigs,
-		signals: sigs,
-		stop:    make(chan struct{}),
-	}
+// Init ialize Processor state; TODO would be great to eliminate this method.
+func (proc *Processor) Init() {
+	proc.signals = make(chan os.Signal, signalCapacity)
+	proc.Signals = proc.signals
+	proc.stop = make(chan struct{})
 }
 
 // Close the processor (but not the underlying file handle); stops signal
@@ -220,28 +245,6 @@ func (proc *Processor) ReadEvent() (Event, error) {
 		ev, err = proc.FilterEvent(ev)
 	}
 	return ev, err
-}
-
-func (proc *Processor) decodeEvents(evs []Event) int {
-	i := 0
-	for i < len(evs) {
-		buf := proc.buf.Bytes()
-		if len(buf) == 0 {
-			break
-		}
-		kev, n := proc.keyDecoder.Decode(buf)
-		if n == 0 {
-			break
-		}
-		proc.buf.Next(n)
-		ev := Event{Type: KeyEvent, Event: kev}
-		if kev.Key.IsMouse() {
-			ev.Type = MouseEvent
-		}
-		evs[i] = ev
-		i++
-	}
-	return i
 }
 
 // ProcessSignals handles signals delivered to proc.Signals until either an

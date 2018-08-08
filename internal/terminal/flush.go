@@ -6,25 +6,14 @@ import (
 	"time"
 )
 
-type writeObserver interface {
-	// preWrite gets called before a write to the output buffer giving a
-	// chance to flush; n is a best-effort size of the bytes about to be
-	// written. NOTE preWrite MUST avoid manipulating cursor state, as it may
-	// reflect state about to be implemented by the written bytes.
-	preWrite(term *Terminal, n int) error
-
-	// postWrite gets called after a write to the output buffer giving a chance to flush.
-	postWrite(term *Terminal, n int) error
-}
-
-func (term *Terminal) setWriteOption(wo writeObserver) {
-	if fa, ok := term.writeObserver.(*FlushAfter); ok {
+func (out *Output) setWriteOption(wo writeObserver) {
+	if fa, ok := out.writeObserver.(*FlushAfter); ok {
 		fa.Stop()
 	}
 	if wo == nil {
-		term.writeObserver = flushWhenFull{}
+		out.writeObserver = flushWhenFull{}
 	} else {
-		term.writeObserver = wo
+		out.writeObserver = wo
 	}
 }
 
@@ -40,19 +29,19 @@ var FlushWhenFull Option = flushWhenFull{}
 type flushWhenFull struct{}
 
 func (fw flushWhenFull) init(term *Terminal) error {
-	term.setWriteOption(fw)
+	term.Output.setWriteOption(fw)
 	return nil
 }
 
-func (fw flushWhenFull) preWrite(term *Terminal, n int) error {
-	if m := term.outbuf.Len(); m > 0 && m+n >= term.outbuf.Cap() {
-		return term.Flush()
+func (fw flushWhenFull) preWrite(out *Output, n int) error {
+	if m := out.buf.Len(); m > 0 && m+n >= out.buf.Cap() {
+		return out.Flush()
 	}
 	return nil
 }
-func (fw flushWhenFull) postWrite(term *Terminal, n int) error {
-	if m := term.outbuf.Len(); m > 0 && m == term.outbuf.Cap() {
-		return term.Flush()
+func (fw flushWhenFull) postWrite(out *Output, n int) error {
+	if m := out.buf.Len(); m > 0 && m == out.buf.Cap() {
+		return out.Flush()
 	}
 	return nil
 }
@@ -82,24 +71,24 @@ type FlushAfter struct {
 	sync.Mutex
 	time.Duration
 
-	term *Terminal
+	out  *Output
 	set  bool
 	stop chan struct{}
 	t    *time.Timer
 }
 
 func (fa *FlushAfter) init(term *Terminal) error {
-	fa.term = term
-	term.setWriteOption(fa)
+	fa.out = &term.Output
+	term.Output.setWriteOption(fa)
 	return nil
 }
 
-func (fa *FlushAfter) preWrite(term *Terminal, n int) error {
-	fa.term = term
+func (fa *FlushAfter) preWrite(out *Output, n int) error {
+	fa.out = out
 	fa.Start()
 	return nil
 }
-func (fa *FlushAfter) postWrite(term *Terminal, n int) error {
+func (fa *FlushAfter) postWrite(out *Output, n int) error {
 	return nil
 }
 
@@ -167,5 +156,5 @@ func (fa *FlushAfter) flush(_ time.Time) error {
 	fa.Lock()
 	defer fa.Unlock()
 	fa.set = false
-	return fa.term.Flush()
+	return fa.out.Flush()
 }
