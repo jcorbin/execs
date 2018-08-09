@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"image"
 	"io"
 	"log"
 	"os"
@@ -53,6 +54,15 @@ type app struct {
 	uiState
 }
 
+var spinner = [6]rune{
+	'◜',
+	'◠',
+	'◝',
+	'◞',
+	'◡',
+	'◟',
+}
+
 func (ap *app) Draw(term *terminal.Terminal, ev terminal.Event) error {
 	if ap.uiState.maxID == 0 && ev.Type != terminal.NoEvent {
 		log.Printf("doing a first dry-run draw %v", ev)
@@ -71,13 +81,13 @@ func (ap *app) Draw(term *terminal.Terminal, ev terminal.Event) error {
 		return err
 	}
 
-	if ev.Type == terminal.RedrawEvent {
-		if ev.Key != 0 || ev.Signal != nil {
-			log.Printf("got %v", ev)
-		}
-	} else if ev.Type == terminal.ResizeEvent {
+	switch ev.Type {
+	case terminal.NoEvent:
+	case terminal.TickEvent:
+		ap.tick++
+	case terminal.ResizeEvent:
 		log.Printf("resized to %v", it.size)
-	} else if ev.Type != terminal.NoEvent {
+	default:
 		log.Printf("got %v", ev)
 	}
 
@@ -92,6 +102,13 @@ func (ap *app) Draw(term *terminal.Terminal, ev terminal.Event) error {
 	)
 
 	it.textbox("Logs", &logBuf)
+
+	// TODO jank
+	term.WriteCursor(func(cur terminal.Cursor, buf []byte) ([]byte, terminal.Cursor) {
+		return cur.Go(buf, it.size.Sub(image.Pt(1, 1)))
+	})
+
+	term.WriteRune(spinner[ap.tick%len(spinner)])
 
 	return nil
 }

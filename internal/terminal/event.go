@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jcorbin/execs/internal/termkey"
 )
@@ -17,6 +18,7 @@ type Event struct {
 	Type          EventType // one of Event* constants
 	termkey.Event           // EventKey and EventMouse
 	Signal        os.Signal // EventSignal
+	time.Time
 }
 
 // Modifier during a key or mouse event.
@@ -36,7 +38,7 @@ const (
 	KeyEvent
 	MouseEvent
 	ResizeEvent
-	TickEvent // TODO probably wants a time field
+	TickEvent
 	RedrawEvent
 	SignalEvent
 	InterruptEvent

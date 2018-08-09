@@ -135,14 +135,14 @@ func (cr *clientRunner) runClient(term *Terminal, client Client) error {
 		}
 	}()
 
-	err := cr.redraw(term, client)
+	err := cr.draw(term, client, Event{Type: RedrawEvent})
 	for err == nil {
 		select {
 		case err = <-errs:
 		case ev := <-events:
 			err = cr.draw(term, client, ev)
-		case <-cr.frameTicker.C:
-			err = cr.redraw(term, client)
+		case t := <-cr.frameTicker.C:
+			err = cr.draw(term, client, Event{Type: TickEvent, Time: t})
 		}
 	}
 	if err == ErrStop || err == ErrTerm {
@@ -178,7 +178,7 @@ func (cr *clientRunner) runBatchClient(term *Terminal, client BatchClient) error
 
 	free <- make([]Event, 0, cr.eventBatchSize)
 	last := make([]Event, 0, cr.eventBatchSize) // TODO evaluate usefulness
-	err := cr.redraw(term, client)
+	err := cr.draw(term, client, Event{Type: RedrawEvent})
 	for err == nil {
 		select {
 		case err = <-errs:
@@ -190,8 +190,8 @@ func (cr *clientRunner) runBatchClient(term *Terminal, client BatchClient) error
 			last, err = evs, cr.drawBatch(term, client, evs)
 		case ev := <-events:
 			err = cr.draw(term, client, ev)
-		case <-cr.frameTicker.C:
-			err = cr.redraw(term, client)
+		case t := <-cr.frameTicker.C:
+			err = cr.draw(term, client, Event{Type: TickEvent, Time: t})
 		}
 	}
 	if err == ErrStop || err == ErrTerm {
@@ -200,22 +200,9 @@ func (cr *clientRunner) runBatchClient(term *Terminal, client BatchClient) error
 	return err
 }
 
-func (cr *clientRunner) redraw(term *Terminal, client Client) error {
-	cr.flushAfter.Lock()
-	defer cr.flushAfter.Unlock()
-	if cr.flushAfter.set {
-		return nil
-	}
-	return cr.lockedDraw(term, client, Event{Type: RedrawEvent})
-}
-
 func (cr *clientRunner) draw(term *Terminal, client Client, ev Event) error {
 	cr.flushAfter.Lock()
 	defer cr.flushAfter.Unlock()
-	return cr.lockedDraw(term, client, ev)
-}
-
-func (cr *clientRunner) lockedDraw(term *Terminal, client Client, ev Event) error {
 	err := term.Discard()
 	if err == nil {
 		err = client.Draw(term, ev)
