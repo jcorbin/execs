@@ -17,6 +17,9 @@ func (id uid) next() uid      { return id + 1 }
 func (id uid) String() string { return fmt.Sprintf("uid<%d>", uint32(id)) }
 
 type uiState struct {
+	crawling bool
+	crawl    image.Point
+
 	tick   int
 	focus  uid
 	active uid

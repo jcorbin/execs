@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"image"
 	"io"
 	"log"
 	"os"
@@ -54,7 +53,7 @@ type app struct {
 	uiState
 }
 
-var spinner = [6]rune{
+var spinner = []rune{
 	'◜',
 	'◠',
 	'◝',
@@ -83,8 +82,35 @@ func (ap *app) Draw(term *terminal.Terminal, ev terminal.Event) error {
 
 	switch ev.Type {
 	case terminal.NoEvent:
+
+	case terminal.KeyEvent:
+		if ev.Ch == '*' {
+			ap.crawling = !ap.crawling
+			log.Printf("toggled crawling to %v", ap.crawling)
+		}
+
 	case terminal.TickEvent:
 		ap.tick++
+
+		crawl := ap.crawling
+		if !crawl {
+			if ap.crawl != it.size {
+				crawl = true
+			}
+		}
+		if crawl {
+			if ap.crawl.Y == 0 {
+				ap.crawl.X++
+			} else if ap.crawl.Y == it.size.Y {
+				ap.crawl.X--
+			}
+			if ap.crawl.X == it.size.X {
+				ap.crawl.Y++
+			} else if ap.crawl.X == 0 {
+				ap.crawl.Y--
+			}
+		}
+
 	case terminal.ResizeEvent:
 		log.Printf("resized to %v", it.size)
 	default:
@@ -105,7 +131,7 @@ func (ap *app) Draw(term *terminal.Terminal, ev terminal.Event) error {
 
 	// TODO jank
 	term.WriteCursor(func(cur terminal.Cursor, buf []byte) ([]byte, terminal.Cursor) {
-		return cur.Go(buf, it.size.Sub(image.Pt(1, 1)))
+		return cur.Go(buf, ap.crawl)
 	})
 
 	term.WriteRune(spinner[ap.tick%len(spinner)])
