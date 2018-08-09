@@ -7,9 +7,6 @@ import (
 	"strconv"
 )
 
-// Transparent is transparent in the RGBA color model.
-var Transparent = color.RGBA{}
-
 // Colors contains the 256 color terminal palette.
 // The first 8 correspond to 30-37 foreground and 40-47 background
 // in ANSI escape sequences. The second 8 correspond to 90-97 and 100-107 or
@@ -274,7 +271,7 @@ var Colors = []color.RGBA{
 	{238, 238, 238, 255},
 }
 
-// ColorModel renders colors to a partiular terminal color rendering protocol.
+// ColorModel renders colors to a particular terminal color rendering protocol.
 type ColorModel func(buf []byte, cur Cursor, fg, bg color.RGBA) ([]byte, Cursor)
 
 var (
@@ -297,8 +294,8 @@ var (
 	// sequences.
 	Model24 ColorModel = renderJustColor24
 
-	// ModelCompat24 supports all 24 bit colors, using palette colors only for exact
-	// matches.
+	// ModelCompat24 supports all 24 bit colors, using palette colors only for
+	// exact matches.
 	ModelCompat24 ColorModel = renderCompatColor24
 )
 
@@ -335,6 +332,13 @@ var (
 	colorIndex map[color.RGBA]int
 )
 
+var (
+	byteStrings    [256]string
+	fgColorStrings [256]string
+	bgColorStrings [256]string
+)
+
+// TODO codegen this
 func init() {
 	for i := 0; i < 8; i++ {
 		Palette3 = append(Palette3, color.Color(Colors[i]))
@@ -355,15 +359,7 @@ func init() {
 	for i := 0; i < 256; i++ {
 		colorIndex[Colors[i]] = i
 	}
-}
 
-var (
-	byteStrings    [256]string
-	fgColorStrings [256]string
-	bgColorStrings [256]string
-)
-
-func init() {
 	for i := 0; i < len(byteStrings); i++ {
 		byteStrings[i] = ";" + strconv.Itoa(i)
 	}

@@ -92,6 +92,7 @@ func (ap *app) Draw(term *terminal.Terminal, ev terminal.Event) error {
 	case terminal.TickEvent:
 		ap.tick++
 
+		// TODO there's still something not right here, something to learn
 		crawl := ap.crawling
 		if !crawl {
 			if ap.crawl != it.size {
@@ -131,7 +132,7 @@ func (ap *app) Draw(term *terminal.Terminal, ev terminal.Event) error {
 
 	// TODO jank
 	term.WriteCursor(func(cur terminal.Cursor, buf []byte) ([]byte, terminal.Cursor) {
-		return cur.Go(buf, ap.crawl)
+		return cur.Go(buf, terminal.ImageToTermPoint(ap.crawl))
 	})
 
 	term.WriteRune(spinner[ap.tick%len(spinner)])
