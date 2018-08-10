@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/jcorbin/execs/internal/terminfo"
@@ -79,6 +80,34 @@ var DefaultTerminfo = optionFunc(func(term *Terminal) error {
 func Terminfo(info *terminfo.Terminfo) Option {
 	return optionFunc(func(term *Terminal) error {
 		term.Decoder.SetTerminfo(info)
+		return nil
+	})
+}
+
+// With provides Context and EventFilter values to be attached to the terminal
+// during open. This should only be used for external implementations of
+// Context and EventFilter, as all standard implementations provided by the
+// terminal package implement Option.
+func With(args ...interface{}) Option {
+	var eventFilter EventFilter
+	var context Context
+	for _, arg := range args {
+		any := false
+		if ef, ok := arg.(EventFilter); ok {
+			eventFilter = chainEventFilter(eventFilter, ef)
+			any = true
+		}
+		if ctx, ok := arg.(Context); ok {
+			context = chainTermContext(context, ctx)
+			any = true
+		}
+		if !any {
+			panic(fmt.Sprintf("unsupported terminal.With arg type %T; must implement Context or EventFilter", arg))
+		}
+	}
+	return optionFunc(func(term *Terminal) error {
+		term.EventFilter = chainEventFilter(term.EventFilter, eventFilter)
+		term.ctx = chainTermContext(term.ctx, context)
 		return nil
 	})
 }

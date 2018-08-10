@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"errors"
 	"syscall"
 
 	"github.com/pkg/term/termios"
@@ -72,20 +73,45 @@ func (at *Attr) apply(attr *syscall.Termios) {
 	}
 }
 
-func (at *Attr) enter(term *Terminal) (err error) {
-	if at.orig, err = term.GetAttr(); err != nil {
-		return err
+// Enter ensures desired termios state, and retains a reference to the passed
+// terminal so that any future calls to Set* calls are immediate.
+func (at *Attr) Enter(term *Terminal) (err error) {
+	if at.term != nil {
+		if term != at.term {
+			return errors.New("terminal.Attr got a foreign Enter")
+		}
+		if at.term.active {
+			return nil
+		}
 	}
-	at.cur = at.orig
-	at.apply(&at.cur)
+	if term.closed {
+		return errors.New("cannot enter closed terminal")
+	}
+	if at.term == nil {
+		if at.orig, err = term.GetAttr(); err != nil {
+			return err
+		}
+		at.cur = at.orig
+		at.apply(&at.cur)
+		at.term = term
+	}
 	if err = term.SetAttr(at.cur); err != nil {
 		return err
 	}
-	at.term = term
+	at.term.active = true
 	return nil
 }
 
-func (at *Attr) exit(term *Terminal) error {
+// Exit restores termios state to before the last Enter(), clearing any
+// retained terminal pointer.
+func (at *Attr) Exit(term *Terminal) error {
+	if term != at.term {
+		return errors.New("terminal.Attr got a foreign Exit")
+	}
+	if term.closed {
+		return errors.New("cannot exit closed terminal")
+	}
+	at.term.active = false
 	at.term = nil
 	return term.SetAttr(at.orig)
 }

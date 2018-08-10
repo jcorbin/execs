@@ -4,12 +4,15 @@ import (
 	"github.com/jcorbin/execs/internal/terminfo"
 )
 
-type termContext interface {
-	enter(term *Terminal) error
-	exit(term *Terminal) error
+// Context provides a piece of terminal context setup and teardown logic; its
+// Enter and Exit methods get called when its attached Terminal becomes
+// (in)active.
+type Context interface {
+	Enter(term *Terminal) error
+	Exit(term *Terminal) error
 }
 
-func chainTermContext(a, b termContext) termContext {
+func chainTermContext(a, b Context) Context {
 	if a == nil {
 		return b
 	}
@@ -28,20 +31,20 @@ func chainTermContext(a, b termContext) termContext {
 	return termContexts{a, b}
 }
 
-type termContexts []termContext
+type termContexts []Context
 
-func (tcs termContexts) enter(term *Terminal) error {
+func (tcs termContexts) Enter(term *Terminal) error {
 	for i := 0; i < len(tcs); i++ {
-		if err := tcs[i].enter(term); err != nil {
+		if err := tcs[i].Enter(term); err != nil {
 			// TODO tcs[:i+1].exit(term)?
 			return err
 		}
 	}
 	return nil
 }
-func (tcs termContexts) exit(term *Terminal) (rerr error) {
+func (tcs termContexts) Exit(term *Terminal) (rerr error) {
 	for i := len(tcs) - 1; i >= 0; i-- {
-		if err := tcs[i].exit(term); rerr == nil {
+		if err := tcs[i].Exit(term); rerr == nil {
 			rerr = err
 		}
 	}
@@ -51,16 +54,16 @@ func (tcs termContexts) exit(term *Terminal) (rerr error) {
 type termOption struct{ enterFunc, exitFunc terminfo.FuncCode }
 
 func (to termOption) init(term *Terminal) error {
-	term.termContext = chainTermContext(term.termContext, to)
+	term.ctx = chainTermContext(term.ctx, to)
 	return nil
 }
-func (to termOption) enter(term *Terminal) error {
+func (to termOption) Enter(term *Terminal) error {
 	if fn := term.Terminfo().Funcs[to.enterFunc]; fn != "" {
 		_, _ = term.Output.buf.WriteString(fn)
 	}
 	return nil
 }
-func (to termOption) exit(term *Terminal) error {
+func (to termOption) Exit(term *Terminal) error {
 	if fn := term.Terminfo().Funcs[to.exitFunc]; fn != "" {
 		_, _ = term.Output.buf.WriteString(fn)
 	}
@@ -75,11 +78,11 @@ func CursorOption(enter, exit []Curse) Option {
 type cursorOption struct{ enterCurses, exitCurses []Curse }
 
 func (co cursorOption) init(term *Terminal) error {
-	term.termContext = chainTermContext(term.termContext, co)
+	term.ctx = chainTermContext(term.ctx, co)
 	return nil
 }
 
-func (co cursorOption) enter(term *Terminal) error {
+func (co cursorOption) Enter(term *Terminal) error {
 	if len(co.enterCurses) > 0 {
 		_, err := term.WriteCursor(co.enterCurses...)
 		return err
@@ -87,7 +90,7 @@ func (co cursorOption) enter(term *Terminal) error {
 	return nil
 }
 
-func (co cursorOption) exit(term *Terminal) error {
+func (co cursorOption) Exit(term *Terminal) error {
 	if len(co.exitCurses) > 0 {
 		_, err := term.WriteCursor(co.exitCurses...)
 		return err

@@ -19,8 +19,9 @@ type Terminal struct {
 	Processor
 	Output
 
+	active bool
 	closed bool
-	termContext
+	ctx    Context
 }
 
 // Open a terminal on the given input/output file pair (defaults to os.Stdin
@@ -40,7 +41,7 @@ func Open(in, out *os.File, opt Option) (*Terminal, error) {
 	term := &Terminal{}
 	term.Decoder.File = in
 	term.Output.File = out
-	term.termContext = &term.Attr
+	term.ctx = &term.Attr
 
 	term.Processor.Init()
 	term.Output.Init()
@@ -49,7 +50,7 @@ func Open(in, out *os.File, opt Option) (*Terminal, error) {
 		return nil, err
 	}
 
-	if err := term.termContext.enter(term); err != nil {
+	if err := term.ctx.Enter(term); err != nil {
 		_ = term.Close()
 		return nil, err
 	}
@@ -62,19 +63,21 @@ func (term *Terminal) Close() error {
 	if term.closed {
 		return errors.New("terminal already closed")
 	}
-	term.closed = true
 	err := term.Processor.Close()
-	if cerr := term.termContext.exit(term); err == nil {
-		err = cerr
-	}
+	if term.active {
+		if cerr := term.ctx.Exit(term); err == nil {
+			err = cerr
+		}
 
-	// TODO do this only if the cursor isn't homed on a new row (requires
-	// cursor to have been parsing and following output all along...)?
-	_, _ = term.WriteString("\r\n")
+		// TODO do this only if the cursor isn't homed on a new row (requires
+		// cursor to have been parsing and following output all along...)?
+		_, _ = term.WriteString("\r\n")
 
-	if ferr := term.Flush(); err == nil {
-		err = ferr
+		if ferr := term.Flush(); err == nil {
+			err = ferr
+		}
 	}
+	term.closed = true
 	return err
 }
 
@@ -87,18 +90,48 @@ func (term *Terminal) closeOnPanic() {
 	}
 }
 
+// Enter the terminal's context if inactive.
+func (term *Terminal) Enter() error {
+	if !term.active {
+		return term.ctx.Enter(term)
+	}
+	return nil
+}
+
+// Exit the terminal's context if active.
+func (term *Terminal) Exit() error {
+	if term.active {
+		return term.ctx.Exit(term)
+	}
+	return nil
+}
+
+func (term *Terminal) without(f func() error) error {
+	if !term.active {
+		return f()
+	}
+	err := term.ctx.Exit(term)
+	if err == nil {
+		err = f()
+	}
+	if err == nil {
+		err = term.ctx.Enter(term)
+	}
+	return err
+}
+
 // Suspend the terminal program: restore terminal state, send SIGTSTP, wait for
 // SIGCONT, then re-setup terminal state once we're back. It returns any error
 // encountered or the received SIGCONT signal for completeness on success.
-func (term *Terminal) Suspend() (os.Signal, error) {
-	if err := term.termContext.exit(term); err != nil {
-		return nil, err
-	}
-	contCh := make(chan os.Signal, 1)
-	signal.Notify(contCh, syscall.SIGCONT)
-	if err := syscall.Kill(0, syscall.SIGTSTP); err != nil {
-		return nil, err
-	}
-	sig := <-contCh
-	return sig, term.termContext.enter(term)
+func (term *Terminal) Suspend() (sig os.Signal, err error) {
+	err = term.without(func() error {
+		contCh := make(chan os.Signal, 1)
+		signal.Notify(contCh, syscall.SIGCONT)
+		err := syscall.Kill(0, syscall.SIGTSTP)
+		if err == nil {
+			sig = <-contCh
+		}
+		return err
+	})
+	return
 }

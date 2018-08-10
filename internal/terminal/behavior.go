@@ -97,11 +97,11 @@ type signalHandler struct {
 
 func (sh signalHandler) init(term *Terminal) error {
 	term.EventFilter = chainEventFilter(term.EventFilter, &sh)
-	term.termContext = chainTermContext(term.termContext, &sh)
+	term.ctx = chainTermContext(term.ctx, &sh)
 	return nil
 }
 
-func (sh *signalHandler) enter(term *Terminal) error {
+func (sh *signalHandler) Enter(term *Terminal) error {
 	if !sh.active {
 		sh.active = true
 		signal.Notify(term.Processor.Signals, sh.signal)
@@ -109,7 +109,7 @@ func (sh *signalHandler) enter(term *Terminal) error {
 	return nil
 }
 
-func (sh *signalHandler) exit(term *Terminal) error {
+func (sh *signalHandler) Exit(term *Terminal) error {
 	// TODO support (optional) deregistration (e.g. when suspending)?
 	return nil
 }
