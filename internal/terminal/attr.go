@@ -1,8 +1,10 @@
 package terminal
 
 import (
-	"errors"
+	"image"
+	"os"
 	"syscall"
+	"unsafe"
 
 	"github.com/pkg/term/termios"
 )
@@ -11,11 +13,12 @@ import (
 //
 // TODO elaborate...
 type Attr struct {
-	orig syscall.Termios
-	cur  syscall.Termios
-	raw  bool
-	echo bool
-	term *Terminal // non-nil after enter and before exit
+	File   *os.File
+	orig   syscall.Termios
+	cur    syscall.Termios
+	raw    bool
+	echo   bool
+	active bool
 }
 
 // SetRaw controls whether the terminal should be in raw raw mode.
@@ -31,10 +34,10 @@ func (at *Attr) SetRaw(raw bool) error {
 		return nil
 	}
 	at.raw = raw
-	if at.term != nil {
+	if at.active {
 		at.cur = at.orig
 		at.apply(&at.cur)
-		return at.term.SetAttr(at.cur)
+		return at.SetAttr(at.cur)
 	}
 	return nil
 }
@@ -49,13 +52,13 @@ func (at *Attr) SetEcho(echo bool) error {
 		return nil
 	}
 	at.echo = echo
-	if at.term != nil {
+	if at.active {
 		if echo {
 			at.cur.Lflag |= syscall.ECHO
 		} else {
 			at.cur.Lflag &^= syscall.ECHO
 		}
-		return at.term.SetAttr(at.cur)
+		return at.SetAttr(at.cur)
 	}
 	return nil
 }
@@ -73,45 +76,64 @@ func (at *Attr) apply(attr *syscall.Termios) {
 	}
 }
 
-// Enter ensures desired termios state, and retains a reference to the passed
-// terminal so that any future calls to Set* calls are immediate.
-func (at *Attr) Enter(term *Terminal) (err error) {
-	if at.term != nil {
-		if term != at.term {
-			return errors.New("terminal.Attr got a foreign Enter")
-		}
-		if at.term.active {
-			return nil
-		}
-	}
-	if term.closed {
-		return errors.New("cannot enter closed terminal")
-	}
-	if at.term == nil {
-		if at.orig, err = term.GetAttr(); err != nil {
+// Activate the terminal attributes if in-active; all future calls to Set* now
+// apply immediately.
+func (at *Attr) Activate() (err error) {
+	if !at.active {
+		if at.orig, err = at.GetAttr(); err != nil {
 			return err
 		}
 		at.cur = at.orig
 		at.apply(&at.cur)
-		at.term = term
+		if err = at.SetAttr(at.cur); err != nil {
+			return err
+		}
+		at.active = true
 	}
-	if err = term.SetAttr(at.cur); err != nil {
-		return err
-	}
-	at.term.active = true
 	return nil
 }
 
-// Exit restores termios state to before the last Enter(), clearing any
-// retained terminal pointer.
-func (at *Attr) Exit(term *Terminal) error {
-	if term != at.term {
-		return errors.New("terminal.Attr got a foreign Exit")
+// Deactivate the terminal attributes, restoring the original ones recorded by
+// Activate.
+func (at *Attr) Deactivate() error {
+	if at.active {
+		at.active = false
+		return at.SetAttr(at.orig)
 	}
-	if term.closed {
-		return errors.New("cannot exit closed terminal")
+	return nil
+}
+
+func (at *Attr) ioctl(request, arg1, arg2, arg3, arg4 uintptr) error {
+	if _, _, e := syscall.Syscall6(syscall.SYS_IOCTL, at.File.Fd(), request, arg1, arg2, arg3, arg4); e != 0 {
+		return e
 	}
-	at.term.active = false
-	at.term = nil
-	return term.SetAttr(at.orig)
+	return nil
+}
+
+// GetAttr retrieves terminal attributes.
+func (at *Attr) GetAttr() (attr syscall.Termios, err error) {
+	err = at.ioctl(syscall.TIOCGETA, uintptr(unsafe.Pointer(&attr)), 0, 0, 0)
+	return
+}
+
+// SetAttr sets terminal attributes.
+func (at *Attr) SetAttr(attr syscall.Termios) error {
+	return at.ioctl(syscall.TIOCSETA, uintptr(unsafe.Pointer(&attr)), 0, 0, 0)
+}
+
+// Size reads and returns the current terminal size.
+func (at *Attr) Size() (size image.Point, err error) {
+	// TODO cache last known good? hide error?
+	var dim struct {
+		rows    uint16
+		cols    uint16
+		xpixels uint16
+		ypixels uint16
+	}
+	err = at.ioctl(syscall.TIOCGWINSZ, uintptr(unsafe.Pointer(&dim)), 0, 0, 0)
+	if err == nil {
+		size.X = int(dim.cols)
+		size.Y = int(dim.rows)
+	}
+	return size, err
 }

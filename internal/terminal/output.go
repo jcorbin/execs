@@ -2,11 +2,8 @@ package terminal
 
 import (
 	"bytes"
-	"image"
 	"os"
-	"syscall"
 	"unicode/utf8"
-	"unsafe"
 )
 
 // Output encapsulates terminal output buffering TODO elaborate
@@ -40,41 +37,6 @@ type Curse func(Cursor, []byte) ([]byte, Cursor)
 func (out *Output) Init() {
 	out.tmp = make([]byte, 64)
 	out.writeObserver = flushWhenFull{}
-}
-
-func (out *Output) ioctl(request, arg1, arg2, arg3, arg4 uintptr) error {
-	if _, _, e := syscall.Syscall6(syscall.SYS_IOCTL, out.File.Fd(), request, arg1, arg2, arg3, arg4); e != 0 {
-		return e
-	}
-	return nil
-}
-
-// GetAttr retrieves terminal attributes.
-func (out *Output) GetAttr() (attr syscall.Termios, err error) {
-	err = out.ioctl(syscall.TIOCGETA, uintptr(unsafe.Pointer(&attr)), 0, 0, 0)
-	return
-}
-
-// SetAttr sets terminal attributes.
-func (out *Output) SetAttr(attr syscall.Termios) error {
-	return out.ioctl(syscall.TIOCSETA, uintptr(unsafe.Pointer(&attr)), 0, 0, 0)
-}
-
-// Size reads and returns the current terminal size.
-func (out *Output) Size() (size image.Point, err error) {
-	// TODO cache last known good? hide error?
-	var dim struct {
-		rows    uint16
-		cols    uint16
-		xpixels uint16
-		ypixels uint16
-	}
-	err = out.ioctl(syscall.TIOCGWINSZ, uintptr(unsafe.Pointer(&dim)), 0, 0, 0)
-	if err == nil {
-		size.X = int(dim.cols)
-		size.Y = int(dim.rows)
-	}
-	return size, err
 }
 
 // Write into the output buffer, triggering any Flush* options.

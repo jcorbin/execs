@@ -41,7 +41,7 @@ func Open(in, out *os.File, opt Option) (*Terminal, error) {
 	term := &Terminal{}
 	term.Decoder.File = in
 	term.Output.File = out
-	term.ctx = &term.Attr
+	term.ctx = attrContext{&term.Attr}
 
 	term.Processor.Init()
 	term.Output.Init()

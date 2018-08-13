@@ -1,6 +1,8 @@
 package terminal
 
 import (
+	"errors"
+
 	"github.com/jcorbin/execs/internal/terminfo"
 )
 
@@ -118,3 +120,23 @@ var RawMode Option = optionFunc(func(term *Terminal) error {
 	term.Attr.raw = true
 	return nil
 })
+
+type attrContext struct{ *Attr }
+
+func (atc attrContext) Enter(term *Terminal) (err error) {
+	if term != nil {
+		if term.closed {
+			return errors.New("cannot enter closed terminal")
+		} else if atc.active && atc.File != term.Output.File {
+			return errors.New("attr already active")
+		}
+		if atc.File == nil {
+			atc.File = term.Output.File
+		}
+	}
+	return atc.Activate()
+}
+
+func (atc attrContext) Exit(term *Terminal) error {
+	return atc.Deactivate()
+}
