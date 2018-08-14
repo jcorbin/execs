@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"unicode/utf8"
 
@@ -38,31 +37,24 @@ func (dw *delimWriter) Write(p []byte) (n int, err error) {
 
 type decMode int
 type decModes []decMode
-type decSeqStr struct {
-	n byte
-	a string
+
+func (dm decMode) Set() ansi.ControlSeq   { return ansi.CTLSeqString('h', "?").With(int(dm)) }
+func (dm decMode) Reset() ansi.ControlSeq { return ansi.CTLSeqString('l', "?").With(int(dm)) }
+
+func (dms decModes) Set() ansi.ControlSeqs {
+	r := make(ansi.ControlSeqs, len(dms))
+	for i := range dms {
+		r[i] = dms[i].Set()
+	}
+	return r
 }
 
-func (dm decMode) Set() decSeqStr   { return decSeqStr{'h', strconv.Itoa(int(dm))} }
-func (dm decMode) Reset() decSeqStr { return decSeqStr{'l', strconv.Itoa(int(dm))} }
-func (ds decSeqStr) String() string { return fmt.Sprintf("\x1b[?%s%s", ds.a, string(ds.n)) }
-
-func (dms decModes) SetString() string {
-	var buf bytes.Buffer
-	buf.Grow(2 * 8 * len(dms))
+func (dms decModes) Reset() ansi.ControlSeqs {
+	r := make(ansi.ControlSeqs, len(dms))
 	for i := range dms {
-		_, _ = buf.WriteString(dms[i].Set().String())
+		r[i] = dms[i].Reset()
 	}
-	return buf.String()
-}
-
-func (dms decModes) ResetString() string {
-	var buf bytes.Buffer
-	buf.Grow(2 * 8 * len(dms))
-	for i := range dms {
-		_, _ = buf.WriteString(dms[i].Reset().String())
-	}
-	return buf.String()
+	return r
 }
 
 var errInt = errors.New("interrupt")
@@ -106,8 +98,8 @@ func run() (rerr error) {
 		modeSgrExtModeMouse,
 		modeAnyEventMouse,
 	}
-	os.Stdout.WriteString(modes.SetString())
-	defer os.Stdout.WriteString(modes.ResetString())
+	os.Stdout.WriteString(modes.Set().String())
+	defer os.Stdout.WriteString(modes.Reset().String())
 
 	buf := newReadBuffer(os.Stdin, 128)
 	log.Printf("reading...")
