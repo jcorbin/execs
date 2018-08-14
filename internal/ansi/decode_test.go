@@ -72,18 +72,18 @@ func TestDecodeUTF8Escape(t *testing.T) {
 		}},
 
 		{"\x1b(B$", []ev{
-			{anRead{ansi.Escape(0xEF42), []byte("("), 3}, utRead{}},
+			{anRead{ansi.Escape(0xEF28), []byte("B"), 3}, utRead{}},
 			{anRead{}, utRead{'$', 1}},
 		}},
 		{"\x1b\x03(B$", []ev{
 			{anRead{0, nil, 0}, utRead{'\x03', 1}},
-			{anRead{ansi.Escape(0xEF42), []byte("("), 3}, utRead{}},
+			{anRead{ansi.Escape(0xEF28), []byte("B"), 3}, utRead{}},
 			{anRead{}, utRead{'$', 1}},
 		}},
 		{"\x1b\x03(\x04B$", []ev{
 			{anRead{0, nil, 0}, utRead{'\x03', 1}},
 			{anRead{0, nil, 0}, utRead{'\x04', 1}},
-			{anRead{ansi.Escape(0xEF42), []byte("("), 3}, utRead{}},
+			{anRead{ansi.Escape(0xEF28), []byte("B"), 3}, utRead{}},
 			{anRead{}, utRead{'$', 1}},
 		}},
 
@@ -93,13 +93,13 @@ func TestDecodeUTF8Escape(t *testing.T) {
 
 		{"\x1b“(B$", []ev{
 			{anRead{}, utRead{'“', 3}},
-			{anRead{ansi.Escape(0xEF42), []byte("("), 3}, utRead{}},
+			{anRead{ansi.Escape(0xEF28), []byte("B"), 3}, utRead{}},
 			{anRead{}, utRead{'$', 1}},
 		}},
 		{"\x1b“(”B$", []ev{
 			{anRead{}, utRead{'“', 3}},
 			{anRead{}, utRead{'”', 3}},
-			{anRead{ansi.Escape(0xEF42), []byte("("), 3}, utRead{}},
+			{anRead{ansi.Escape(0xEF28), []byte("B"), 3}, utRead{}},
 			{anRead{}, utRead{'$', 1}},
 		}},
 

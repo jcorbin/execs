@@ -5,6 +5,7 @@ import "fmt"
 // Escape is an ANSI escape or control function mapped into the unicode world:
 // - U+0000-U+001F: C0 controls
 // - U+0080-U+009F: C1 controls
+// - U+EF20-U+EF2F: character set selection functions
 // - U+EF30-U+EF3F: private ESCape-sequence functions
 // - U+EF40-U+EF5F: non-standard ESCape-sequence functions
 // - U+EF60-U+EF7E: standard ESCape-sequence functions

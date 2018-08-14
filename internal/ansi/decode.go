@@ -104,6 +104,11 @@ func decodeESC(p []byte) (e Escape, a []byte, n int) {
 		switch {
 		case 0x30 <= r && r <= 0x7E: // End of an escape sequence.
 			if ai != 0 {
+				if ni-ai == 1 && 0x20 <= p[ai] && p[ai] <= 0x2F {
+					// name the character selection block after its
+					// intermediate byte, rather than its parameter
+					return ESC(p[ai]), p[ni : ni+n], n
+				}
 				a = p[ai:ni]
 			}
 			return ESC(byte(r)), a, n
