@@ -10,6 +10,7 @@ type Scope struct {
 	typs   []genType
 	free   []ID
 	watAll []Type
+	watAny []Type
 	wats   []Watcher
 }
 
@@ -93,8 +94,9 @@ type Watcher interface {
 // registered.
 //
 // TODO also support an "any" bitmask?
-func (sc *Scope) Watch(all Type, wat Watcher) {
+func (sc *Scope) Watch(all, any Type, wat Watcher) {
 	sc.watAll = append(sc.watAll, all)
+	sc.watAny = append(sc.watAny, any)
 	sc.wats = append(sc.wats, wat)
 }
 
@@ -107,17 +109,20 @@ func (sc *Scope) RemoveWatcher(wat Watcher) {
 		}
 		if i != j {
 			sc.watAll[j] = sc.watAll[i]
+			sc.watAny[j] = sc.watAny[i]
 			sc.wats[j] = sc.wats[i]
 		}
 		j++
 	}
 	sc.watAll = sc.watAll[:j]
+	sc.watAny = sc.watAny[:j]
 	sc.wats = sc.wats[:j]
 }
 
 // Create a new entity with the given Type, returning a handle to it.
 //
-// Fires any Watcher's whose all criteria are fully satisfied by the new Type.
+// Fires any Watcher's whose all criteria are fully satisfied by the new Type,
+// and whose any criteria (if non-zero) are have at least one bit satisfied.
 func (sc *Scope) Create(newType Type) (ent Entity) {
 	if newType != 0 {
 		ent = Entity{sc, sc.create()}
@@ -215,21 +220,23 @@ func (ent Entity) SetType(newType Type) bool {
 }
 
 func (ent Entity) dispatchCreate(newType, createdType Type) {
-	for i, all := range ent.Scope.watAll {
-		if all == 0 {
+	for i := 0; i < len(ent.Scope.watAll); i++ {
+		all := ent.Scope.watAll[i]
+		any := ent.Scope.watAny[i]
+		if (all == 0 || (newType&all == all && createdType&all != 0)) &&
+			(any == 0 || createdType&any != 0) {
 			ent.Scope.wats[i].Create(ent, createdType)
-		} else if createdType&all != 0 && newType&all == all {
-			ent.Scope.wats[i].Create(ent, all)
 		}
 	}
 }
 
 func (ent Entity) dispatchDestroy(newType, destroyedType Type) {
-	for i, all := range ent.Scope.watAll {
-		if all == 0 {
+	for i := 0; i < len(ent.Scope.watAll); i++ {
+		all := ent.Scope.watAll[i]
+		any := ent.Scope.watAny[i]
+		if (all == 0 || (newType&all != all && destroyedType&all != 0)) &&
+			(any == 0 || destroyedType&any != 0) {
 			ent.Scope.wats[i].Destroy(ent, destroyedType)
-		} else if destroyedType&all != 0 && newType&all != all {
-			ent.Scope.wats[i].Destroy(ent, all)
 		}
 	}
 }
