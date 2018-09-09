@@ -6,6 +6,7 @@ import (
 	"log"
 	"math/rand"
 
+	"github.com/jcorbin/anansi"
 	"github.com/jcorbin/anansi/ansi"
 	"github.com/jcorbin/anansi/x/platform"
 
@@ -112,6 +113,7 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 
 	// TODO debug why empty
 	if r := g.drag.process(ctx); r != image.ZR {
+		r = r.Canon()
 		r = r.Add(g.ctl.view.Min)
 		n := 0
 		for q := g.pos.Within(r); q.next(); n++ {
@@ -126,6 +128,27 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 
 	ctx.Output.Clear()
 	g.ren.drawRegionInto(g.ctl.view, &ctx.Output.Grid)
+
+	if g.drag.active {
+		dr := g.drag.r.Canon()
+		eachCell(&ctx.Output.Grid, dr, func(cell anansi.Cell) {
+			dc := uint32(0x1000)
+			if cell.X == dr.Min.X ||
+				cell.Y == dr.Min.Y ||
+				cell.X == dr.Max.X-1 ||
+				cell.Y == dr.Max.Y-1 {
+				dc = 0x2000
+			}
+			// TODO better brighten function
+			if r := cell.Rune(); r == 0 {
+				cell.SetRune(' ') // TODO this shouldn't be necessary, test and fix anansi.Screen
+			}
+			a := cell.Attr()
+			c, _ := a.BG()
+			cr, cg, cb, ca := c.RGBA()
+			cell.SetAttr(a.SansBG() | ansi.RGBA(cr+dc, cg+dc, cb+dc, ca).BG())
+		})
+	}
 
 	return err
 }
@@ -215,6 +238,14 @@ type dragState struct {
 	r      image.Rectangle
 }
 
+func eachCell(g *anansi.Grid, r image.Rectangle, f func(anansi.Cell)) {
+	for p := r.Min; p.Y < r.Max.Y; p.Y++ {
+		for p.X = r.Min.X; p.X < r.Max.X; p.X++ {
+			f(g.Cell(p))
+		}
+	}
+}
+
 func (ds *dragState) process(ctx *platform.Context) (r image.Rectangle) {
 	for id, typ := range ctx.Input.Type {
 		if typ == platform.EventMouse {
@@ -222,8 +253,10 @@ func (ds *dragState) process(ctx *platform.Context) (r image.Rectangle) {
 			if b, isPress := m.State.IsPress(); isPress && b == 0 {
 				ds.r.Min = m.Point
 			} else if m.State.IsDrag() {
+				ds.r.Max = m.Point
 				if ds.r.Min == image.ZP {
 					ds.r.Min = m.Point
+					ds.r.Max = m.Point
 				}
 				ds.active = true
 			} else {
