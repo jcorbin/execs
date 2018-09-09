@@ -27,7 +27,7 @@ type cell struct {
 func (ren *render) drawRegionInto(view image.Rectangle, grid *anansi.Grid) {
 	ren.rezort() // TODO invalidation based approach, try to defer to inter-frame bg work
 	for _, i := range ren.zord {
-		posd := ren.pos.Get(ecs.Entity{ren.Scope, ren.ID(i)})
+		posd := ren.pos.Get(ren.Scope.Entity(ren.ID(i)))
 		if pt := posd.Point(); pt.In(view) {
 			pt = pt.Sub(view.Min)
 			if c := grid.Cell(pt); c.Rune() == 0 {
@@ -116,13 +116,11 @@ func (rend renderable) SetCell(r rune, a ansi.SGRAttr) {
 }
 
 func (rend renderable) Entity() ecs.Entity {
-	return ecs.Entity{rend.ren.Scope, rend.ren.ID(rend.i)}
+	return rend.ren.Scope.Entity(rend.ren.ID(rend.i))
 }
 
 func (rend renderable) String() string {
-	posd := rend.ren.pos.Get(rend.Entity())
-	return fmt.Sprintf("pt:%v z:%v rune:%q attr:%v",
-		posd.Point(),
+	return fmt.Sprintf("z:%v rune:%q attr:%v",
 		rend.ren.z[rend.i],
 		rend.ren.cell[rend.i].r,
 		rend.ren.cell[rend.i].a,

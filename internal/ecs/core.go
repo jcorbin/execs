@@ -136,6 +136,18 @@ func (sc *Scope) Create(newType Type) (ent Entity) {
 	return ent
 }
 
+// Entity resolves an ID to an Entity within the scope.
+// Returns zero Entity value for zero id.
+// Panics if the ID is invalid.
+func (sc *Scope) Entity(id ID) Entity {
+	if id == 0 {
+		return Entity{}
+	}
+	ent := Entity{sc, id}
+	ent.typ() // check gen
+	return ent
+}
+
 func (sc *Scope) create() ID {
 	if i := len(sc.free) - 1; i >= 0 {
 		id := sc.free[i]
@@ -240,3 +252,6 @@ func (ent Entity) dispatchDestroy(newType, destroyedType Type) {
 		}
 	}
 }
+
+// ZE is the zero entity
+var ZE Entity

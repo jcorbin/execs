@@ -39,8 +39,9 @@ func (ctl *control) Update(ctx *platform.Context) {
 		for _, player := range ctl.player {
 			// TODO proper movement system
 			posd := ctl.pos.Get(player)
-			pos := posd.Point().Add(move)
-			posd.SetPoint(pos) // TODO collision check
+			if pos := posd.Point().Add(move); ctl.pos.collides(player, pos) == ecs.ZE {
+				posd.SetPoint(pos)
+			}
 		}
 	}
 
@@ -54,6 +55,18 @@ func (ctl *control) Update(ctx *platform.Context) {
 	} else if adj := ctl.viewAdjust(centroid); adj != image.ZP {
 		ctl.view = ctl.view.Add(adj)
 	}
+}
+
+// TODO proper movement / collision system
+func (pos *position) collides(ent ecs.Entity, p image.Point) ecs.Entity {
+	if ent.Type()&gameCollides != 0 {
+		if hitPosd := pos.At(p); !hitPosd.zero() {
+			if other := hitPosd.Entity(); other.Type()&gameCollides != 0 {
+				return other
+			}
+		}
+	}
+	return ecs.Entity{}
 }
 
 func (ctl *control) viewAdjust(pt image.Point) (adj image.Point) {

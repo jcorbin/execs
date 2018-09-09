@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image"
+	"log"
 	"math/rand"
 
 	"github.com/jcorbin/anansi/ansi"
@@ -16,19 +17,21 @@ type game struct {
 	ren render
 	pos position
 
-	ctl control
+	ctl  control
+	drag dragState
 }
 
 const (
 	gamePosition ecs.Type = 1 << iota
 	gameRender
+	gameCollides
 	gameInput
 
 	// gamePosition // TODO separate from gameRender
 
-	gameWall      = gamePosition | gameRender
+	gameWall      = gamePosition | gameRender | gameCollides
 	gameFloor     = gamePosition | gameRender
-	gameCharacter = gamePosition | gameRender
+	gameCharacter = gamePosition | gameRender | gameCollides
 	gamePlayer    = gameCharacter | gameInput
 )
 
@@ -46,15 +49,15 @@ func newGame() *game {
 	walls := builder{
 		g: g,
 		style: style(gameWall, 5, '#', ansi.SGRAttrBold|
-			ansi.RGB(0x10, 0x10, 0x10).BG()|
-			ansi.RGB(0x20, 0x20, 0x20).FG()),
+			ansi.RGB(0x20, 0x20, 0x20).BG()|
+			ansi.RGB(0x30, 0x30, 0x30).FG()),
 	}
 
 	floors := builder{
 		g: g,
 		style: style(gameFloor, 4, '·',
-			ansi.RGB(0x08, 0x08, 0x08).BG()|
-				ansi.RGB(0x10, 0x10, 0x10).FG()),
+			ansi.RGB(0x10, 0x10, 0x10).BG()|
+				ansi.RGB(0x18, 0x18, 0x18).FG()),
 	}
 
 	// create room walls
@@ -83,7 +86,7 @@ func newGame() *game {
 
 	// place characters
 	style(gamePlayer, 10, '@', ansi.SGRAttrBold|
-		ansi.RGB(0x40, 0x60, 0x80).FG(),
+		ansi.RGB(0x60, 0x80, 0xa0).FG(),
 	).createAt(g, image.Pt(10, 5))
 
 	return g
@@ -105,6 +108,18 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 				err = ctx.Suspend()
 			} // else NOTE don't bother suspending, e.g. if Ctrl-C was also present
 		}()
+	}
+
+	// TODO debug why empty
+	if r := g.drag.process(ctx); r != image.ZR {
+		r = r.Add(g.ctl.view.Min)
+		n := 0
+		for q := g.pos.Within(r); q.next(); n++ {
+			posd := q.handle()
+			rend := g.ren.Get(posd.Entity())
+			log.Printf("%v %v", posd, rend)
+		}
+		log.Printf("queried %v entities in %v", n, r)
 	}
 
 	g.ctl.Update(ctx)
@@ -193,4 +208,35 @@ func isCorner(p image.Point, r image.Rectangle) bool {
 		(p.X == r.Min.X && p.Y == r.Max.Y-1) ||
 		(p.X == r.Max.X-1 && p.Y == r.Min.Y) ||
 		(p.X == r.Max.X-1 && p.Y == r.Max.Y-1)
+}
+
+type dragState struct {
+	active bool
+	r      image.Rectangle
+}
+
+func (ds *dragState) process(ctx *platform.Context) (r image.Rectangle) {
+	for id, typ := range ctx.Input.Type {
+		if typ == platform.EventMouse {
+			m := ctx.Input.Mouse(id)
+			if b, isPress := m.State.IsPress(); isPress && b == 0 {
+				ds.r.Min = m.Point
+			} else if m.State.IsDrag() {
+				if ds.r.Min == image.ZP {
+					ds.r.Min = m.Point
+				}
+				ds.active = true
+			} else {
+				if ds.active && m.State.IsRelease() {
+					ds.r.Max = m.Point
+					r = ds.r
+				}
+				ds.active = false
+				ds.r = image.ZR
+				break
+			}
+			ctx.Input.Type[id] = platform.EventNone
+		}
+	}
+	return r
 }
