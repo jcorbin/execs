@@ -9,9 +9,8 @@ import (
 )
 
 type control struct {
-	view   image.Rectangle
-	getPos func(ecs.Entity) image.Point
-	setPos func(ecs.Entity, image.Point)
+	view image.Rectangle
+	pos  *position
 
 	ecs.ArrayIndex
 	player []ecs.Entity
@@ -39,9 +38,9 @@ func (ctl *control) Update(ctx *platform.Context) {
 		// TODO other options beyond apply-to-all
 		for _, player := range ctl.player {
 			// TODO proper movement system
-			pos := ctl.getPos(player)
-			pos = pos.Add(move)
-			ctl.setPos(player, pos)
+			posd := ctl.pos.Get(player)
+			pos := posd.Point().Add(move)
+			posd.SetPoint(pos) // TODO collision check
 		}
 	}
 
@@ -84,7 +83,7 @@ func (ctl *control) centerRegion() image.Rectangle {
 
 func (ctl *control) playerCentroid() (centroid image.Point) {
 	for _, player := range ctl.player {
-		centroid = centroid.Add(ctl.getPos(player))
+		centroid = centroid.Add(ctl.pos.Get(player).Point())
 	}
 	return centroid.Div(len(ctl.player))
 }

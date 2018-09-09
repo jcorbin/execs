@@ -13,30 +13,35 @@ import (
 
 type game struct {
 	ecs.Scope
-	render render
+	ren render
+	pos position
 
 	ctl control
 }
 
 const (
-	gameRender ecs.Type = 1 << iota
+	gamePosition ecs.Type = 1 << iota
+	gameRender
 	gameInput
 
 	// gamePosition // TODO separate from gameRender
 
-	gameWall      = gameRender
-	gameFloor     = gameRender
-	gameCharacter = gameRender
+	gameWall      = gamePosition | gameRender
+	gameFloor     = gamePosition | gameRender
+	gameCharacter = gamePosition | gameRender
 	gamePlayer    = gameCharacter | gameInput
 )
 
 func newGame() *game {
 	g := &game{}
 
-	g.Scope.Watch(gameRender, 0, &g.render)
+	g.Scope.Watch(gamePosition, 0, &g.pos)
+	g.Scope.Watch(gameRender, 0, &g.ren)
 	g.Scope.Watch(gamePlayer, 0, &g.ctl)
-	g.ctl.getPos = g.getEntPos
-	g.ctl.setPos = g.setEntPos
+
+	// TODO better dep coupling
+	g.ren.pos = &g.pos
+	g.ctl.pos = &g.pos
 
 	walls := builder{
 		g: g,
@@ -62,8 +67,7 @@ func newGame() *game {
 
 	var door ecs.Entity
 	for i, wall := range walls.ents {
-		pos := g.render.Get(wall).Point()
-		if !isCorner(pos, bounds) {
+		if pt := g.pos.Get(wall).Point(); !isCorner(pt, bounds) {
 			if door.Scope == nil || rand.Intn(i+1) <= 1 {
 				door = wall
 			}
@@ -83,14 +87,6 @@ func newGame() *game {
 	).createAt(g, image.Pt(10, 5))
 
 	return g
-}
-
-func (g *game) getEntPos(ent ecs.Entity) image.Point {
-	return g.render.Get(ent).Point()
-}
-
-func (g *game) setEntPos(ent ecs.Entity, pos image.Point) {
-	g.render.Get(ent).SetPoint(pos)
 }
 
 func (g *game) Update(ctx *platform.Context) (err error) {
@@ -114,7 +110,7 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 	g.ctl.Update(ctx)
 
 	ctx.Output.Clear()
-	g.render.drawRegionInto(g.ctl.view, &ctx.Output.Grid)
+	g.ren.drawRegionInto(g.ctl.view, &ctx.Output.Grid)
 
 	return err
 }
@@ -146,16 +142,16 @@ func (bld *builder) rectangle(box image.Rectangle) {
 func (bld *builder) fill(box image.Rectangle) {
 	for bld.moveTo(box.Min); bld.pos.Y < box.Max.Y; bld.pos.Y++ {
 		for bld.pos.X = box.Min.X; bld.pos.X < box.Max.X; bld.pos.X++ {
-			bld.ents = append(bld.ents,
-				bld.style.createAt(bld.g, bld.pos))
+			ent := bld.style.createAt(bld.g, bld.pos)
+			bld.ents = append(bld.ents, ent)
 		}
 	}
 }
 
 func (bld *builder) lineTo(d image.Point, n int) {
 	for i := 0; i < n; i++ {
-		bld.ents = append(bld.ents,
-			bld.style.createAt(bld.g, bld.pos))
+		ent := bld.style.createAt(bld.g, bld.pos)
+		bld.ents = append(bld.ents, ent)
 		bld.pos = bld.pos.Add(d)
 	}
 }
@@ -177,8 +173,9 @@ func (st buildStyle) String() string {
 
 func (st buildStyle) createAt(g *game, pos image.Point) ecs.Entity {
 	ent := g.Create(st.t)
-	rend := g.render.Get(ent)
-	rend.SetPoint(pos)
+	posd := g.pos.Get(ent)
+	rend := g.ren.Get(ent)
+	posd.SetPoint(pos)
 	rend.SetZ(st.z)
 	rend.SetCell(st.r, st.a)
 	return ent
@@ -186,7 +183,7 @@ func (st buildStyle) createAt(g *game, pos image.Point) ecs.Entity {
 
 func (st buildStyle) applyTo(g *game, ent ecs.Entity) {
 	ent.SetType(st.t)
-	rend := g.render.Get(ent)
+	rend := g.ren.Get(ent)
 	rend.SetZ(st.z)
 	rend.SetCell(st.r, st.a)
 }

@@ -12,8 +12,8 @@ import (
 )
 
 type render struct {
+	pos *position
 	ecs.ArrayIndex
-	pt   []image.Point // TODO shouldn't own the position data
 	z    []int
 	cell []cell
 	zord []int
@@ -27,7 +27,8 @@ type cell struct {
 func (ren *render) drawRegionInto(view image.Rectangle, grid *anansi.Grid) {
 	ren.rezort() // TODO invalidation based approach, try to defer to inter-frame bg work
 	for _, i := range ren.zord {
-		if pt := ren.pt[i]; pt.In(view) {
+		posd := ren.pos.Get(ecs.Entity{ren.Scope, ren.ID(i)})
+		if pt := posd.Point(); pt.In(view) {
 			pt = pt.Sub(view.Min)
 			if c := grid.Cell(pt); c.Rune() == 0 {
 				c.Set(ren.cell[i].r, ren.cell[i].a)
@@ -61,18 +62,15 @@ func (ren *render) zcmp(i, j int) bool {
 
 func (ren *render) Create(ent ecs.Entity, _ ecs.Type) {
 	i := ren.ArrayIndex.Create(ent)
-	for i >= len(ren.pt) {
-		if i < cap(ren.pt) {
-			ren.pt = ren.pt[:i+1]
+	for i >= len(ren.cell) {
+		if i < cap(ren.cell) {
 			ren.z = ren.z[:i+1]
 			ren.cell = ren.cell[:i+1]
 		} else {
-			ren.pt = append(ren.pt, image.ZP)
 			ren.z = append(ren.z, 0)
 			ren.cell = append(ren.cell, cell{})
 		}
 	}
-	ren.pt[i] = image.ZP
 	ren.z[i] = 0
 	ren.cell[i] = cell{}
 }
@@ -91,18 +89,6 @@ func (ren *render) Get(ent ecs.Entity) renderable {
 		return renderable{ren, i}
 	}
 	return renderable{}
-}
-
-func (rend renderable) Point() image.Point {
-	if rend.ren == nil {
-		return image.ZP
-	}
-	return rend.ren.pt[rend.i]
-}
-func (rend renderable) SetPoint(pt image.Point) {
-	if rend.ren != nil {
-		rend.ren.pt[rend.i] = pt
-	}
 }
 
 func (rend renderable) Z() int {
@@ -129,9 +115,14 @@ func (rend renderable) SetCell(r rune, a ansi.SGRAttr) {
 	}
 }
 
+func (rend renderable) Entity() ecs.Entity {
+	return ecs.Entity{rend.ren.Scope, rend.ren.ID(rend.i)}
+}
+
 func (rend renderable) String() string {
+	posd := rend.ren.pos.Get(rend.Entity())
 	return fmt.Sprintf("pt:%v z:%v rune:%q attr:%v",
-		rend.ren.pt[rend.i],
+		posd.Point(),
 		rend.ren.z[rend.i],
 		rend.ren.cell[rend.i].r,
 		rend.ren.cell[rend.i].a,
