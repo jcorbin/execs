@@ -19,9 +19,15 @@ func (ai *ArrayIndex) ID(i int) ID {
 	return 0
 }
 
-// Create index entries for the given entity, re-using from the free list if
+// Create minimally implements Watcher by inserting the entity.
+func (ai *ArrayIndex) Create(ent Entity, _ Type) { ai.Insert(ent) }
+
+// Destroy minimally implements Watcher by deleting the entity.
+func (ai *ArrayIndex) Destroy(ent Entity, _ Type) { ai.Delete(ent) }
+
+// Insert index entries for the given entity, re-using from the free list if
 // possible. Returns the array index that should be used for the new entity.
-func (ai *ArrayIndex) Create(ent Entity) (i int) {
+func (ai *ArrayIndex) Insert(ent Entity) (i int) {
 	if ai.Scope == nil {
 		ai.Scope = ent.Scope
 	} else if ent.Scope != ai.Scope {
@@ -42,9 +48,9 @@ func (ai *ArrayIndex) Create(ent Entity) (i int) {
 	return i
 }
 
-// Destroy index entries for the given entities, returning the old index and a
+// Delete index entries for the given entities, returning the old index and a
 // boolean that is true only if the entity had been defined.
-func (ai *ArrayIndex) Destroy(ent Entity) (i int, def bool) {
+func (ai *ArrayIndex) Delete(ent Entity) (i int, def bool) {
 	if ai.Scope != nil && ent.Scope != ai.Scope {
 		panic("multi-scope use of ArrayIndex")
 	}

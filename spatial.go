@@ -21,7 +21,7 @@ type positioned struct {
 }
 
 func (pos *position) Create(ent ecs.Entity, _ ecs.Type) {
-	i := pos.ArrayIndex.Create(ent)
+	i := pos.ArrayIndex.Insert(ent)
 	for i >= len(pos.pt) {
 		if i < cap(pos.pt) {
 			pos.pt = pos.pt[:i+1]
@@ -36,10 +36,6 @@ func (pos *position) Create(ent ecs.Entity, _ ecs.Type) {
 	pos.pt[i] = image.ZP
 	pos.qi.ix[i] = i
 	pos.qi.ks[i] = 0 // pos.qi.key(image.ZP)
-}
-
-func (pos *position) Destroy(ent ecs.Entity, _ ecs.Type) {
-	pos.ArrayIndex.Destroy(ent)
 }
 
 func (pos *position) Get(ent ecs.Entity) positioned {
@@ -96,6 +92,9 @@ func (posd positioned) Entity() ecs.Entity {
 }
 
 func (posd positioned) String() string {
+	if posd.pos == nil {
+		return fmt.Sprintf("no-position")
+	}
 	return fmt.Sprintf("pt: %v", posd.pos.pt[posd.i])
 }
 

@@ -15,8 +15,9 @@ import (
 
 type game struct {
 	ecs.Scope
-	ren render
-	pos position
+	ren   render
+	pos   position
+	spawn ecs.ArrayIndex
 
 	ctl  control
 	drag dragState
@@ -30,13 +31,15 @@ const (
 	gameRender
 	gameCollides
 	gameInput
+	gameSpawn
 
 	// gamePosition // TODO separate from gameRender
 
-	gameWall      = gamePosition | gameRender | gameCollides
-	gameFloor     = gamePosition | gameRender
-	gameCharacter = gamePosition | gameRender | gameCollides
-	gamePlayer    = gameCharacter | gameInput
+	gameWall       = gamePosition | gameRender | gameCollides
+	gameFloor      = gamePosition | gameRender
+	gameSpawnPoint = gamePosition | gameSpawn
+	gameCharacter  = gamePosition | gameRender | gameCollides
+	gamePlayer     = gameCharacter | gameInput
 )
 
 func newGame() *game {
@@ -45,31 +48,41 @@ func newGame() *game {
 	g.Scope.Watch(gamePosition, 0, &g.pos)
 	g.Scope.Watch(gameRender, 0, &g.ren)
 	g.Scope.Watch(gamePlayer, 0, &g.ctl)
+	g.Scope.Watch(gameSpawnPoint, 0, &g.spawn)
 
 	// TODO better dep coupling
 	g.ren.pos = &g.pos
 	g.ctl.pos = &g.pos
 
+	var (
+		wallStyle = style(gameWall, 5, '#', ansi.SGRAttrBold|
+			ansi.RGB(0x20, 0x20, 0x20).BG()|
+			ansi.RGB(0x30, 0x30, 0x30).FG())
+		floorStyle = style(gameFloor, 4, '·',
+			ansi.RGB(0x10, 0x10, 0x10).BG()|
+				ansi.RGB(0x18, 0x18, 0x18).FG())
+		playerStyle = style(gamePlayer, 10, '@', ansi.SGRAttrBold|
+			ansi.RGB(0x60, 0x80, 0xa0).FG(),
+		)
+	)
+
 	// TODO re-evaluate builder abstraction
 	gen := worldGen{
 		g:        g,
-		roomSize: image.Rect(3, 3, 20, 10),
+		roomSize: image.Rect(5, 3, 21, 13),
 		wall: builder{
-			g: g,
-			style: style(gameWall, 5, '#', ansi.SGRAttrBold|
-				ansi.RGB(0x20, 0x20, 0x20).BG()|
-				ansi.RGB(0x30, 0x30, 0x30).FG()),
+			g:     g,
+			style: wallStyle,
 		},
 		floor: builder{
-			g: g,
-			style: style(gameFloor, 4, '·',
-				ansi.RGB(0x10, 0x10, 0x10).BG()|
-					ansi.RGB(0x18, 0x18, 0x18).FG()),
+			g:     g,
+			style: floorStyle,
 		},
 	}
 
 	// create room walls
 	gen.room(image.Rectangle{image.ZP, gen.chooseRoomSize()})
+	g.pos.Get(g.Create(gameSpawnPoint)).SetPoint(gen.r.Min.Add(gen.r.Size().Div(2)))
 
 	// carve doorway
 	if door, pos := gen.chooseWall(); door != ecs.ZE {
@@ -99,9 +112,9 @@ func newGame() *game {
 	}
 
 	// place characters
-	style(gamePlayer, 10, '@', ansi.SGRAttrBold|
-		ansi.RGB(0x60, 0x80, 0xa0).FG(),
-	).createAt(g, image.Pt(10, 5))
+	spawnPos := g.pos.Get(g.spawn.Scope.Entity(g.spawn.ID(0)))
+	log.Printf("spawn player @%v", spawnPos)
+	playerStyle.createAt(g, spawnPos.Point())
 
 	return g
 }

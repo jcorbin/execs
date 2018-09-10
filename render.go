@@ -61,7 +61,7 @@ func (ren *render) zcmp(i, j int) bool {
 }
 
 func (ren *render) Create(ent ecs.Entity, _ ecs.Type) {
-	i := ren.ArrayIndex.Create(ent)
+	i := ren.ArrayIndex.Insert(ent)
 	for i >= len(ren.cell) {
 		if i < cap(ren.cell) {
 			ren.z = ren.z[:i+1]
@@ -73,10 +73,6 @@ func (ren *render) Create(ent ecs.Entity, _ ecs.Type) {
 	}
 	ren.z[i] = 0
 	ren.cell[i] = cell{}
-}
-
-func (ren *render) Destroy(ent ecs.Entity, _ ecs.Type) {
-	ren.ArrayIndex.Destroy(ent)
 }
 
 type renderable struct {
@@ -120,6 +116,9 @@ func (rend renderable) Entity() ecs.Entity {
 }
 
 func (rend renderable) String() string {
+	if rend.ren == nil {
+		return fmt.Sprintf("no-render")
+	}
 	a := rend.ren.cell[rend.i].a
 	fg, _ := a.FG()
 	bg, _ := a.BG()

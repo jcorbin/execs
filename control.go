@@ -17,7 +17,7 @@ type control struct {
 }
 
 func (ctl *control) Create(player ecs.Entity, _ ecs.Type) {
-	i := ctl.ArrayIndex.Create(player)
+	i := ctl.ArrayIndex.Insert(player)
 	for i >= len(ctl.player) {
 		if i < cap(ctl.player) {
 			ctl.player = ctl.player[:i+1]
@@ -26,10 +26,6 @@ func (ctl *control) Create(player ecs.Entity, _ ecs.Type) {
 		}
 	}
 	ctl.player[i] = player
-}
-
-func (ctl *control) Destroy(ent ecs.Entity, _ ecs.Type) {
-	ctl.ArrayIndex.Destroy(ent)
 }
 
 func (ctl *control) process(ctx *platform.Context) (interacted bool) {
