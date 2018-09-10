@@ -87,9 +87,7 @@ func newGame() *game {
 	// carve doorway
 	if door, pos := gen.chooseWall(); door != ecs.ZE {
 		// door
-		log.Printf("doorway @%v", pos)
-		gen.floor.applyTo(door)
-		// TODO actual door entity
+		gen.doorway(door, pos)
 
 		// hallway
 		dir := gen.wallNormal(pos)
@@ -102,13 +100,16 @@ func newGame() *game {
 		enter := pos.Add(dir)
 		gen.room(gen.placeRoom(enter, dir, sz))
 
-		// TODO
-		// log.Printf("doorway @%v", enter)
-		// gen.floor.applyTo(door)
-		// TODO actual door entity
+		// door
+		for i, wall := range gen.wall.ents {
+			if pt := g.pos.Get(wall).Point(); pt == enter {
+				gen.wall.ents = removeEntity(gen.wall.ents, i)
+				gen.doorway(wall, pt)
+				break
+			}
+		}
 
 		// TODO loop
-
 	}
 
 	// place characters
@@ -270,6 +271,12 @@ func (gen *worldGen) placeRoom(enter, dir, sz image.Point) (r image.Rectangle) {
 	return r
 }
 
+func (gen *worldGen) doorway(ent ecs.Entity, p image.Point) ecs.Entity {
+	log.Printf("doorway @%v", p)
+	gen.floor.applyTo(ent)
+	return ent // TODO actual door entity
+}
+
 func (gen *worldGen) chooseWall() (ent ecs.Entity, pos image.Point) {
 	if gen.r != image.ZR {
 		var j int
@@ -281,11 +288,16 @@ func (gen *worldGen) chooseWall() (ent ecs.Entity, pos image.Point) {
 			}
 		}
 		if ent != ecs.ZE {
-			copy(gen.wall.ents[j:], gen.wall.ents[j+1:])
-			gen.wall.ents = gen.wall.ents[:len(gen.wall.ents)-1]
+			gen.wall.ents = removeEntity(gen.wall.ents, j)
 		}
 	}
 	return ent, pos
+}
+
+func removeEntity(ents []ecs.Entity, i int) []ecs.Entity {
+	copy(ents[i:], ents[i+1:])
+	ents = ents[:len(ents)-1]
+	return ents
 }
 
 type builder struct {
@@ -312,9 +324,9 @@ func (bld *builder) rectangle(box image.Rectangle) {
 	bld.lineTo(image.Pt(-1, 0), box.Dx()-1)
 }
 
-func (bld *builder) point(p image.Point) {
+func (bld *builder) point(p image.Point) ecs.Entity {
 	bld.pos = p
-	bld.create()
+	return bld.create()
 }
 
 func (bld *builder) fill(r image.Rectangle) {
@@ -332,9 +344,10 @@ func (bld *builder) lineTo(p image.Point, n int) {
 	}
 }
 
-func (bld *builder) create() {
+func (bld *builder) create() ecs.Entity {
 	ent := bld.style.createAt(bld.g, bld.pos)
 	bld.ents = append(bld.ents, ent)
+	return ent
 }
 
 func (bld *builder) applyTo(ent ecs.Entity) {
