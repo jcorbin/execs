@@ -3,6 +3,7 @@ package main
 import (
 	"image"
 
+	"github.com/jcorbin/anansi/ansi"
 	"github.com/jcorbin/anansi/x/platform"
 
 	"github.com/jcorbin/execs/internal/ecs"
@@ -28,9 +29,10 @@ func (ctl *control) Create(player ecs.Entity, _ ecs.Type) {
 	ctl.player[i] = player
 }
 
-func (ctl *control) process(ctx *platform.Context) (interacted bool) {
-	// TODO support numpad and vi movement keys
-	if move := ctx.Input.TotalCursorMovement(); move != image.ZP {
+func (ctl *control) process(ctx *platform.Context) bool {
+	move, interacted := parseTotalMove(ctx.Input)
+
+	if move != image.ZP {
 		// TODO other options beyond apply-to-all
 		for _, player := range ctl.player {
 			// TODO proper movement system
@@ -39,7 +41,7 @@ func (ctl *control) process(ctx *platform.Context) (interacted bool) {
 				posd.SetPoint(pos)
 			}
 		}
-		interacted = true
+		interacted = true // NOTE should already have been true; TODO maybe differentiate moved=true
 	}
 
 	if centroid := ctl.playerCentroid(); ctl.view == image.ZR {
@@ -54,6 +56,58 @@ func (ctl *control) process(ctx *platform.Context) (interacted bool) {
 	}
 
 	return interacted
+}
+
+func parseTotalMove(in *platform.Events) (move image.Point, interacted bool) {
+	for id := range in.Type {
+		if dp, any := parseMove(in, id); any {
+			move = move.Add(dp)
+			interacted = true
+		}
+	}
+	return move, interacted
+}
+
+func parseMove(in *platform.Events, id int) (_ image.Point, interacted bool) {
+	defer func() {
+		if interacted {
+			in.Type[id] = platform.EventNone
+		}
+	}()
+
+	// TODO support numpad
+
+	switch in.Type[id] {
+	case platform.EventEscape:
+		esc := in.Escape(id)
+		if d, isMove := ansi.DecodeCursorCardinal(esc.ID, esc.Arg); isMove {
+			return d, true
+		}
+
+	case platform.EventRune:
+		switch in.Rune(id) {
+		case 'y':
+			return image.Pt(-1, -1), true
+		case 'u':
+			return image.Pt(1, -1), true
+		case 'n':
+			return image.Pt(1, 1), true
+		case 'b':
+			return image.Pt(-1, 1), true
+		case 'h':
+			return image.Pt(-1, 0), true
+		case 'j':
+			return image.Pt(0, 1), true
+		case 'k':
+			return image.Pt(0, -1), true
+		case 'l':
+			return image.Pt(1, 0), true
+		case '.':
+			return image.ZP, true
+		}
+	}
+
+	return image.ZP, false
 }
 
 // TODO proper movement / collision system
