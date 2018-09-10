@@ -50,43 +50,53 @@ func newGame() *game {
 	g.ren.pos = &g.pos
 	g.ctl.pos = &g.pos
 
-	walls := builder{
-		g: g,
-		style: style(gameWall, 5, '#', ansi.SGRAttrBold|
-			ansi.RGB(0x20, 0x20, 0x20).BG()|
-			ansi.RGB(0x30, 0x30, 0x30).FG()),
-	}
-
-	floors := builder{
-		g: g,
-		style: style(gameFloor, 4, '·',
-			ansi.RGB(0x10, 0x10, 0x10).BG()|
-				ansi.RGB(0x18, 0x18, 0x18).FG()),
+	// TODO re-evaluate builder abstraction
+	gen := worldGen{
+		g:        g,
+		roomSize: image.Rect(3, 3, 20, 10),
+		wall: builder{
+			g: g,
+			style: style(gameWall, 5, '#', ansi.SGRAttrBold|
+				ansi.RGB(0x20, 0x20, 0x20).BG()|
+				ansi.RGB(0x30, 0x30, 0x30).FG()),
+		},
+		floor: builder{
+			g: g,
+			style: style(gameFloor, 4, '·',
+				ansi.RGB(0x10, 0x10, 0x10).BG()|
+					ansi.RGB(0x18, 0x18, 0x18).FG()),
+		},
 	}
 
 	// create room walls
-	bounds := image.Rect(0, 0, 20, 10)
+	gen.room(image.Rectangle{image.ZP, gen.chooseRoomSize()})
 
-	walls.reset()
-	floors.reset()
-	walls.rectangle(bounds)
-	floors.fill(bounds.Inset(1))
+	// carve doorway
+	if door, pos := gen.chooseWall(); door != ecs.ZE {
+		// door
+		log.Printf("doorway @%v", pos)
+		gen.floor.applyTo(door)
+		// TODO actual door entity
 
-	var door ecs.Entity
-	for i, wall := range walls.ents {
-		if pt := g.pos.Get(wall).Point(); !isCorner(pt, bounds) {
-			if door.Scope == nil || rand.Intn(i+1) <= 1 {
-				door = wall
-			}
+		// hallway
+		dir := gen.wallNormal(pos)
+		if n := rand.Intn(5) + 1; n > 0 {
+			pos = gen.hallway(pos, dir, n)
 		}
+
+		// next room
+		sz := gen.chooseRoomSize()
+		enter := pos.Add(dir)
+		gen.room(gen.placeRoom(enter, dir, sz))
+
+		// TODO
+		// log.Printf("doorway @%v", enter)
+		// gen.floor.applyTo(door)
+		// TODO actual door entity
+
+		// TODO loop
+
 	}
-	if door.Scope != nil {
-		floors.style.applyTo(g, door)
-	}
-	// TODO actual door entity
-	// TODO hallway
-	// TODO room
-	// TODO loop
 
 	// place characters
 	style(gamePlayer, 10, '@', ansi.SGRAttrBold|
@@ -171,6 +181,107 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 	return err
 }
 
+type worldGen struct {
+	g *game
+
+	roomSize image.Rectangle
+	floor    builder
+	wall     builder
+
+	r image.Rectangle
+}
+
+func (gen *worldGen) room(r image.Rectangle) {
+	log.Printf("room @%v", r)
+	gen.r = r
+	gen.wall.reset()
+	gen.floor.reset()
+	gen.wall.rectangle(gen.r)
+	gen.floor.fill(gen.r.Inset(1))
+}
+
+func (gen *worldGen) hallway(p, dir image.Point, n int) image.Point {
+	log.Printf("hallway n:%v dir:%v", n, dir)
+	orth := orthNormal(dir)
+	gen.wall.reset()
+	gen.floor.reset()
+	for i := 0; i < n; i++ {
+		p = p.Add(dir)
+		// TODO deconflict?
+		gen.floor.point(p)
+		gen.wall.point(p.Add(orth))
+		gen.wall.point(p.Sub(orth))
+	}
+	return p
+}
+
+func (gen *worldGen) wallNormal(p image.Point) (dir image.Point) {
+	if p.X == gen.r.Min.X {
+		dir.X = -1
+	} else if p.Y == gen.r.Min.Y {
+		dir.Y = -1
+	} else if p.X == gen.r.Max.X-1 {
+		dir.X = 1
+	} else if p.Y == gen.r.Max.Y-1 {
+		dir.Y = 1
+	}
+	return dir
+}
+
+func (gen *worldGen) chooseRoomSize() image.Point {
+	return image.Pt(
+		gen.roomSize.Min.X+rand.Intn(gen.roomSize.Dx()),
+		gen.roomSize.Min.Y+rand.Intn(gen.roomSize.Dy()),
+	)
+}
+
+func (gen *worldGen) placeRoom(enter, dir, sz image.Point) (r image.Rectangle) {
+	// TODO better placement
+	r.Min = enter
+	if dir.Y == 0 {
+		if dir.X == 1 {
+			r.Max.X = r.Min.X + sz.X
+		} else { // dir.X == -1
+			r.Max.X = r.Min.X
+			r.Min.X -= sz.X
+		}
+		if d := rand.Intn(sz.Y) - 2; d > 0 {
+			r.Min.Y -= d
+		}
+		r.Max.Y = r.Min.Y + sz.Y
+	} else { // dir.X == 0
+		if dir.Y == 1 {
+			r.Max.Y = r.Min.Y + sz.Y
+		} else { // dir.Y == -1
+			r.Max.Y = r.Min.Y
+			r.Min.Y -= sz.Y
+		}
+		if d := rand.Intn(sz.X) - 2; d > 0 {
+			r.Min.X -= d
+		}
+		r.Max.X = r.Min.X + sz.X
+	}
+	return r
+}
+
+func (gen *worldGen) chooseWall() (ent ecs.Entity, pos image.Point) {
+	if gen.r != image.ZR {
+		var j int
+		for i, wall := range gen.wall.ents {
+			if pt := gen.g.pos.Get(wall).Point(); !isCorner(pt, gen.r) {
+				if ent == ecs.ZE || rand.Intn(i+1) <= 1 {
+					j, ent, pos = i, wall, pt
+				}
+			}
+		}
+		if ent != ecs.ZE {
+			copy(gen.wall.ents[j:], gen.wall.ents[j+1:])
+			gen.wall.ents = gen.wall.ents[:len(gen.wall.ents)-1]
+		}
+	}
+	return ent, pos
+}
+
 type builder struct {
 	g    *game
 	pos  image.Point
@@ -195,21 +306,34 @@ func (bld *builder) rectangle(box image.Rectangle) {
 	bld.lineTo(image.Pt(-1, 0), box.Dx()-1)
 }
 
-func (bld *builder) fill(box image.Rectangle) {
-	for bld.moveTo(box.Min); bld.pos.Y < box.Max.Y; bld.pos.Y++ {
-		for bld.pos.X = box.Min.X; bld.pos.X < box.Max.X; bld.pos.X++ {
-			ent := bld.style.createAt(bld.g, bld.pos)
-			bld.ents = append(bld.ents, ent)
+func (bld *builder) point(p image.Point) {
+	bld.pos = p
+	bld.create()
+}
+
+func (bld *builder) fill(r image.Rectangle) {
+	for bld.moveTo(r.Min); bld.pos.Y < r.Max.Y; bld.pos.Y++ {
+		for bld.pos.X = r.Min.X; bld.pos.X < r.Max.X; bld.pos.X++ {
+			bld.create()
 		}
 	}
 }
 
-func (bld *builder) lineTo(d image.Point, n int) {
+func (bld *builder) lineTo(p image.Point, n int) {
 	for i := 0; i < n; i++ {
-		ent := bld.style.createAt(bld.g, bld.pos)
-		bld.ents = append(bld.ents, ent)
-		bld.pos = bld.pos.Add(d)
+		bld.create()
+		bld.pos = bld.pos.Add(p)
 	}
+}
+
+func (bld *builder) create() {
+	ent := bld.style.createAt(bld.g, bld.pos)
+	bld.ents = append(bld.ents, ent)
+}
+
+func (bld *builder) applyTo(ent ecs.Entity) {
+	bld.style.applyTo(bld.g, ent)
+	bld.ents = append(bld.ents, ent)
 }
 
 type buildStyle struct {
@@ -310,4 +434,14 @@ func isCorner(p image.Point, r image.Rectangle) bool {
 		(p.X == r.Min.X && p.Y == r.Max.Y-1) ||
 		(p.X == r.Max.X-1 && p.Y == r.Min.Y) ||
 		(p.X == r.Max.X-1 && p.Y == r.Max.Y-1)
+}
+
+func orthNormal(p image.Point) image.Point {
+	if p.X == 0 {
+		return image.Pt(1, 0)
+	}
+	if p.Y == 0 {
+		return image.Pt(0, 1)
+	}
+	return image.ZP
 }
