@@ -79,8 +79,8 @@ type positionQuery struct {
 }
 
 func (pq *positionQuery) handle() positioned {
-	if pq.i < pq.imax {
-		return positioned{pq.pos, pq.i}
+	if pq.ii < pq.iimax {
+		return positioned{pq.pos, pq.ix[pq.ii]}
 	}
 	return positioned{}
 }
@@ -118,11 +118,13 @@ type quadIndex struct {
 }
 
 type quadQuery struct {
-	pt         []image.Point
-	r          image.Rectangle
-	kmin, kmax uint64
-	imin, imax int
-	i          int
+	r            image.Rectangle
+	kmin, kmax   uint64
+	iimin, iimax int
+	ii           int
+
+	pt []image.Point
+	ix []int
 }
 
 func (qi quadIndex) Len() int           { return len(qi.ix) }
@@ -136,56 +138,48 @@ func (qi quadIndex) update(i int, p image.Point) {
 	sort.Sort(qi)
 }
 
-func (qi quadIndex) search(k uint64) (int, bool) {
-	ii := sort.Search(len(qi.ix), func(ii int) bool {
+func (qi quadIndex) search(k uint64) int {
+	return sort.Search(len(qi.ix), func(ii int) bool {
 		i := qi.ix[ii]
 		return qi.ks[i] >= k
 	})
-	if ii < len(qi.ix) {
-		if i := qi.ix[ii]; qi.ks[i] == k {
-			return i, true
-		}
-	}
-	return 0, false
 }
 
 func (qi quadIndex) query(r image.Rectangle) (qq quadQuery) {
+	qq.ix = qi.ix
 	qq.kmin = qi.key(r.Min)
-	qq.kmax = qi.key(r.Max)
-
-	var ok bool
-	qq.imin, ok = qi.search(qq.kmin)
-	if qq.kmax == qq.kmin {
-		qq.imax = qq.imin
+	qq.iimin = qi.search(qq.kmin)
+	if r.Max == r.Min {
+		qq.kmax = qq.kmin
+		qq.iimax = qq.iimin
 	} else {
+		qq.kmax = qi.key(r.Max)
+		qq.iimax = qi.search(qq.kmax)
 		qq.r = r
-		qq.imax, _ = qi.search(qq.kmax)
 	}
-
-	for qq.imax < len(qi.ks) && qi.ks[qq.imax] == qq.kmax {
-		qq.imax++
-	}
-	if ok {
-		qq.i = qq.imin - 1
+	if qq.iimin < len(qi.ix) && qi.ks[qi.ix[qq.iimin]] == qq.kmin {
+		for qq.iimax < len(qi.ix) && qi.ks[qi.ix[qq.iimax]] == qq.kmax {
+			qq.iimax++
+		}
+		qq.ii = qq.iimin - 1
 	} else {
-		qq.i = len(qi.ix)
+		qq.ii = len(qi.ix)
 	}
-
 	return qq
 }
 
 func (qq quadQuery) String() string {
-	return fmt.Sprintf("quadQuery(%v := range i[%v %v] k[%v %v])",
-		qq.i, qq.imin, qq.imax, qq.kmin, qq.kmax)
+	return fmt.Sprintf("quadQuery(%v := range ii[%v %v] k[%016x %016x])",
+		qq.ii, qq.iimin, qq.iimax, qq.kmin, qq.kmax)
 }
 
 func (qq *quadQuery) next() bool {
-	for qq.i++; qq.i < qq.imax; qq.i++ {
+	for qq.ii++; qq.ii < qq.iimax; qq.ii++ {
 		// TODO skip directly by computing BIGMIN rather than scanning
 		if qq.r == image.ZR {
 			return true
 		}
-		if pt := qq.pt[qq.i]; pt.In(qq.r) {
+		if pt := qq.pt[qq.ix[qq.ii]]; pt.In(qq.r) {
 			return true
 		}
 	}
