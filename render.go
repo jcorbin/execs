@@ -120,9 +120,14 @@ func (rend renderable) Entity() ecs.Entity {
 }
 
 func (rend renderable) String() string {
-	return fmt.Sprintf("z:%v rune:%q attr:%v",
+	a := rend.ren.cell[rend.i].a
+	fg, _ := a.FG()
+	bg, _ := a.BG()
+	fl := a.SansBG().SansFG()
+	return fmt.Sprintf("z:%v rune:%q fg:%v bg:%v attr:%q",
 		rend.ren.z[rend.i],
 		rend.ren.cell[rend.i].r,
-		rend.ren.cell[rend.i].a,
+		fg, bg,
+		fl,
 	)
 }

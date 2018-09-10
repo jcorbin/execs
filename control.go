@@ -32,7 +32,7 @@ func (ctl *control) Destroy(ent ecs.Entity, _ ecs.Type) {
 	ctl.ArrayIndex.Destroy(ent)
 }
 
-func (ctl *control) Update(ctx *platform.Context) {
+func (ctl *control) process(ctx *platform.Context) (interacted bool) {
 	// TODO support numpad and vi movement keys
 	if move := ctx.Input.TotalCursorMovement(); move != image.ZP {
 		// TODO other options beyond apply-to-all
@@ -43,6 +43,7 @@ func (ctl *control) Update(ctx *platform.Context) {
 				posd.SetPoint(pos)
 			}
 		}
+		interacted = true
 	}
 
 	if centroid := ctl.playerCentroid(); ctl.view == image.ZR {
@@ -55,6 +56,8 @@ func (ctl *control) Update(ctx *platform.Context) {
 	} else if adj := ctl.viewAdjust(centroid); adj != image.ZP {
 		ctl.view = ctl.view.Add(adj)
 	}
+
+	return interacted
 }
 
 // TODO proper movement / collision system
