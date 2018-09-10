@@ -65,6 +65,10 @@ func (id ID) setgen(gen uint8) ID {
 // registered with a distinct type bit.
 type Type uint64
 
+func (typ Type) String() string {
+	return fmt.Sprintf("T+%016X", uint64(typ))
+}
+
 // Entity is a handle within a Scope's ID space.
 type Entity struct {
 	Scope *Scope

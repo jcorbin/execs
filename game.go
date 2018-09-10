@@ -32,14 +32,14 @@ const (
 	gameCollides
 	gameInput
 	gameSpawn
-
-	// gamePosition // TODO separate from gameRender
+	gameInteract
 
 	gameWall       = gamePosition | gameRender | gameCollides
 	gameFloor      = gamePosition | gameRender
 	gameSpawnPoint = gamePosition | gameSpawn
 	gameCharacter  = gamePosition | gameRender | gameCollides
 	gamePlayer     = gameCharacter | gameInput
+	gameDoor       = gamePosition | gameRender // FIXME | gameCollides | gameInteract
 )
 
 func newGame() *game {
@@ -56,11 +56,14 @@ func newGame() *game {
 
 	var (
 		wallStyle = style(gameWall, 5, '#', ansi.SGRAttrBold|
-			ansi.RGB(0x20, 0x20, 0x20).BG()|
+			ansi.RGB(0x18, 0x18, 0x18).BG()|
 			ansi.RGB(0x30, 0x30, 0x30).FG())
 		floorStyle = style(gameFloor, 4, '·',
 			ansi.RGB(0x10, 0x10, 0x10).BG()|
 				ansi.RGB(0x18, 0x18, 0x18).FG())
+		doorStyle = style(gameDoor, 6, '+',
+			ansi.RGB(0x18, 0x18, 0x18).BG()|
+				ansi.RGB(0x60, 0x40, 0x30).FG())
 		playerStyle = style(gamePlayer, 10, '@', ansi.SGRAttrBold|
 			ansi.RGB(0x60, 0x80, 0xa0).FG(),
 		)
@@ -78,39 +81,68 @@ func newGame() *game {
 			g:     g,
 			style: floorStyle,
 		},
+		door: doorStyle,
 	}
 
-	// create room walls
+	// create initial room
 	gen.room(image.Rectangle{image.ZP, gen.chooseRoomSize()})
 	g.pos.Get(g.Create(gameSpawnPoint)).SetPoint(gen.r.Min.Add(gen.r.Size().Div(2)))
 
-	// carve doorway
-	if door, pos := gen.chooseWall(); door != ecs.ZE {
-		// door
-		gen.doorway(door, pos)
+	// chain rooms
+	const exitDensity = 25
+	type qent struct {
+		r     image.Rectangle
+		exits []image.Point
+		walls []ecs.Entity
+	}
+	q := make([]qent, 0, 10)
 
-		// hallway
-		dir := gen.wallNormal(pos)
-		if n := rand.Intn(5) + 1; n > 0 {
-			pos = gen.hallway(pos, dir, n)
-		}
-
-		// next room
-		sz := gen.chooseRoomSize()
-		enter := pos.Add(dir)
-		gen.room(gen.placeRoom(enter, dir, sz))
-
-		// door
-		for i, wall := range gen.wall.ents {
-			if pt := g.pos.Get(wall).Point(); pt == enter {
-				gen.wall.ents = removeEntity(gen.wall.ents, i)
-				gen.doorway(wall, pt)
-				break
+	for len(q) < cap(q) {
+		walls := make([]ecs.Entity, 0, len(gen.wall.ents))
+		for _, wall := range gen.wall.ents {
+			if pt := gen.g.pos.Get(wall).Point(); !isCorner(pt, gen.r) {
+				walls = append(walls, wall)
 			}
 		}
-
-		// TODO loop
+		walls, exit := chooseEntity(walls)
+		if exit == ecs.ZE {
+			break
+		}
+		pos := gen.g.pos.Get(exit).Point()
+		if maxExits := gen.r.Dx() * gen.r.Dy() / exitDensity; maxExits > 1 {
+			q = append(q, qent{
+				r:     gen.r,
+				exits: append(make([]image.Point, 0, maxExits), pos),
+				walls: walls,
+			})
+		}
+		gen.exitRoom(exit, pos)
 	}
+
+	// TODO
+	// for i := 0; len(q) > 0 && i < 10; i++ {
+	// 	var exit ecs.Entity
+	// 	qe := q[0]
+	// 	gen.r = qe.r
+
+	// 	qe.walls, exit = chooseEntity(qe.walls)
+
+	// 	// TODO choose avoiding prior exits
+	// 	// for exit != ecs.ZE {
+	// 	// }
+
+	// 	if exit != ecs.ZE {
+	// 		posd := gen.g.pos.Get(exit)
+	// 		pos := posd.Point()
+	// 		qe.exits = append(qe.exits, pos)
+	// 		gen.exitRoom(exit, pos)
+	// 		// TODO keep chaining?
+	// 		if len(qe.exits) < cap(qe.exits) {
+	// 			continue
+	// 		}
+	// 	}
+	// 	q = q[1:]
+	// }
 
 	// place characters
 	spawnPos := g.pos.Get(g.spawn.Scope.Entity(g.spawn.ID(0)))
@@ -201,8 +233,34 @@ type worldGen struct {
 	roomSize image.Rectangle
 	floor    builder
 	wall     builder
+	door     buildStyle
 
 	r image.Rectangle
+}
+
+func (gen *worldGen) exitRoom(door ecs.Entity, pos image.Point) {
+	// door
+	gen.doorway(door, pos)
+
+	// hallway
+	dir := gen.wallNormal(pos)
+	if n := rand.Intn(5) + 1; n > 0 {
+		pos = gen.hallway(pos, dir, n)
+	}
+
+	// next room
+	sz := gen.chooseRoomSize()
+	enter := pos.Add(dir)
+	gen.room(gen.placeRoom(enter, dir, sz))
+
+	// door
+	for i, wall := range gen.wall.ents {
+		if pt := gen.g.pos.Get(wall).Point(); pt == enter {
+			gen.wall.ents = removeEntity(gen.wall.ents, i)
+			gen.doorway(wall, pt)
+			break
+		}
+	}
 }
 
 func (gen *worldGen) room(r image.Rectangle) {
@@ -256,11 +314,11 @@ func (gen *worldGen) placeRoom(enter, dir, sz image.Point) (r image.Rectangle) {
 		if dir.X == -1 {
 			r.Min.X -= sz.X - 1
 		}
-		if d := rand.Intn(sz.Y) - 2; d > 0 {
+		if d := rand.Intn(sz.Y - 2); d > 0 {
 			r.Min.Y -= d
 		}
 	} else { // dir.X == 0
-		if d := rand.Intn(sz.X) - 2; d > 0 {
+		if d := rand.Intn(sz.X - 2); d > 0 {
 			r.Min.X -= d
 		}
 		if dir.Y == -1 {
@@ -274,24 +332,22 @@ func (gen *worldGen) placeRoom(enter, dir, sz image.Point) (r image.Rectangle) {
 func (gen *worldGen) doorway(ent ecs.Entity, p image.Point) ecs.Entity {
 	log.Printf("doorway @%v", p)
 	gen.floor.applyTo(ent)
-	return ent // TODO actual door entity
+	door := gen.door.createAt(gen.g, p)
+	// TODO set door behavior
+	return door
 }
 
-func (gen *worldGen) chooseWall() (ent ecs.Entity, pos image.Point) {
-	if gen.r != image.ZR {
-		var j int
-		for i, wall := range gen.wall.ents {
-			if pt := gen.g.pos.Get(wall).Point(); !isCorner(pt, gen.r) {
-				if ent == ecs.ZE || rand.Intn(i+1) <= 1 {
-					j, ent, pos = i, wall, pt
-				}
-			}
-		}
-		if ent != ecs.ZE {
-			gen.wall.ents = removeEntity(gen.wall.ents, j)
+func chooseEntity(ents []ecs.Entity) (_ []ecs.Entity, ent ecs.Entity) {
+	var j int
+	for i := range ents {
+		if ent == ecs.ZE || rand.Intn(i+1) <= 1 {
+			j, ent = i, ents[i]
 		}
 	}
-	return ent, pos
+	if ent != ecs.ZE {
+		ents = removeEntity(ents, j)
+	}
+	return ents, ent
 }
 
 func removeEntity(ents []ecs.Entity, i int) []ecs.Entity {

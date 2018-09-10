@@ -62,17 +62,24 @@ func (ren *render) zcmp(i, j int) bool {
 
 func (ren *render) Create(ent ecs.Entity, _ ecs.Type) {
 	i := ren.ArrayIndex.Insert(ent)
+
 	for i >= len(ren.cell) {
 		if i < cap(ren.cell) {
-			ren.z = ren.z[:i+1]
 			ren.cell = ren.cell[:i+1]
 		} else {
-			ren.z = append(ren.z, 0)
 			ren.cell = append(ren.cell, cell{})
 		}
 	}
-	ren.z[i] = 0
 	ren.cell[i] = cell{}
+
+	for i >= len(ren.z) {
+		if i < cap(ren.z) {
+			ren.z = ren.z[:i+1]
+		} else {
+			ren.z = append(ren.z, 0)
+		}
+	}
+	ren.z[i] = 0
 }
 
 type renderable struct {

@@ -57,15 +57,28 @@ func (ctl *control) process(ctx *platform.Context) (interacted bool) {
 }
 
 // TODO proper movement / collision system
-func (pos *position) collides(ent ecs.Entity, p image.Point) ecs.Entity {
+func (pos *position) collides(ent ecs.Entity, p image.Point) (hit ecs.Entity) {
 	if ent.Type()&gameCollides != 0 {
-		if hitPosd := pos.At(p); !hitPosd.zero() {
-			if other := hitPosd.Entity(); other.Type()&gameCollides != 0 {
-				return other
+		n := 0
+		for q := pos.At(p); q.next(); {
+			hitPosd := q.handle()
+			other := hitPosd.Entity()
+			typ := other.Type()
+			// log.Printf("q:%v coll check %v type:%v", q, other, typ)
+			if typ&gameCollides != 0 {
+				// TODO better than last wins
+				hit = other
 			}
+			n++
 		}
+		// FIXME
+		// if hit != ecs.ZE {
+		// 	log.Printf("%v at %v hit:%v type:%v", n, p, hit, hit.Type())
+		// } else {
+		// 	log.Printf("%v at %v hit:none", n, p)
+		// }
 	}
-	return ecs.Entity{}
+	return hit
 }
 
 func (ctl *control) viewAdjust(pt image.Point) (adj image.Point) {
