@@ -252,28 +252,21 @@ func (gen *worldGen) placeRoom(enter, dir, sz image.Point) (r image.Rectangle) {
 	// TODO better placement
 	r.Min = enter
 	if dir.Y == 0 {
-		if dir.X == 1 {
-			r.Max.X = r.Min.X + sz.X
-		} else { // dir.X == -1
-			r.Max.X = r.Min.X
-			r.Min.X -= sz.X
+		if dir.X == -1 {
+			r.Min.X -= sz.X - 1
 		}
 		if d := rand.Intn(sz.Y) - 2; d > 0 {
 			r.Min.Y -= d
 		}
-		r.Max.Y = r.Min.Y + sz.Y
 	} else { // dir.X == 0
-		if dir.Y == 1 {
-			r.Max.Y = r.Min.Y + sz.Y
-		} else { // dir.Y == -1
-			r.Max.Y = r.Min.Y
-			r.Min.Y -= sz.Y
-		}
 		if d := rand.Intn(sz.X) - 2; d > 0 {
 			r.Min.X -= d
 		}
-		r.Max.X = r.Min.X + sz.X
+		if dir.Y == -1 {
+			r.Min.Y -= sz.Y - 1
+		}
 	}
+	r.Max = r.Min.Add(sz)
 	return r
 }
 
