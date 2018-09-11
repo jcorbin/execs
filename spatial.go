@@ -165,7 +165,7 @@ func (qi quadIndex) query(r image.Rectangle) (qq quadQuery) {
 		}
 		qq.ii = qq.iimin - 1
 	} else {
-		qq.ii = len(qi.ix)
+		qq.ii = len(qi.ix) + 42
 	}
 	return qq
 }

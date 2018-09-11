@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image"
 	"log"
-	"math/rand"
 
 	"github.com/jcorbin/anansi"
 	"github.com/jcorbin/anansi/ansi"
@@ -24,6 +23,8 @@ type game struct {
 
 	inspecting ecs.Entity
 	pop        popup
+
+	gen worldGen
 }
 
 const (
@@ -42,8 +43,29 @@ const (
 	gameDoor       = gamePosition | gameRender // FIXME | gameCollides | gameInteract
 )
 
+var worldConfig = worldGenConfig{
+	Wall: style(gameWall, 5, '#', ansi.SGRAttrBold|
+		ansi.RGB(0x18, 0x18, 0x18).BG()|
+		ansi.RGB(0x30, 0x30, 0x30).FG()),
+	Floor: style(gameFloor, 4, '·',
+		ansi.RGB(0x10, 0x10, 0x10).BG()|
+			ansi.RGB(0x18, 0x18, 0x18).FG()),
+	Door: style(gameDoor, 6, '+',
+		ansi.RGB(0x18, 0x18, 0x18).BG()|
+			ansi.RGB(0x60, 0x40, 0x30).FG()),
+	Player: style(gamePlayer, 10, '@', ansi.SGRAttrBold|
+		ansi.RGB(0x60, 0x80, 0xa0).FG(),
+	),
+	RoomSize:    image.Rect(5, 3, 21, 13),
+	ExitDensity: 25,
+	GenDepth:    10,
+	GenBreadth:  10,
+}
+
 func newGame() *game {
 	g := &game{}
+
+	g.gen.worldGenConfig = worldConfig
 
 	g.Scope.Watch(gamePosition, 0, &g.pos)
 	g.Scope.Watch(gameRender, 0, &g.ren)
@@ -53,101 +75,15 @@ func newGame() *game {
 	// TODO better dep coupling
 	g.ren.pos = &g.pos
 	g.ctl.pos = &g.pos
+	g.gen.g = g
 
-	var (
-		wallStyle = style(gameWall, 5, '#', ansi.SGRAttrBold|
-			ansi.RGB(0x18, 0x18, 0x18).BG()|
-			ansi.RGB(0x30, 0x30, 0x30).FG())
-		floorStyle = style(gameFloor, 4, '·',
-			ansi.RGB(0x10, 0x10, 0x10).BG()|
-				ansi.RGB(0x18, 0x18, 0x18).FG())
-		doorStyle = style(gameDoor, 6, '+',
-			ansi.RGB(0x18, 0x18, 0x18).BG()|
-				ansi.RGB(0x60, 0x40, 0x30).FG())
-		playerStyle = style(gamePlayer, 10, '@', ansi.SGRAttrBold|
-			ansi.RGB(0x60, 0x80, 0xa0).FG(),
-		)
-	)
-
-	// TODO re-evaluate builder abstraction
-	gen := worldGen{
-		g:        g,
-		roomSize: image.Rect(5, 3, 21, 13),
-		wall: builder{
-			g:     g,
-			style: wallStyle,
-		},
-		floor: builder{
-			g:     g,
-			style: floorStyle,
-		},
-		door: doorStyle,
-	}
-
-	// create initial room
-	gen.room(image.Rectangle{image.ZP, gen.chooseRoomSize()})
-	g.pos.Get(g.Create(gameSpawnPoint)).SetPoint(gen.r.Min.Add(gen.r.Size().Div(2)))
-
-	// chain rooms
-	const exitDensity = 25
-	type qent struct {
-		r     image.Rectangle
-		exits []image.Point
-		walls []ecs.Entity
-	}
-	q := make([]qent, 0, 10)
-
-	for len(q) < cap(q) {
-		walls := make([]ecs.Entity, 0, len(gen.wall.ents))
-		for _, wall := range gen.wall.ents {
-			if pt := gen.g.pos.Get(wall).Point(); !isCorner(pt, gen.r) {
-				walls = append(walls, wall)
-			}
-		}
-		walls, exit := chooseEntity(walls)
-		if exit == ecs.ZE {
-			break
-		}
-		pos := gen.g.pos.Get(exit).Point()
-		if maxExits := gen.r.Dx() * gen.r.Dy() / exitDensity; maxExits > 1 {
-			q = append(q, qent{
-				r:     gen.r,
-				exits: append(make([]image.Point, 0, maxExits), pos),
-				walls: walls,
-			})
-		}
-		gen.exitRoom(exit, pos)
-	}
-
-	// TODO
-	// for i := 0; len(q) > 0 && i < 10; i++ {
-	// 	var exit ecs.Entity
-	// 	qe := q[0]
-	// 	gen.r = qe.r
-
-	// 	qe.walls, exit = chooseEntity(qe.walls)
-
-	// 	// TODO choose avoiding prior exits
-	// 	// for exit != ecs.ZE {
-	// 	// }
-
-	// 	if exit != ecs.ZE {
-	// 		posd := gen.g.pos.Get(exit)
-	// 		pos := posd.Point()
-	// 		qe.exits = append(qe.exits, pos)
-	// 		gen.exitRoom(exit, pos)
-	// 		// TODO keep chaining?
-	// 		if len(qe.exits) < cap(qe.exits) {
-	// 			continue
-	// 		}
-	// 	}
-	// 	q = q[1:]
-	// }
+	// generate level
+	g.gen.genLevel()
 
 	// place characters
 	spawnPos := g.pos.Get(g.spawn.Scope.Entity(g.spawn.ID(0)))
 	log.Printf("spawn player @%v", spawnPos)
-	playerStyle.createAt(g, spawnPos.Point())
+	g.gen.Player.createAt(g, spawnPos.Point())
 
 	return g
 }
@@ -227,220 +163,10 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 	return err
 }
 
-type worldGen struct {
-	g *game
-
-	roomSize image.Rectangle
-	floor    builder
-	wall     builder
-	door     buildStyle
-
-	r image.Rectangle
-}
-
-func (gen *worldGen) exitRoom(door ecs.Entity, pos image.Point) {
-	// door
-	gen.doorway(door, pos)
-
-	// hallway
-	dir := gen.wallNormal(pos)
-	if n := rand.Intn(5) + 1; n > 0 {
-		pos = gen.hallway(pos, dir, n)
-	}
-
-	// next room
-	sz := gen.chooseRoomSize()
-	enter := pos.Add(dir)
-	gen.room(gen.placeRoom(enter, dir, sz))
-
-	// door
-	for i, wall := range gen.wall.ents {
-		if pt := gen.g.pos.Get(wall).Point(); pt == enter {
-			gen.wall.ents = removeEntity(gen.wall.ents, i)
-			gen.doorway(wall, pt)
-			break
-		}
-	}
-}
-
-func (gen *worldGen) room(r image.Rectangle) {
-	log.Printf("room @%v", r)
-	gen.r = r
-	gen.wall.reset()
-	gen.floor.reset()
-	gen.wall.rectangle(gen.r)
-	gen.floor.fill(gen.r.Inset(1))
-}
-
-func (gen *worldGen) hallway(p, dir image.Point, n int) image.Point {
-	log.Printf("hallway n:%v dir:%v", n, dir)
-	orth := orthNormal(dir)
-	gen.wall.reset()
-	gen.floor.reset()
-	for i := 0; i < n; i++ {
-		p = p.Add(dir)
-		// TODO deconflict?
-		gen.floor.point(p)
-		gen.wall.point(p.Add(orth))
-		gen.wall.point(p.Sub(orth))
-	}
-	return p
-}
-
-func (gen *worldGen) wallNormal(p image.Point) (dir image.Point) {
-	if p.X == gen.r.Min.X {
-		dir.X = -1
-	} else if p.Y == gen.r.Min.Y {
-		dir.Y = -1
-	} else if p.X == gen.r.Max.X-1 {
-		dir.X = 1
-	} else if p.Y == gen.r.Max.Y-1 {
-		dir.Y = 1
-	}
-	return dir
-}
-
-func (gen *worldGen) chooseRoomSize() image.Point {
-	return image.Pt(
-		gen.roomSize.Min.X+rand.Intn(gen.roomSize.Dx()),
-		gen.roomSize.Min.Y+rand.Intn(gen.roomSize.Dy()),
-	)
-}
-
-func (gen *worldGen) placeRoom(enter, dir, sz image.Point) (r image.Rectangle) {
-	// TODO better placement
-	r.Min = enter
-	if dir.Y == 0 {
-		if dir.X == -1 {
-			r.Min.X -= sz.X - 1
-		}
-		if d := rand.Intn(sz.Y - 2); d > 0 {
-			r.Min.Y -= d
-		}
-	} else { // dir.X == 0
-		if d := rand.Intn(sz.X - 2); d > 0 {
-			r.Min.X -= d
-		}
-		if dir.Y == -1 {
-			r.Min.Y -= sz.Y - 1
-		}
-	}
-	r.Max = r.Min.Add(sz)
-	return r
-}
-
-func (gen *worldGen) doorway(ent ecs.Entity, p image.Point) ecs.Entity {
-	log.Printf("doorway @%v", p)
-	gen.floor.applyTo(ent)
-	door := gen.door.createAt(gen.g, p)
-	// TODO set door behavior
-	return door
-}
-
-func chooseEntity(ents []ecs.Entity) (_ []ecs.Entity, ent ecs.Entity) {
-	var j int
-	for i := range ents {
-		if ent == ecs.ZE || rand.Intn(i+1) <= 1 {
-			j, ent = i, ents[i]
-		}
-	}
-	if ent != ecs.ZE {
-		ents = removeEntity(ents, j)
-	}
-	return ents, ent
-}
-
 func removeEntity(ents []ecs.Entity, i int) []ecs.Entity {
 	copy(ents[i:], ents[i+1:])
 	ents = ents[:len(ents)-1]
 	return ents
-}
-
-type builder struct {
-	g    *game
-	pos  image.Point
-	ents []ecs.Entity
-
-	style buildStyle
-}
-
-func (bld *builder) reset() {
-	bld.ents = bld.ents[:0]
-}
-
-func (bld *builder) moveTo(pos image.Point) {
-	bld.pos = pos
-}
-
-func (bld *builder) rectangle(box image.Rectangle) {
-	bld.moveTo(box.Min)
-	bld.lineTo(image.Pt(0, 1), box.Dy()-1)
-	bld.lineTo(image.Pt(1, 0), box.Dx()-1)
-	bld.lineTo(image.Pt(0, -1), box.Dy()-1)
-	bld.lineTo(image.Pt(-1, 0), box.Dx()-1)
-}
-
-func (bld *builder) point(p image.Point) ecs.Entity {
-	bld.pos = p
-	return bld.create()
-}
-
-func (bld *builder) fill(r image.Rectangle) {
-	for bld.moveTo(r.Min); bld.pos.Y < r.Max.Y; bld.pos.Y++ {
-		for bld.pos.X = r.Min.X; bld.pos.X < r.Max.X; bld.pos.X++ {
-			bld.create()
-		}
-	}
-}
-
-func (bld *builder) lineTo(p image.Point, n int) {
-	for i := 0; i < n; i++ {
-		bld.create()
-		bld.pos = bld.pos.Add(p)
-	}
-}
-
-func (bld *builder) create() ecs.Entity {
-	ent := bld.style.createAt(bld.g, bld.pos)
-	bld.ents = append(bld.ents, ent)
-	return ent
-}
-
-func (bld *builder) applyTo(ent ecs.Entity) {
-	bld.style.applyTo(bld.g, ent)
-	bld.ents = append(bld.ents, ent)
-}
-
-type buildStyle struct {
-	t ecs.Type
-	z int
-	r rune
-	a ansi.SGRAttr
-}
-
-func style(t ecs.Type, z int, r rune, a ansi.SGRAttr) buildStyle {
-	return buildStyle{t, z, r, a}
-}
-
-func (st buildStyle) String() string {
-	return fmt.Sprintf("t:%v z:%v rune:%q attr:%v", st.t, st.z, st.r, st.a)
-}
-
-func (st buildStyle) createAt(g *game, pos image.Point) ecs.Entity {
-	ent := g.Create(st.t)
-	posd := g.pos.Get(ent)
-	rend := g.ren.Get(ent)
-	posd.SetPoint(pos)
-	rend.SetZ(st.z)
-	rend.SetCell(st.r, st.a)
-	return ent
-}
-
-func (st buildStyle) applyTo(g *game, ent ecs.Entity) {
-	ent.SetType(st.t)
-	rend := g.ren.Get(ent)
-	rend.SetZ(st.z)
-	rend.SetCell(st.r, st.a)
 }
 
 type dragState struct {
@@ -502,21 +228,4 @@ func eachCell(g *anansi.Grid, r image.Rectangle, f func(anansi.Cell)) {
 			f(g.Cell(p))
 		}
 	}
-}
-
-func isCorner(p image.Point, r image.Rectangle) bool {
-	return (p.X == r.Min.X && p.Y == r.Min.Y) ||
-		(p.X == r.Min.X && p.Y == r.Max.Y-1) ||
-		(p.X == r.Max.X-1 && p.Y == r.Min.Y) ||
-		(p.X == r.Max.X-1 && p.Y == r.Max.Y-1)
-}
-
-func orthNormal(p image.Point) image.Point {
-	if p.X == 0 {
-		return image.Pt(1, 0)
-	}
-	if p.Y == 0 {
-		return image.Pt(0, 1)
-	}
-	return image.ZP
 }
