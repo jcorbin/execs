@@ -2,22 +2,31 @@ package main
 
 import (
 	"image"
+	"sort"
 	"testing"
 
-	"github.com/jcorbin/execs/internal/ecs"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/jcorbin/execs/internal/ecs"
 )
 
 func Test_position(t *testing.T) {
 	for _, tc := range []struct {
-		name  string
-		data  []image.Point
-		zeros []image.Point
+		name   string
+		data   []image.Point
+		zeros  []image.Point
+		within map[image.Rectangle][]int
 	}{
 		{
 			name:  "origin",
 			data:  []image.Point{image.Pt(0, 0)},
 			zeros: testPointRing(image.Rect(-1, -1, 1, 1)),
+			within: map[image.Rectangle][]int{
+				testRectAround(image.Pt(0, 0)):   {0}, // centered around only
+				testRectAround(image.Pt(-1, -1)): nil, // Max exclusive
+				testRectAround(image.Pt(1, 1)):   {0}, // Min inclusive
+				testRectAround(image.Pt(42, 42)): nil, // far point
+			},
 		},
 		{
 			name: "four-quadrant square",
@@ -26,6 +35,24 @@ func Test_position(t *testing.T) {
 				image.Pt(8, -8),
 				image.Pt(-8, -8),
 				image.Pt(-8, 8),
+			},
+
+			zeros: flattenPoints(
+				testRingAround(image.Pt(8, 8)),
+				testRingAround(image.Pt(8, -8)),
+				testRingAround(image.Pt(-8, -8)),
+				testRingAround(image.Pt(-8, 8)),
+			),
+
+			within: map[image.Rectangle][]int{
+				testRectAround(image.Pt(8, 8)):   {0},
+				testRectAround(image.Pt(8, -8)):  {1},
+				testRectAround(image.Pt(-8, -8)): {2},
+				testRectAround(image.Pt(-8, 8)):  {3},
+				image.Rect(7, -9, 9, 9):          {0, 1},
+				image.Rect(-9, -9, -7, 9):        {2, 3},
+				image.Rect(-9, 7, 9, 9):          {0, 3},
+				image.Rect(-9, -9, 9, -7):        {1, 2},
 			},
 		},
 
@@ -77,10 +104,23 @@ func Test_position(t *testing.T) {
 				}
 			}
 
-			// TODO Within queries
+			// Within queries
+			for r, is := range tc.within {
+				var res []int
+				for q := tp.pos.Within(r); q.next(); {
+					posd := q.handle()
+					ent := posd.Entity()
+					res = append(res, int(ent.ID)-1)
+				}
+				sort.Ints(res)
+				if !assert.Equal(t, is, res, "expected points within %v", r) {
+					t.Logf("q: %v", tp.pos.Within(r))
+					tp.dump()
+				}
+			}
+
 		})
 	}
-
 }
 
 type testPos struct {
@@ -118,6 +158,29 @@ func (tp *testPos) dump() {
 			tp.pos.qi.ks[i], tp.pos.qi.ix[i],
 		)
 	}
+}
+
+func flattenPoints(ptss ...[]image.Point) []image.Point {
+	n := 0
+	for _, pts := range ptss {
+		n += len(pts)
+	}
+	r := make([]image.Point, 0, n)
+	for _, pts := range ptss {
+		r = append(r, pts...)
+	}
+	return r
+}
+
+func testRectAround(pt image.Point) image.Rectangle {
+	return image.Rectangle{
+		pt.Sub(image.Pt(1, 1)),
+		pt.Add(image.Pt(1, 1)),
+	}
+}
+
+func testRingAround(pt image.Point) []image.Point {
+	return testPointRing(testRectAround(pt))
 }
 
 func testPointRing(r image.Rectangle) (pts []image.Point) {

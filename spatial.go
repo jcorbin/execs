@@ -125,6 +125,7 @@ type quadQuery struct {
 
 	pt []image.Point
 	ix []int
+	ks []uint64
 }
 
 func (qi quadIndex) Len() int           { return len(qi.ix) }
@@ -147,6 +148,7 @@ func (qi quadIndex) search(k uint64) int {
 
 func (qi quadIndex) query(r image.Rectangle) (qq quadQuery) {
 	qq.ix = qi.ix
+	qq.ks = qi.ks
 	qq.kmin = qi.key(r.Min)
 	qq.iimin = qi.search(qq.kmin)
 	if r.Max == r.Min {
@@ -157,7 +159,7 @@ func (qi quadIndex) query(r image.Rectangle) (qq quadQuery) {
 		qq.iimax = qi.search(qq.kmax)
 		qq.r = r
 	}
-	if qq.iimin < len(qi.ix) && qi.ks[qi.ix[qq.iimin]] == qq.kmin {
+	if qq.iimin < len(qi.ix) {
 		for qq.iimax < len(qi.ix) && qi.ks[qi.ix[qq.iimax]] == qq.kmax {
 			qq.iimax++
 		}
@@ -175,6 +177,10 @@ func (qq quadQuery) String() string {
 
 func (qq *quadQuery) next() bool {
 	for qq.ii++; qq.ii < qq.iimax; qq.ii++ {
+		if qq.ks[qq.ix[qq.ii]] > qq.kmax {
+			qq.ii = qq.iimax + 1
+			return false
+		}
 		// TODO skip directly by computing BIGMIN rather than scanning
 		if qq.r == image.ZR {
 			return true
