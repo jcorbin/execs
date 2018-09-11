@@ -77,7 +77,7 @@ func newGame() *game {
 	g.gen.g = g
 
 	// generate level
-	g.gen.genLevel()
+	g.gen.init()
 
 	// place characters
 	spawnPos := g.pos.Get(g.spawn.Scope.Entity(g.spawn.ID(0)))
@@ -88,6 +88,9 @@ func newGame() *game {
 }
 
 func (g *game) Update(ctx *platform.Context) (err error) {
+	g.gen.elaborate()
+	// for i := 0; i < 1 && g.gen.elaborate(); i++ { }
+
 	// Ctrl-C interrupts
 	if ctx.Input.HasTerminal('\x03') {
 		// ... AFTER any other available input has been processed

@@ -33,115 +33,77 @@ type worldGenConfig struct {
 	GenDepth    int
 }
 
-func (gen *worldGen) genLevel() {
-	const placeRoomAttempts = 10
-
+func (gen *worldGen) init() {
 	if cap(gen.q) != gen.GenDepth {
 		gen.q = make([]genRoom, gen.GenDepth)
 	}
 	gen.q = gen.q[:0]
-
-	// create rooms until depth queue is full
-	enter := image.ZP
 	room := genRoom{r: image.Rectangle{image.ZP, gen.chooseRoomSize()}}
-	for room.r != image.ZR {
-		log.Printf("chain %v", room.r)
-		room.create(gen, enter)
-		if room.d >= gen.GenDepth {
-			break
-		}
+	log.Printf("init %v", room.r)
+	room.create(gen, image.ZP)
+	gen.q = append(gen.q, room)
+}
 
-		// choose and build exit door
-		doorway := room.chooseDoorWall(gen)
-		if doorway == ecs.ZE {
-			break
-		}
-		exit := gen.g.pos.Get(doorway).Point()
-		pos, dir, clear := room.hallway(gen, exit)
-		if !clear {
-			break
-		}
-		gen.doorway(doorway, exit)
-		room.exits = append(room.exits, exit)
+func (gen *worldGen) elaborate() bool {
+	if len(gen.q) == 0 {
+		return false
+	}
+	room := gen.q[0]
+	gen.q = gen.q[:copy(gen.q, gen.q[1:])]
+	room.elaborate(gen)
+	return true
+}
 
-		// record exit
-		if len(room.exits) < cap(room.exits) {
-			// room was large enough to be interesting, put in the queue for
-			// further elaboration
-			gen.q = append(gen.q, room)
-		}
+func (room genRoom) elaborate(gen *worldGen) {
+	const placeAttempts = 10
 
-		// entrance clear?
-		if enter = pos.Add(dir); gen.at(enter) {
-			// otherwise, cap hallway. TODO maybe doorway back into a room.
-			gen.fillWallAt()
-			break
-		}
+	log.Printf("elaborate %v", room.r)
+	// choose and build exit door
+	doorway := room.chooseDoorWall(gen)
+	if doorway == ecs.ZE {
+		return
+	}
+	exit := gen.g.pos.Get(doorway).Point()
+	pos, dir, clear := room.hallway(gen, exit)
+	if !clear {
+		return
+	}
+	gen.doorway(doorway, exit)
+	room.exits = append(room.exits, exit)
 
-		// place next room
-		room = genRoom{}
-		for i := 0; ; i++ {
-			if i >= placeRoomAttempts {
-				room.r = image.ZR
-				break
-			}
-			room.r = gen.placeRoom(enter, dir, gen.chooseRoomSize())
-			if !gen.anyWithin(room.r) {
-				break
-			}
-		}
+	// record exit
+	if len(room.exits) < cap(room.exits) {
+		// room can be further elaborated
+		gen.q = append(gen.q, room)
 	}
 
-	for len(gen.q) > 0 {
-		room := gen.q[0]
-		gen.q = gen.q[:copy(gen.q, gen.q[1:])]
-		log.Printf("elaborate %v", room.r)
+	// entrance clear?
+	enter := pos.Add(dir)
+	if gen.at(enter) {
+		// otherwise, cap hallway. TODO maybe doorway back into a room.
+		gen.fillWallAt()
+		return
+	}
 
-		// choose and build exit door
-		doorway := room.chooseDoorWall(gen)
-		if doorway == ecs.ZE {
-			continue
+	// place and create next room
+	room = genRoom{d: room.d + 1}
+	for i := 0; ; i++ {
+		if i >= placeAttempts {
+			room.r = image.ZR
+			break
 		}
-		exit := gen.g.pos.Get(doorway).Point()
-		pos, dir, clear := room.hallway(gen, exit)
-		if !clear {
-			continue
+		room.r = gen.placeRoom(enter, dir, gen.chooseRoomSize())
+		if !gen.anyWithin(room.r) {
+			break
 		}
-		gen.doorway(doorway, exit)
-		room.exits = append(room.exits, exit)
+	}
+	room.create(gen, enter)
 
-		// record exit
-		if len(room.exits) < cap(room.exits) {
+	// further elaborate if large enough and not too deep
+	if room.d < gen.GenDepth && len(room.exits) < cap(room.exits) {
+		if len(gen.q) < cap(gen.q) {
 			gen.q = append(gen.q, room)
 		}
-
-		// entrance clear?
-		if enter = pos.Add(dir); gen.at(enter) {
-			// otherwise, cap hallway. TODO maybe doorway back into a room.
-			gen.fillWallAt()
-			continue
-		}
-
-		// place and create next room
-		room = genRoom{d: room.d + 1}
-		for i := 0; ; i++ {
-			if i >= placeRoomAttempts {
-				room.r = image.ZR
-				break
-			}
-			room.r = gen.placeRoom(enter, dir, gen.chooseRoomSize())
-			if !gen.anyWithin(room.r) {
-				break
-			}
-		}
-		room.create(gen, enter)
-		// further elaborate if large enough and not too deep
-		if room.d < gen.GenDepth && len(room.exits) < cap(room.exits) {
-			if len(gen.q) < cap(gen.q) {
-				gen.q = append(gen.q, room)
-			}
-		}
-
 	}
 }
 
