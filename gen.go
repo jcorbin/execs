@@ -31,10 +31,11 @@ type worldGenConfig struct {
 	RoomSize    image.Rectangle
 	ExitDensity int
 	GenDepth    int
-	GenBreadth  int
 }
 
 func (gen *worldGen) genLevel() {
+	const placeRoomAttempts = 10
+
 	if cap(gen.q) != gen.GenDepth {
 		gen.q = make([]genRoom, gen.GenDepth)
 	}
@@ -43,72 +44,165 @@ func (gen *worldGen) genLevel() {
 	// create rooms until depth queue is full
 	enter := image.ZP
 	room := genRoom{r: image.Rectangle{image.ZP, gen.chooseRoomSize()}}
-	for {
-		// create room
-		gen.room(&room)
-		if maxExits := room.r.Dx() * room.r.Dy() / gen.ExitDensity; maxExits > 1 {
-			room.exits = make([]image.Point, 0, maxExits)
+	for room.r != image.ZR {
+		log.Printf("chain %v", room.r)
+		room.create(gen, enter)
+		if room.d >= gen.GenDepth {
+			break
 		}
 
-		if enter == image.ZP {
-			// create spawn in non-enterable rooms
-			mid := room.r.Min.Add(room.r.Size().Div(2))
-			gen.g.pos.Get(gen.g.Create(gameSpawnPoint)).SetPoint(mid)
-		} else {
-			// entrance door
-			for i, wall := range room.walls {
-				if pt := gen.g.pos.Get(wall).Point(); pt == enter {
-					gen.ents = removeEntity(gen.ents, i)
-					gen.doorway(wall, enter)
-					room.exits = append(room.exits, enter)
-					break
-				}
-			}
-		}
-
-		// choose exit
+		// choose and build exit door
 		doorway := room.chooseDoorWall(gen)
 		if doorway == ecs.ZE {
 			break
 		}
 		exit := gen.g.pos.Get(doorway).Point()
-
-		// hallway
-		pos := exit
-		dir := room.wallNormal(pos)
-		if n := rand.Intn(5) + 1; n > 0 {
-			var clear bool
-			pos, clear = gen.hallway(pos, dir, n)
-			if !clear {
-				break
-			}
+		pos, dir, clear := room.hallway(gen, exit)
+		if !clear {
+			break
 		}
-
-		// exit door
 		gen.doorway(doorway, exit)
 		room.exits = append(room.exits, exit)
 
+		// record exit
 		if len(room.exits) < cap(room.exits) {
 			// room was large enough to be interesting, put in the queue for
 			// further elaboration
-			if gen.q = append(gen.q, room); len(gen.q) >= cap(gen.q) {
-				if gen.at(pos) {
-					gen.fillWallAt()
-				}
-				break
-			}
+			gen.q = append(gen.q, room)
 		}
 
-		// next room
+		// entrance clear?
 		if enter = pos.Add(dir); gen.at(enter) {
+			// otherwise, cap hallway. TODO maybe doorway back into a room.
 			gen.fillWallAt()
 			break
 		}
-		room = genRoom{r: gen.placeRoom(enter, dir, gen.chooseRoomSize())}
-		// TODO range check room
+
+		// place next room
+		room = genRoom{}
+		for i := 0; ; i++ {
+			if i >= placeRoomAttempts {
+				room.r = image.ZR
+				break
+			}
+			room.r = gen.placeRoom(enter, dir, gen.chooseRoomSize())
+			if !gen.anyWithin(room.r) {
+				break
+			}
+		}
 	}
 
-	// TODO elaborate on prior rooms
+	for len(gen.q) > 0 {
+		room := gen.q[0]
+		gen.q = gen.q[:copy(gen.q, gen.q[1:])]
+		log.Printf("elaborate %v", room.r)
+
+		// choose and build exit door
+		doorway := room.chooseDoorWall(gen)
+		if doorway == ecs.ZE {
+			continue
+		}
+		exit := gen.g.pos.Get(doorway).Point()
+		pos, dir, clear := room.hallway(gen, exit)
+		if !clear {
+			continue
+		}
+		gen.doorway(doorway, exit)
+		room.exits = append(room.exits, exit)
+
+		// record exit
+		if len(room.exits) < cap(room.exits) {
+			gen.q = append(gen.q, room)
+		}
+
+		// entrance clear?
+		if enter = pos.Add(dir); gen.at(enter) {
+			// otherwise, cap hallway. TODO maybe doorway back into a room.
+			gen.fillWallAt()
+			continue
+		}
+
+		// place and create next room
+		room = genRoom{d: room.d + 1}
+		for i := 0; ; i++ {
+			if i >= placeRoomAttempts {
+				room.r = image.ZR
+				break
+			}
+			room.r = gen.placeRoom(enter, dir, gen.chooseRoomSize())
+			if !gen.anyWithin(room.r) {
+				break
+			}
+		}
+		room.create(gen, enter)
+		// further elaborate if large enough and not too deep
+		if room.d < gen.GenDepth && len(room.exits) < cap(room.exits) {
+			if len(gen.q) < cap(gen.q) {
+				gen.q = append(gen.q, room)
+			}
+		}
+
+	}
+}
+
+func (room *genRoom) create(gen *worldGen, enter image.Point) {
+	// create room
+	gen.room(room)
+	if maxExits := room.r.Dx() * room.r.Dy() / gen.ExitDensity; maxExits > 1 {
+		room.exits = make([]image.Point, 0, maxExits)
+	}
+
+	if enter == image.ZP {
+		// create spawn in non-enterable rooms
+		mid := room.r.Min.Add(room.r.Size().Div(2))
+		gen.g.pos.Get(gen.g.Create(gameSpawnPoint)).SetPoint(mid)
+	} else {
+		// entrance door
+		for i, wall := range room.walls {
+			if pt := gen.g.pos.Get(wall).Point(); pt == enter {
+				gen.ents = removeEntity(gen.ents, i)
+				gen.doorway(wall, enter)
+				room.exits = append(room.exits, enter)
+				break
+			}
+		}
+	}
+}
+
+func (room *genRoom) hallway(gen *worldGen, pos image.Point) (_, dir image.Point, clear bool) {
+	dir = room.wallNormal(pos)
+	n := rand.Intn(5) + 1
+	orth := orthNormal(dir)
+	log.Printf("hallway dir:%v n:%v", dir, n)
+
+	gen.reset()
+	for i := 0; i < n; i++ {
+		pos = pos.Add(dir)
+		if gen.at(pos) {
+			return pos, dir, false
+		}
+
+		gen.style = gen.Floor
+		gen.point(pos)
+
+		// TODO deconflict?
+
+		gen.style = gen.Wall
+		gen.point(pos.Add(orth))
+		gen.point(pos.Sub(orth))
+	}
+	return pos, dir, true
+}
+
+func (gen *worldGen) anyWithin(r image.Rectangle) bool {
+	for q := gen.g.pos.Within(r); q.next(); {
+		ent := q.handle().Entity()
+		switch ent.Type() {
+		case gen.Floor.t, gen.Wall.t, gen.Door.t:
+			return true
+		}
+	}
+	return false
 }
 
 func (gen *worldGen) fillWallAt() {
@@ -129,28 +223,6 @@ func (gen *worldGen) room(room *genRoom) {
 	gen.style = gen.Wall
 	gen.rectangle(room.r)
 	room.collectWalls(gen)
-}
-
-func (gen *worldGen) hallway(p, dir image.Point, n int) (image.Point, bool) {
-	log.Printf("hallway n:%v dir:%v", n, dir)
-	orth := orthNormal(dir)
-	gen.reset()
-	for i := 0; i < n; i++ {
-		p = p.Add(dir)
-		if gen.at(p) {
-			return p, false
-		}
-
-		gen.style = gen.Floor
-		gen.point(p)
-
-		// TODO deconflict?
-
-		gen.style = gen.Wall
-		gen.point(p.Add(orth))
-		gen.point(p.Sub(orth))
-	}
-	return p, true
 }
 
 func (gen *worldGen) at(p image.Point) (any bool) {
@@ -209,6 +281,7 @@ func (gen *worldGen) doorway(ent ecs.Entity, p image.Point) ecs.Entity {
 }
 
 type genRoom struct {
+	d     int
 	r     image.Rectangle
 	exits []image.Point
 	walls []ecs.Entity

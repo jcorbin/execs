@@ -59,7 +59,6 @@ var worldConfig = worldGenConfig{
 	RoomSize:    image.Rect(5, 3, 21, 13),
 	ExitDensity: 25,
 	GenDepth:    10,
-	GenBreadth:  10,
 }
 
 func newGame() *game {
