@@ -30,14 +30,12 @@ type worldGenConfig struct {
 
 	RoomSize    image.Rectangle
 	ExitDensity int
-	GenDepth    int
 }
 
 func (gen *worldGen) init() {
-	if cap(gen.q) != gen.GenDepth {
-		gen.q = make([]genRoom, gen.GenDepth)
+	if len(gen.q) > 0 {
+		gen.q = gen.q[:0]
 	}
-	gen.q = gen.q[:0]
 	room := genRoom{r: image.Rectangle{image.ZP, gen.chooseRoomSize()}}
 	log.Printf("init %v", room.r)
 	room.create(gen, image.ZP)
@@ -86,7 +84,7 @@ func (room genRoom) elaborate(gen *worldGen) {
 	}
 
 	// place and create next room
-	room = genRoom{d: room.d + 1}
+	room = genRoom{depth: room.depth + 1}
 	for i := 0; ; i++ {
 		if i >= placeAttempts {
 			room.r = image.ZR
@@ -99,11 +97,9 @@ func (room genRoom) elaborate(gen *worldGen) {
 	}
 	room.create(gen, enter)
 
-	// further elaborate if large enough and not too deep
-	if room.d < gen.GenDepth && len(room.exits) < cap(room.exits) {
-		if len(gen.q) < cap(gen.q) {
-			gen.q = append(gen.q, room)
-		}
+	// further elaborate if large enough
+	if len(room.exits) < cap(room.exits) {
+		gen.q = append(gen.q, room)
 	}
 }
 
@@ -243,7 +239,7 @@ func (gen *worldGen) doorway(ent ecs.Entity, p image.Point) ecs.Entity {
 }
 
 type genRoom struct {
-	d     int
+	depth int
 	r     image.Rectangle
 	exits []image.Point
 	walls []ecs.Entity

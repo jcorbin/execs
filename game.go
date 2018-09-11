@@ -24,7 +24,8 @@ type game struct {
 	inspecting ecs.Entity
 	pop        popup
 
-	gen worldGen
+	genning bool
+	gen     worldGen
 }
 
 const (
@@ -58,7 +59,6 @@ var worldConfig = worldGenConfig{
 	),
 	RoomSize:    image.Rect(5, 3, 21, 13),
 	ExitDensity: 25,
-	GenDepth:    10,
 }
 
 func newGame() *game {
@@ -88,15 +88,27 @@ func newGame() *game {
 }
 
 func (g *game) Update(ctx *platform.Context) (err error) {
-	g.gen.elaborate()
-	// for i := 0; i < 1 && g.gen.elaborate(); i++ { }
+	if !g.genning && ctx.Input.CountRune('\x07') > 0 {
+		g.genning = true
+		log.Printf("starting generation len(q):%v", len(g.gen.q))
+	}
+	if g.genning {
+		if g.gen.elaborate() {
+			log.Printf("gen up to %v entities", g.Scope.Len())
+		} else {
+			g.genning = false
+			log.Printf("generation done")
+		}
+	}
 
 	// Ctrl-C interrupts
 	if ctx.Input.HasTerminal('\x03') {
-		// ... AFTER any other available input has been processed
-		err = errInt
-		// ... NOTE err != nil will prevent wasting any time flushing the final
-		//          lame-duck frame
+		if g.genning {
+			g.genning = false
+			log.Printf("stopping generation")
+		} else {
+			err = errInt
+		}
 	}
 
 	// Ctrl-Z suspends

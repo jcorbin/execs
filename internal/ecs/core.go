@@ -83,6 +83,11 @@ type Watcher interface {
 	Destroy(Entity, Type)
 }
 
+// Len returns the number of existent entities (with non-zero type).
+func (sc *Scope) Len() int {
+	return len(sc.typs) - len(sc.free)
+}
+
 // Watch changes in entity types, calling the given Watcher when all of the
 // given bits are destroyed / created. If all is 0 then the Watcher is called
 // when any type bits are destroyed/created.
