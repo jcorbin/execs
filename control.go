@@ -114,7 +114,7 @@ func parseMove(in *platform.Events, id int) (_ image.Point, interacted bool) {
 func (pos *position) collides(ent ecs.Entity, p image.Point) (hit ecs.Entity) {
 	if ent.Type()&gameCollides != 0 {
 		n := 0
-		for q := pos.At(p); q.next(); {
+		for q := pos.At(p); q.Next(); {
 			hitPosd := q.handle()
 			other := hitPosd.Entity()
 			typ := other.Type()

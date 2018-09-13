@@ -153,7 +153,7 @@ func (room *genRoom) hallway(gen *worldGen, pos image.Point) (_, dir image.Point
 }
 
 func (gen *worldGen) anyWithin(r image.Rectangle) bool {
-	for q := gen.g.pos.Within(r); q.next(); {
+	for q := gen.g.pos.Within(r); q.Next(); {
 		ent := q.handle().Entity()
 		switch ent.Type() {
 		case gen.Floor.t, gen.Wall.t, gen.Door.t:
@@ -184,7 +184,7 @@ func (gen *worldGen) room(room *genRoom) {
 }
 
 func (gen *worldGen) at(p image.Point) (any bool) {
-	for q := gen.g.pos.At(p); q.next(); {
+	for q := gen.g.pos.At(p); q.Next(); {
 		ent := q.handle().Entity()
 		switch ent.Type() {
 		case gen.Floor.t:

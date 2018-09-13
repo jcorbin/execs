@@ -1,4 +1,4 @@
-package main
+package quadindex_test
 
 import (
 	"image"
@@ -7,10 +7,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/jcorbin/execs/internal/ecs"
+	"github.com/jcorbin/execs/internal/quadindex"
 )
 
-func Test_position(t *testing.T) {
+func TestIndex(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		data   []image.Point
@@ -76,87 +76,61 @@ func Test_position(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			tp := newTestPos(t, tc.data)
+			var qi quadindex.Index
+			for i, pt := range tc.data {
+				qi.Update(i, pt)
+			}
 
 			// readback via At
 			for i, pt := range tc.data {
-				idt := ecs.Type(i + 1)
 				found := false
-				for q := tp.pos.At(pt); q.next(); {
-					posd := q.handle()
-					ent := posd.Entity()
-					if ent.Type() == idt {
+				for q := qi.At(pt); q.Next(); {
+					if q.I() == i {
 						found = true
 						break
 					}
 				}
 				if !assert.True(t, found, "expected to find [%v]%v", i, pt) {
-					t.Logf("q: %v", tp.pos.At(pt))
-					tp.dump()
+					t.Logf("q: %v", qi.At(pt))
+					dump(&qi, t.Logf)
 				}
+			}
+			if t.Failed() {
+				return
 			}
 
 			// At zeros
 			for _, pt := range tc.zeros {
-				if q := tp.pos.At(pt); !assert.False(t, q.next(), "expected zero at %v", pt) {
-					t.Logf("q: %v", tp.pos.At(pt))
-					tp.dump()
+				if q := qi.At(pt); !assert.False(t, q.Next(), "expected zero at %v", pt) {
+					t.Logf("q: %v", qi.At(pt))
+					dump(&qi, t.Logf)
 				}
+			}
+			if t.Failed() {
+				return
 			}
 
 			// Within queries
 			for r, is := range tc.within {
 				var res []int
-				for q := tp.pos.Within(r); q.next(); {
-					posd := q.handle()
-					ent := posd.Entity()
-					res = append(res, int(ent.ID)-1)
+				for q := qi.Within(r); q.Next(); {
+					res = append(res, q.I())
 				}
 				sort.Ints(res)
 				if !assert.Equal(t, is, res, "expected points within %v", r) {
-					t.Logf("q: %v", tp.pos.Within(r))
-					tp.dump()
+					t.Logf("q: %v", qi.Within(r))
+					dump(&qi, t.Logf)
 				}
 			}
-
 		})
 	}
 }
 
-type testPos struct {
-	*testing.T
-	ecs.Scope
-	pos position
-}
-
-func newTestPos(t *testing.T, data []image.Point) *testPos {
-	var tp testPos
-	tp.T = t
-	tp.Watch(0, 0, &tp.pos)
-	for i, pt := range data {
-		tp.create(ecs.Type(i+1), pt)
-	}
-	return &tp
-}
-
-func (tp *testPos) create(t ecs.Type, pt image.Point) ecs.Entity {
-	ent := tp.Create(t)
-	posd := tp.pos.Get(ent)
-	posd.SetPoint(pt)
-	return ent
-}
-
-func (tp *testPos) dump() {
-	tp.Logf("id,type,pi,X,Y,key,ix")
-	for i := 0; i < tp.pos.ArrayIndex.Len(); i++ {
-		id := tp.pos.ArrayIndex.ID(i)
-		ent := tp.Entity(id)
-		tp.Logf(
-			"%v,%v,%v,%v,%v,%016x,%v",
-			id, ent.Type(), i,
-			tp.pos.pt[i].X, tp.pos.pt[i].Y,
-			tp.pos.qi.ks[i], tp.pos.qi.ix[i],
-		)
+func dump(qi *quadindex.Index, logf func(string, ...interface{})) {
+	logf("i,ix,key")
+	for i := 0; i < qi.Len(); i++ {
+		ix, k := qi.Data(i)
+		logf("%v,%v,%v", i, ix, k)
 	}
 }
 

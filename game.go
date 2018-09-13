@@ -124,7 +124,7 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 	if r := g.drag.process(ctx); r != image.ZR {
 		r = r.Canon().Add(g.ctl.view.Min)
 		n := 0
-		for q := g.pos.Within(r); q.next(); n++ {
+		for q := g.pos.Within(r); q.Next(); n++ {
 			posd := q.handle()
 			rend := g.ren.Get(posd.Entity())
 			log.Printf("%v %v", posd, rend)
