@@ -11,6 +11,14 @@ type Index struct {
 	index
 }
 
+// Get the key value stored for the given index.
+func (qi *Index) Get(i int) Key {
+	if i >= len(qi.ks) {
+		return 0
+	}
+	return qi.ks[i]
+}
+
 // Update the point associated with the given index.
 func (qi *Index) Update(i int, p image.Point) {
 	if i >= qi.index.Len() {

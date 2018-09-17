@@ -10,7 +10,7 @@ import (
 	"github.com/jcorbin/execs/internal/quadindex"
 )
 
-func TestIndex(t *testing.T) {
+func TestIndex_queries(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		data   []image.Point
@@ -124,6 +124,58 @@ func TestIndex(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestIndex_mutation(t *testing.T) {
+	var qi quadindex.Index
+
+	// generate
+	func() {
+		id := 0
+		qi.Update(id, image.ZP)
+		id++
+		for _, pt := range testPointRing(image.Rect(-2, -2, 2, 2)) {
+			qi.Update(id, pt)
+			assert.Equal(t, pt, qi.Get(id).Pt(), "must be able to readback point[%v]", id)
+			id++
+		}
+	}()
+	if t.Failed() {
+		return
+	}
+
+	// move around
+	func() {
+		id := 0
+		for stepi, step := range []struct {
+			d image.Point
+			n int
+			e image.Point
+		}{
+			{image.Pt(0, 0), 0, image.Pt(0, 0)},
+			{image.Pt(1, 0), 5, image.Pt(1, 0)},
+			{image.Pt(0, 1), 5, image.Pt(1, 1)},
+			{image.Pt(-1, 0), 5, image.Pt(-1, 1)},
+			{image.Pt(0, -1), 5, image.Pt(-1, -1)},
+		} {
+			for i := 0; i < step.n; i++ {
+				pos := qi.Get(id).Pt()
+				pos = pos.Add(step.d)
+				any := false
+				for q := qi.At(pos); q.Next(); {
+					any = true
+					t.Logf("hit id:%v @%v", q.I(), pos)
+					break
+				}
+				if any {
+					break
+				}
+				qi.Update(id, pos)
+				t.Logf("move id:%v to %v", id, pos)
+			}
+			assert.Equal(t, step.e, qi.Get(id).Pt(), "expected position after step[%v]", stepi)
+		}
+	}()
 }
 
 func dump(qi *quadindex.Index, logf func(string, ...interface{})) {
