@@ -22,7 +22,7 @@ func (qi *Index) Get(i int) Key {
 // Update the point associated with the given index.
 func (qi *Index) Update(i int, p image.Point) {
 	if i >= qi.index.Len() {
-		qi.alloc(i)
+		qi.alloc(i, 0)
 	}
 	qi.ks[i] = MakeKey(p) | keySet
 	sort.Sort(&qi.index)
@@ -115,7 +115,7 @@ func (qi index) Len() int             { return len(qi.ix) }
 func (qi index) Less(ii, jj int) bool { return qi.ks[qi.ix[ii]] < qi.ks[qi.ix[jj]] }
 func (qi index) Swap(ii, jj int)      { qi.ix[ii], qi.ix[jj] = qi.ix[jj], qi.ix[ii] }
 
-func (qi *index) alloc(i int) {
+func (qi *index) alloc(i int, init Key) {
 	for i >= len(qi.ix) {
 		if i < cap(qi.ix) {
 			j := len(qi.ix)
@@ -134,13 +134,12 @@ func (qi *index) alloc(i int) {
 			j := len(qi.ks)
 			qi.ks = qi.ks[:i+1]
 			for ; j <= i; j++ {
-				qi.ks[j] = 0
+				qi.ks[j] = init
 			}
 		} else {
-			qi.ks = append(qi.ks, 0)
+			qi.ks = append(qi.ks, init)
 		}
 	}
-	qi.ks[i] = 0
 }
 
 func (qi *index) search(k Key) int {
