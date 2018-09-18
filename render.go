@@ -27,6 +27,7 @@ type cell struct {
 func (ren *render) drawRegionInto(view image.Rectangle, grid *anansi.Grid) {
 	ren.rezort() // TODO invalidation based approach, try to defer to inter-frame bg work
 	for _, i := range ren.zord {
+		// TODO joining position data like this is too expensive
 		posd := ren.pos.Get(ren.Scope.Entity(ren.ID(i)))
 		if pt := posd.Point(); pt.In(view) {
 			pt = pt.Sub(view.Min)
