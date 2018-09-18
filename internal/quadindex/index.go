@@ -9,6 +9,7 @@ import (
 // Index implements a linear quadtree.
 type Index struct {
 	index
+	invalid int
 }
 
 // Get the key value stored for the given index.
@@ -21,17 +22,28 @@ func (qi *Index) Get(i int) Key {
 
 // Update the point associated with the given index.
 func (qi *Index) Update(i int, p image.Point) {
-	if i >= qi.index.Len() {
-		qi.alloc(i, 0)
+	if i < qi.index.Len() {
+		prior := qi.ks[i]
+		qi.ks[i] = MakeKey(p) | keySet | keyInval
+		if !prior.invalid() {
+			qi.invalid++
+		}
+		return
 	}
-	qi.ks[i] = MakeKey(p) | keySet
-	sort.Sort(&qi.index)
+
+	n := qi.index.Len()
+	qi.index.alloc(i, keyInval)
+	qi.ks[i] = MakeKey(p) | keySet | keyInval
+	qi.invalid += qi.index.Len() - n
 }
 
 // Delete the point associated with the given index.
 func (qi *Index) Delete(i int, p image.Point) {
-	qi.ks[i] = 0
-	sort.Sort(&qi.index)
+	prior := qi.ks[i]
+	qi.ks[i] = keyInval
+	if !prior.invalid() {
+		qi.invalid++
+	}
 }
 
 // At returns a query cursor for all stored indices at the given point.
@@ -65,6 +77,53 @@ func (qi *Index) Within(r image.Rectangle) (qq Cursor) {
 		qq.ii = len(qi.ix)
 	}
 	return qq
+}
+
+func (qi *Index) reindex() {
+	// collect invalid
+	eoh := 0
+	for jj := 0; jj < len(qi.ix); jj++ {
+		i := qi.ix[jj]
+		if k := qi.ks[i]; k&keyInval != 0 {
+			qi.ks[i] &= ^keyInval
+			if kk := qi.narrow(0, eoh, qi.ks[qi.ix[jj]]); kk != jj {
+				copy(qi.ix[kk+1:jj+1], qi.ix[kk:])
+				qi.ix[kk] = i
+			}
+			eoh++
+		}
+	}
+
+	// merge
+	for iiHead, iiBody := 0, eoh; iiHead < iiBody && iiBody < len(qi.ix); iiHead++ {
+		if !qi.Less(iiHead, iiBody) {
+			iiBody++
+			rotateRight(qi.ix[iiHead:iiBody])
+		}
+	}
+
+	qi.invalid = 0
+}
+
+func (qi *Index) resort() {
+	for i, k := range qi.ks {
+		if k&keyInval != 0 {
+			qi.ks[i] = k & ^keyInval
+		}
+	}
+	sort.Sort(qi.index)
+	qi.invalid = 0
+}
+
+func (qi *Index) search(k Key) int {
+	if qi.invalid > 0 {
+		if qi.invalid >= len(qi.ix)/2 {
+			qi.resort()
+		} else {
+			qi.reindex()
+		}
+	}
+	return qi.index.search(k)
 }
 
 // Cursor is a point or region query on an Index.
@@ -104,6 +163,12 @@ func (qq *Cursor) Next() bool {
 		}
 	}
 	return false
+}
+
+func rotateRight(ns []int) {
+	tmp := ns[len(ns)-1]
+	copy(ns[1:], ns)
+	ns[0] = tmp
 }
 
 type index struct {

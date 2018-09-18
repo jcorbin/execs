@@ -10,6 +10,7 @@ type Key uint64
 
 const (
 	keySet Key = 1 << (64 - iota - 1)
+	keyInval
 
 	keyBits     = 64 - iota
 	keyCompBits = keyBits / 2
@@ -22,7 +23,14 @@ func (k Key) String() string {
 	if !k.Set() {
 		return "Key(unset)"
 	}
+	if k.invalid() {
+		return fmt.Sprintf("Key%v*", k.Pt())
+	}
 	return fmt.Sprintf("Key%v", k.Pt())
+}
+
+func (k Key) invalid() bool {
+	return k&keyInval != 0
 }
 
 // Set returns true only if the key value is marked as "set" or defined; the
