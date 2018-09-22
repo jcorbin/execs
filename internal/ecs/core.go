@@ -264,3 +264,18 @@ func (ent Entity) dispatchDestroy(newType, destroyedType Type) {
 
 // ZE is the zero entity
 var ZE Entity
+
+// Entities is a collection of entity ids from the same scope.
+type Entities struct {
+	Scope *Scope
+	IDs   []ID
+}
+
+// Entity returns an entity handle for the i-th ID.
+func (es Entities) Entity(i int) Entity { return Entity{es.Scope, es.IDs[i]} }
+
+// Ent is a convenience constructor for an entity handle.
+func Ent(s *Scope, id ID) Entity { return Entity{s, id} }
+
+// Ents is a convenience constructor for a collection of entity handles.
+func Ents(s *Scope, ids []ID) Entities { return Entities{s, ids} }
