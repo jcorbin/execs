@@ -88,27 +88,9 @@ func newGame() *game {
 }
 
 func (g *game) Update(ctx *platform.Context) (err error) {
-	if !g.genning && ctx.Input.CountRune('\x07') > 0 {
-		g.genning = true
-		log.Printf("starting generation len(q):%v", len(g.gen.q))
-	}
-	if g.genning {
-		if g.gen.elaborate() {
-			log.Printf("gen up to %v entities", g.Scope.Len())
-		} else {
-			g.genning = false
-			log.Printf("generation done")
-		}
-	}
-
 	// Ctrl-C interrupts
 	if ctx.Input.HasTerminal('\x03') {
-		if g.genning {
-			g.genning = false
-			log.Printf("stopping generation")
-		} else {
-			err = errInt
-		}
+		err = errInt
 	}
 
 	// Ctrl-Z suspends
@@ -120,7 +102,26 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 		}()
 	}
 
-	// TODO debug why empty
+	// start/stop generation
+	if !g.genning && ctx.Input.CountRune('\x07') > 0 {
+		g.genning = true
+		log.Printf("starting generation len(q):%v", len(g.gen.q))
+	} else if g.genning && err == errInt {
+		err = nil
+		g.genning = false
+		log.Printf("stopping generation")
+	}
+
+	// run generation
+	if g.genning {
+		if !g.gen.elaborate() {
+			g.genning = false
+			log.Printf("generation done")
+		} else {
+			log.Printf("gen up to %v entities", g.Scope.Len())
+		}
+	}
+
 	if r := g.drag.process(ctx); r != image.ZR {
 		r = r.Canon().Add(g.ctl.view.Min)
 		n := 0
