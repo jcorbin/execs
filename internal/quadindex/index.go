@@ -159,6 +159,7 @@ func (qq *Cursor) Next() bool {
 		if qq.r == image.ZR {
 			return true
 		} else if qq.ks[qq.ix[qq.ii]].Pt().In(qq.r) {
+			// TODO implement BIGMIN; turns out that Key.Pt above is the long pole
 			return true
 		}
 	}

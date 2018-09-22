@@ -38,6 +38,13 @@ func (pos *position) Get(ent ecs.Entity) positioned {
 	return positioned{}
 }
 
+func (pos *position) GetID(id ecs.ID) positioned {
+	if i, def := pos.ArrayIndex.GetID(id); def {
+		return positioned{pos, i}
+	}
+	return positioned{}
+}
+
 func (pos *position) At(p image.Point) (pq positionQuery) {
 	pq.pos = pos
 	pq.Cursor = pos.qi.At(p)
@@ -51,8 +58,8 @@ func (pos *position) Within(r image.Rectangle) (pq positionQuery) {
 }
 
 type positionQuery struct {
-	quadindex.Cursor
 	pos *position
+	quadindex.Cursor
 }
 
 func (pq *positionQuery) handle() positioned {
@@ -78,9 +85,8 @@ func (posd positioned) SetPoint(p image.Point) {
 	}
 }
 
-func (posd positioned) Entity() ecs.Entity {
-	return posd.pos.Scope.Entity(posd.pos.ID(posd.i))
-}
+func (posd positioned) Entity() ecs.Entity { return posd.pos.Entity(posd.i) }
+func (posd positioned) ID() ecs.ID         { return posd.pos.ID(posd.i) }
 
 func (posd positioned) String() string {
 	if posd.pos == nil {

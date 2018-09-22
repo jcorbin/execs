@@ -67,7 +67,7 @@ func newGame() *game {
 	g.gen.worldGenConfig = worldConfig
 
 	g.Scope.Watch(gamePosition, 0, &g.pos)
-	g.Scope.Watch(gameRender, 0, &g.ren)
+	g.Scope.Watch(gamePosition|gameRender, 0, &g.ren)
 	g.Scope.Watch(gamePlayer, 0, &g.ctl)
 	g.Scope.Watch(gameSpawnPoint, 0, &g.spawn)
 

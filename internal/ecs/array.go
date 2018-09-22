@@ -11,6 +11,14 @@ type ArrayIndex struct {
 // Len returns how many id slots have been allocated.
 func (ai *ArrayIndex) Len() int { return len(ai.id) }
 
+// Entity returns the entity stored for the given array index.
+func (ai *ArrayIndex) Entity(i int) Entity {
+	if i < len(ai.id) {
+		return ai.Scope.Entity(ai.id[i])
+	}
+	return ZE
+}
+
 // ID returns the entity ID stored for the given array index.
 func (ai *ArrayIndex) ID(i int) ID {
 	if i < len(ai.id) {
@@ -69,7 +77,13 @@ func (ai *ArrayIndex) Get(ent Entity) (i int, def bool) {
 	if ai.Scope != nil && ent.Scope != ai.Scope {
 		return 0, false
 	}
-	i, def = ai.ix[ent.ID]
+	return ai.GetID(ent.ID)
+}
+
+// GetID returns the index defined for the given entity ID, assuming it's in
+// the correct scope.
+func (ai *ArrayIndex) GetID(id ID) (i int, def bool) {
+	i, def = ai.ix[id]
 	return i, def
 }
 
