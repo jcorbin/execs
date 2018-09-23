@@ -1,12 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"image"
 	"log"
 	"math/rand"
-
-	"github.com/jcorbin/anansi/ansi"
 
 	"github.com/jcorbin/execs/internal/ecs"
 )
@@ -23,10 +20,10 @@ type worldGen struct {
 }
 
 type worldGenConfig struct {
-	Floor  buildStyle
-	Wall   buildStyle
-	Door   buildStyle
-	Player buildStyle
+	Floor  renderStyle
+	Wall   renderStyle
+	Door   renderStyle
+	Player renderStyle
 
 	RoomSize    image.Rectangle
 	ExitDensity int
@@ -169,7 +166,7 @@ func (gen *worldGen) fillWallAt() {
 		gen.atDoor.SetType(0)
 	}
 	if gen.atFloor != ecs.ZE && gen.atWall == ecs.ZE {
-		gen.Wall.applyTo(gen.g, gen.atFloor)
+		gen.g.ren.Get(gen.atFloor).apply(gen.Wall)
 		gen.atFloor, gen.atWall = ecs.ZE, gen.atFloor
 	}
 }
@@ -232,11 +229,12 @@ func (gen *worldGen) placeRoom(enter, dir, sz image.Point) (r image.Rectangle) {
 }
 
 func (gen *worldGen) doorway(ent ecs.Entity, p image.Point) ecs.Entity {
+	floor := gen.g.ren.Get(ent)
 	log.Printf("doorway @%v", p)
-	gen.Floor.applyTo(gen.g, ent)
-	door := gen.Door.createAt(gen.g, p)
+	floor.apply(gen.Floor)
+	door := gen.g.ren.create(p, gen.Door)
 	// TODO set door behavior
-	return door
+	return door.Entity()
 }
 
 type genRoom struct {
@@ -275,7 +273,8 @@ func (room *genRoom) collectWalls(gen *worldGen) {
 func (room *genRoom) chooseDoorWall(gen *worldGen) (ent ecs.Entity) {
 	var j int
 	for i := range room.walls {
-		if posd := gen.g.pos.Get(room.walls[i]); !posd.zero() && room.sharesWallWithExit(posd.Point()) {
+		wall := gen.g.pos.Get(room.walls[i])
+		if !wall.zero() && room.sharesWallWithExit(wall.Point()) {
 			continue
 		}
 		if ent == ecs.ZE || rand.Intn(i+1) <= 1 {
@@ -303,7 +302,7 @@ type builder struct {
 	pos  image.Point
 	ents []ecs.Entity
 
-	style buildStyle
+	style renderStyle
 }
 
 func (bld *builder) reset() {
@@ -343,46 +342,15 @@ func (bld *builder) lineTo(p image.Point, n int) {
 }
 
 func (bld *builder) create() ecs.Entity {
-	ent := bld.style.createAt(bld.g, bld.pos)
+	ent := bld.g.ren.create(bld.pos, bld.style).Entity()
 	bld.ents = append(bld.ents, ent)
 	return ent
 }
 
 func (bld *builder) applyTo(ent ecs.Entity) {
-	bld.style.applyTo(bld.g, ent)
+	rend := bld.g.ren.Get(ent)
+	rend.apply(bld.style)
 	bld.ents = append(bld.ents, ent)
-}
-
-type buildStyle struct {
-	t ecs.Type
-	z int
-	r rune
-	a ansi.SGRAttr
-}
-
-func style(t ecs.Type, z int, r rune, a ansi.SGRAttr) buildStyle {
-	return buildStyle{t, z, r, a}
-}
-
-func (st buildStyle) String() string {
-	return fmt.Sprintf("t:%v z:%v rune:%q attr:%v", st.t, st.z, st.r, st.a)
-}
-
-func (st buildStyle) createAt(g *game, pos image.Point) ecs.Entity {
-	ent := g.Create(st.t)
-	posd := g.pos.Get(ent)
-	rend := g.ren.Get(ent)
-	posd.SetPoint(pos)
-	rend.SetZ(st.z)
-	rend.SetCell(st.r, st.a)
-	return ent
-}
-
-func (st buildStyle) applyTo(g *game, ent ecs.Entity) {
-	ent.SetType(st.t)
-	rend := g.ren.Get(ent)
-	rend.SetZ(st.z)
-	rend.SetCell(st.r, st.a)
 }
 
 func isCorner(p image.Point, r image.Rectangle) bool {

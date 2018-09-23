@@ -96,6 +96,15 @@ func (ren *render) EntityCreated(ent ecs.Entity, _ ecs.Type) {
 	ren.zord.z[i] = 0
 }
 
+func (ren *render) create(pos image.Point, st renderStyle) renderable {
+	ent := ren.Scope.Create(st.t)
+	rend := ren.Get(ent)
+	rend.SetPoint(pos)
+	rend.SetZ(st.z)
+	rend.SetCell(st.r, st.a)
+	return rend
+}
+
 type renderable struct {
 	positioned
 	ren *render
@@ -151,4 +160,25 @@ func (rend renderable) String() string {
 		fg, bg,
 		fl,
 	)
+}
+
+func (rend renderable) apply(st renderStyle) {
+	rend.Entity().SetType(st.t)
+	rend.SetZ(st.z)
+	rend.SetCell(st.r, st.a)
+}
+
+type renderStyle struct {
+	t ecs.Type
+	z int
+	r rune
+	a ansi.SGRAttr
+}
+
+func style(t ecs.Type, z int, r rune, a ansi.SGRAttr) renderStyle {
+	return renderStyle{t, z, r, a}
+}
+
+func (st renderStyle) String() string {
+	return fmt.Sprintf("t:%v z:%v rune:%q attr:%v", st.t, st.z, st.r, st.a)
 }

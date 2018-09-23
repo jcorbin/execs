@@ -67,6 +67,10 @@ var worldConfig = worldGenConfig{
 func newGame() *game {
 	g := &game{}
 
+	// TODO better shard construction
+	g.pos.Scope = &g.Scope
+	g.ren.Scope = &g.Scope
+
 	// TODO better dep coupling
 	g.ren.pos = &g.pos
 	g.gen.g = g

@@ -53,7 +53,7 @@ func (g *game) spawnPlayers(ctx agentContext, es ecs.Entities) (agentContext, er
 			}
 		}
 		spawnPos := g.pos.GetID(id).Point()
-		g.gen.Player.createAt(g, spawnPos)
+		g.ren.create(spawnPos, g.gen.Player)
 		log.Printf("spawn player @%v", spawnPos)
 	}
 	return ctx, nil
