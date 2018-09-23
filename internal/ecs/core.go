@@ -79,8 +79,8 @@ type Entity struct {
 // data manager (de)allocation and logic systems updating their entity subject
 // collections.
 type Watcher interface {
-	Create(Entity, Type)
-	Destroy(Entity, Type)
+	EntityCreated(Entity, Type)
+	EntityDestroyed(Entity, Type)
 }
 
 // Len returns the number of existent entities (with non-zero type).
@@ -246,7 +246,7 @@ func (ent Entity) dispatchCreate(newType, createdType Type) {
 		any := ent.Scope.watAny[i]
 		if (all == 0 || (newType&all == all && createdType&all != 0)) &&
 			(any == 0 || createdType&any != 0) {
-			ent.Scope.wats[i].Create(ent, createdType)
+			ent.Scope.wats[i].EntityCreated(ent, createdType)
 		}
 	}
 }
@@ -257,7 +257,7 @@ func (ent Entity) dispatchDestroy(newType, destroyedType Type) {
 		any := ent.Scope.watAny[i]
 		if (all == 0 || (newType&all != all && destroyedType&all != 0)) &&
 			(any == 0 || destroyedType&any != 0) {
-			ent.Scope.wats[i].Destroy(ent, destroyedType)
+			ent.Scope.wats[i].EntityDestroyed(ent, destroyedType)
 		}
 	}
 }

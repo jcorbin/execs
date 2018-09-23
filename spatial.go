@@ -19,7 +19,7 @@ type positioned struct {
 	i   int
 }
 
-func (pos *position) Create(ent ecs.Entity, _ ecs.Type) {
+func (pos *position) EntityCreated(ent ecs.Entity, _ ecs.Type) {
 	i := pos.ArrayIndex.Insert(ent)
 	for i >= len(pos.pt) {
 		if i < cap(pos.pt) {

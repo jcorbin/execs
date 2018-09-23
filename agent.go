@@ -95,7 +95,7 @@ func (as *agentSystem) watch(scope *ecs.Scope) {
 	}
 }
 
-func (as *agentSystem) Create(ent ecs.Entity, _ ecs.Type) {
+func (as *agentSystem) EntityCreated(ent ecs.Entity, _ ecs.Type) {
 	tids := as.ids[ent.Scope]
 	if tids == nil {
 		tids = make(map[ecs.Type][]ecs.ID)
@@ -105,7 +105,7 @@ func (as *agentSystem) Create(ent ecs.Entity, _ ecs.Type) {
 	tids[t] = append(tids[t], ent.ID)
 }
 
-func (as *agentSystem) Destroy(ent ecs.Entity, _ ecs.Type) {
+func (as *agentSystem) EntityDestroyed(ent ecs.Entity, _ ecs.Type) {
 	tids := as.ids[ent.Scope]
 	if tids == nil {
 		tids = make(map[ecs.Type][]ecs.ID)

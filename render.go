@@ -74,7 +74,7 @@ func (ren *render) rezort(pq positionQuery) {
 	sort.Stable(ren.zord)
 }
 
-func (ren *render) Create(ent ecs.Entity, _ ecs.Type) {
+func (ren *render) EntityCreated(ent ecs.Entity, _ ecs.Type) {
 	i := ren.ArrayIndex.Insert(ent)
 
 	for i >= len(ren.cell) {
