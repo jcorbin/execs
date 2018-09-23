@@ -69,7 +69,7 @@ func (room genRoom) elaborate(gen *worldGen) {
 	gen.createDoorway(exit)
 
 	// record exit
-	if len(room.exits) < cap(room.exits) {
+	if len(room.exits) < room.maxExits {
 		// room can be further elaborated
 		gen.q = append(gen.q, room)
 	}
@@ -97,13 +97,14 @@ func (room genRoom) elaborate(gen *worldGen) {
 	gen.createRoom(&room, enter)
 
 	// further elaborate if large enough
-	if len(room.exits) < cap(room.exits) {
+	if len(room.exits) < room.maxExits {
 		gen.q = append(gen.q, room)
 	}
 }
 
 func (gen *worldGen) createRoom(room *genRoom, enter image.Point) {
 	log.Printf("room @%v", room.r)
+	room.maxExits = room.r.Dx() * room.r.Dy() / gen.ExitDensity
 
 	// create room
 	gen.reset()
@@ -112,10 +113,6 @@ func (gen *worldGen) createRoom(room *genRoom, enter image.Point) {
 	gen.style = gen.Wall
 	gen.rectangle(room.r)
 	room.collectWalls(gen)
-
-	if maxExits := room.r.Dx() * room.r.Dy() / gen.ExitDensity; maxExits > 1 {
-		room.exits = make([]image.Point, 0, maxExits)
-	}
 
 	if enter == image.ZP {
 		// create spawn in non-enterable rooms
@@ -244,10 +241,11 @@ func (gen *worldGen) placeRoom(enter, dir, sz image.Point) (r image.Rectangle) {
 }
 
 type genRoom struct {
-	depth int
-	r     image.Rectangle
-	exits []image.Point
-	walls []renderable
+	depth    int
+	maxExits int
+	r        image.Rectangle
+	exits    []image.Point
+	walls    []renderable
 }
 
 func (room *genRoom) wallNormal(p image.Point) (dir image.Point) {
