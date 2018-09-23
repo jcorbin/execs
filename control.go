@@ -2,6 +2,8 @@ package main
 
 import (
 	"image"
+	"log"
+	"math/rand"
 
 	"github.com/jcorbin/anansi/ansi"
 	"github.com/jcorbin/anansi/x/platform"
@@ -9,53 +11,52 @@ import (
 	"github.com/jcorbin/execs/internal/ecs"
 )
 
-type control struct {
-	view image.Rectangle
-	pos  *position
+const (
+	playerMoveKey     = "playerMove"
+	playerCentroidKey = "playerCentroid"
+	playerCountKey    = "playerCount"
+)
 
-	ecs.ArrayIndex
-	player []ecs.Entity
-}
+func (g *game) movePlayers(ctx agentContext, es ecs.Entities) (agentContext, error) {
+	move, haveMove := ctx.Value(playerMoveKey).(image.Point)
+	var centroid image.Point
 
-func (ctl *control) Create(player ecs.Entity, _ ecs.Type) {
-	i := ctl.ArrayIndex.Insert(player)
-	for i >= len(ctl.player) {
-		if i < cap(ctl.player) {
-			ctl.player = ctl.player[:i+1]
-		} else {
-			ctl.player = append(ctl.player, ecs.Entity{})
-		}
-	}
-	ctl.player[i] = player
-}
+	for i := range es.IDs {
+		player := es.Entity(i)
+		posd := g.pos.Get(player)
+		pos := posd.Point()
 
-func (ctl *control) process(ctx *platform.Context) bool {
-	move, interacted := parseTotalMove(ctx.Input)
-
-	if move != image.ZP {
 		// TODO other options beyond apply-to-all
-		for _, player := range ctl.player {
+		if haveMove {
 			// TODO proper movement system
-			posd := ctl.pos.Get(player)
-			if pos := posd.Point().Add(move); ctl.pos.collides(player, pos) == ecs.ZE {
-				posd.SetPoint(pos)
+			if newPos := pos.Add(move); g.pos.collides(player, newPos) == ecs.ZE {
+				posd.SetPoint(newPos)
+				pos = newPos
 			}
 		}
-		interacted = true // NOTE should already have been true; TODO maybe differentiate moved=true
+
+		centroid = centroid.Add(pos)
 	}
 
-	if centroid := ctl.playerCentroid(); ctl.view == image.ZR {
-		offset := centroid.Sub(ctx.Output.Size.Div(2))
-		ctl.view = image.Rectangle{offset, ctx.Output.Size.Add(offset)}
-	} else if ctl.view.Size() != ctx.Output.Size {
-		ds := ctl.view.Size().Sub(ctx.Output.Size).Div(2)
-		ctl.view.Min = ctl.view.Min.Sub(ds)
-		ctl.view.Max = ctl.view.Min.Add(ctx.Output.Size)
-	} else if adj := ctl.viewAdjust(centroid); adj != image.ZP {
-		ctl.view = ctl.view.Add(adj)
-	}
+	ctx = addAgentValue(ctx,
+		playerCentroidKey, centroid.Div(len(es.IDs)),
+		playerCountKey, len(es.IDs))
+	return ctx, nil
+}
 
-	return interacted
+func (g *game) spawnPlayers(ctx agentContext, es ecs.Entities) (agentContext, error) {
+	if n, _ := ctx.Value(playerCountKey).(int); n == 0 {
+		id := es.IDs[0]
+		for i := 1; i < len(es.IDs); i++ {
+			if rand.Intn(i+1) == 0 {
+				id = es.IDs[i]
+			}
+		}
+		spawnPos := g.pos.GetID(id).Point()
+		g.gen.Player.createAt(g, spawnPos)
+		log.Printf("spawn player @%v", spawnPos)
+	}
+	return ctx, nil
 }
 
 func parseTotalMove(in *platform.Events) (move image.Point, interacted bool) {
@@ -135,34 +136,34 @@ func (pos *position) collides(ent ecs.Entity, p image.Point) (hit ecs.Entity) {
 	return hit
 }
 
-func (ctl *control) viewAdjust(pt image.Point) (adj image.Point) {
-	mid := ctl.centerRegion()
-	dmin := pt.Sub(mid.Min)
-	dmax := pt.Sub(mid.Max)
-	if dmin.X < 0 {
-		adj.X = dmin.X
-	} else if dmax.X > 0 {
-		adj.X = dmax.X
+func centerView(view image.Rectangle, centroid, size image.Point) image.Rectangle {
+	if view == image.ZR {
+		offset := centroid.Sub(size.Div(2))
+		return image.Rectangle{offset, size.Add(offset)}
 	}
-	if dmin.Y < 0 {
-		adj.Y = dmin.Y
-	} else if dmax.Y > 0 {
-		adj.Y = dmax.Y
+	if view.Size() != size {
+		return image.Rectangle{
+			view.Min.Sub(view.Size().Sub(size).Div(2)),
+			view.Min.Add(size),
+		}
 	}
-	return adj
+	ds := view.Size().Div(8)
+	return view.Add(compMinMax(
+		centroid.Sub(view.Min.Add(ds)),
+		centroid.Sub(view.Max.Sub(ds)),
+	))
 }
 
-func (ctl *control) centerRegion() image.Rectangle {
-	mid := ctl.view
-	ds := mid.Size().Div(8)
-	mid.Min = mid.Min.Add(ds)
-	mid.Max = mid.Max.Sub(ds)
-	return mid
-}
-
-func (ctl *control) playerCentroid() (centroid image.Point) {
-	for _, player := range ctl.player {
-		centroid = centroid.Add(ctl.pos.Get(player).Point())
+func compMinMax(min, max image.Point) (pt image.Point) {
+	if min.X < 0 {
+		pt.X = min.X
+	} else if max.X > 0 {
+		pt.X = max.X
 	}
-	return centroid.Div(len(ctl.player))
+	if min.Y < 0 {
+		pt.Y = min.Y
+	} else if max.Y > 0 {
+		pt.Y = max.Y
+	}
+	return pt
 }

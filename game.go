@@ -13,19 +13,22 @@ import (
 )
 
 type game struct {
+	ag agentSystem
+
+	// TODO shard(s)
 	ecs.Scope
-	ren   render
-	pos   position
-	spawn ecs.ArrayIndex
+	ren render
+	pos position
 
-	ctl  control
-	drag dragState
-
-	inspecting ecs.Entity
-	pop        popup
-
+	// generation
 	genning bool
 	gen     worldGen
+
+	// ui
+	view       image.Rectangle
+	drag       dragState
+	inspecting ecs.Entity
+	pop        popup
 }
 
 const (
@@ -64,25 +67,21 @@ var worldConfig = worldGenConfig{
 func newGame() *game {
 	g := &game{}
 
+	// TODO better dep coupling
+	g.ren.pos = &g.pos
+	g.gen.g = g
 	g.gen.worldGenConfig = worldConfig
+
+	g.ag.watch(&g.Scope)
+	g.ag.registerFunc(g.movePlayers, 0, gamePlayer)
+	g.ag.registerFunc(g.spawnPlayers, 1, gameSpawnPoint)
 
 	g.Scope.Watch(gamePosition, 0, &g.pos)
 	g.Scope.Watch(gamePosition|gameRender, 0, &g.ren)
-	g.Scope.Watch(gamePlayer, 0, &g.ctl)
-	g.Scope.Watch(gameSpawnPoint, 0, &g.spawn)
 
-	// TODO better dep coupling
-	g.ren.pos = &g.pos
-	g.ctl.pos = &g.pos
-	g.gen.g = g
-
+	// TODO agent-based gen
 	// generate level
 	g.gen.init()
-
-	// place characters
-	spawnPos := g.pos.Get(g.spawn.Scope.Entity(g.spawn.ID(0)))
-	log.Printf("spawn player @%v", spawnPos)
-	g.gen.Player.createAt(g, spawnPos.Point())
 
 	return g
 }
@@ -122,8 +121,9 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 		}
 	}
 
+	// process any drag region
 	if r := g.drag.process(ctx); r != image.ZR {
-		r = r.Canon().Add(g.ctl.view.Min)
+		r = r.Canon().Add(g.view.Min)
 		n := 0
 		for q := g.pos.Within(r); q.Next(); n++ {
 			posd := q.handle()
@@ -134,13 +134,28 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 		g.pop.active = false
 	}
 
-	if g.ctl.process(ctx) || g.drag.active {
+	// process control input
+	agCtx := nopAgentContext
+	if move, interacted := parseTotalMove(ctx.Input); interacted {
+		agCtx = addAgentValue(agCtx, playerMoveKey, move)
+		g.pop.active = false
+	} else if g.drag.active {
 		g.pop.active = false
 	}
 
+	// run agents
+	agCtx, agErr := g.ag.update(agCtx, &g.Scope)
+	if err == nil {
+		err = agErr
+	}
+
+	// center view on player (if any)
+	centroid, _ := agCtx.Value(playerCentroidKey).(image.Point)
+	g.view = centerView(g.view, centroid, ctx.Output.Size)
+
 	// TODO debug
 	// if m, haveMouse := ctx.Input.LastMouse(false); haveMouse && m.State.IsMotion() {
-	// 	if posd := g.pos.At(m.Point.Add(g.ctl.view.Min)); posd.zero() {
+	// 	if posd := g.pos.At(m.Point.Add(g.view.Min)); posd.zero() {
 	// 		g.pop.active = false
 	// 	} else {
 	// 		g.inspect(posd.Entity())
@@ -150,7 +165,7 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 	// }
 
 	ctx.Output.Clear()
-	g.ren.drawRegionInto(g.ctl.view, &ctx.Output.Grid)
+	g.ren.drawRegionInto(g.view, &ctx.Output.Grid)
 
 	if g.drag.active {
 		dr := g.drag.r.Canon()
