@@ -20,15 +20,13 @@ type game struct {
 	ecs.Scope
 	ren render
 	pos position
-
-	// generation
-	genning bool
-	gen     worldGen
+	gen worldGen
 
 	// ui
-	view image.Rectangle
-	drag dragState
-	pop  popup
+	genning bool
+	view    image.Rectangle
+	drag    dragState
+	pop     popup
 }
 
 const (
