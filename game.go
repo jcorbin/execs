@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image"
+	"io"
 	"log"
 
 	"github.com/jcorbin/anansi"
@@ -25,10 +26,9 @@ type game struct {
 	gen     worldGen
 
 	// ui
-	view       image.Rectangle
-	drag       dragState
-	inspecting ecs.Entity
-	pop        popup
+	view image.Rectangle
+	drag dragState
+	pop  popup
 }
 
 const (
@@ -46,6 +46,18 @@ const (
 	gamePlayer     = gameCharacter | gameInput
 	gameDoor       = gamePosition | gameRender // FIXME | gameCollides | gameInteract
 )
+
+func (g *game) describe(w io.Writer, ent ecs.Entity) {
+	describe(w, ent, []descSpec{
+		{gameInput, "Ctl", nil},
+		{gameCollides, "Col", nil},
+		{gamePosition, "Pos", g.describePosition},
+		{gameRender, "Ren", g.describeRender},
+	})
+}
+
+func (g *game) describeRender(ent ecs.Entity) fmt.Stringer   { return g.ren.Get(ent) }
+func (g *game) describePosition(ent ecs.Entity) fmt.Stringer { return g.pos.Get(ent) }
 
 var worldConfig = worldGenConfig{
 	Wall: style(gameWall, 5, '#', ansi.SGRAttrBold|
@@ -157,16 +169,30 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 	centroid, _ := agCtx.Value(playerCentroidKey).(image.Point)
 	g.view = centerView(g.view, centroid, ctx.Output.Size)
 
-	// TODO debug
-	// if m, haveMouse := ctx.Input.LastMouse(false); haveMouse && m.State.IsMotion() {
-	// 	if posd := g.pos.At(m.Point.Add(g.view.Min)); posd.zero() {
-	// 		g.pop.active = false
-	// 	} else {
-	// 		g.inspect(posd.Entity())
-	// 		g.pop.setAt(m.Point)
-	// 		g.pop.active = true
-	// 	}
-	// }
+	// Ctrl-mouse to inspect entities
+	if m, haveMouse := ctx.Input.LastMouse(false); haveMouse && m.State.IsMotion() {
+		any := false
+		if m.State&ansi.MouseModControl != 0 {
+			pq := g.pos.At(m.Point.Add(g.view.Min))
+			if pq.Next() {
+				any = true
+				g.pop.buf.Reset()
+				g.pop.buf.Grow(1024)
+				g.describe(&g.pop.buf, pq.handle().Entity())
+				for pq.Next() {
+					_, _ = g.pop.buf.WriteString("\r\n\n")
+					g.describe(&g.pop.buf, pq.handle().Entity())
+				}
+			}
+			if any {
+				g.pop.processBuf()
+				g.pop.setAt(m.Point)
+				g.pop.active = true
+			} else {
+				g.pop.active = false
+			}
+		}
+	}
 
 	ctx.Output.Clear()
 	g.ren.drawRegionInto(g.view, &ctx.Output.Grid)
@@ -230,24 +256,6 @@ func (ds *dragState) process(ctx *platform.Context) (r image.Rectangle) {
 		}
 	}
 	return r
-}
-
-func (g *game) inspect(ent ecs.Entity) {
-	if ent == g.inspecting {
-		return
-	}
-	log.Printf("inspect %v", ent)
-	g.inspecting = ent
-
-	g.pop.buf.Reset()
-	g.pop.buf.Grow(1024)
-	describe(&g.pop.buf, ent, []descSpec{
-		{gameInput, "Ctl", nil},
-		{gameCollides, "Col", nil},
-		{gamePosition, "Pos", func(ent ecs.Entity) fmt.Stringer { return g.pos.Get(ent) }},
-		{gameRender, "Ren", func(ent ecs.Entity) fmt.Stringer { return g.ren.Get(ent) }},
-	})
-	g.pop.processBuf()
 }
 
 func eachCell(g *anansi.Grid, r image.Rectangle, f func(anansi.Cell)) {

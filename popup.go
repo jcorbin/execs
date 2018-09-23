@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"image"
-	"log"
 	"unicode/utf8"
 
 	"github.com/jcorbin/anansi"
@@ -29,7 +28,6 @@ func (pop *popup) drawInto(grid *anansi.Grid) {
 func (pop *popup) processBuf() {
 	b := pop.buf.Bytes()
 	sz := measureTextBounds(b)
-	log.Printf("popup sz:%v b:%q", sz, b)
 	pop.ScreenState.Clear()
 	pop.ScreenState.Resize(sz)
 	pop.CursorState.Attr = ansi.SGRAttrClear | ansi.RGB(0x20, 0x20, 0x40).BG()
