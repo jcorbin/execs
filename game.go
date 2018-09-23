@@ -77,6 +77,8 @@ var worldConfig = worldGenConfig{
 		ansi.RGB(0x60, 0x80, 0xa0).FG(),
 	),
 	RoomSize:    image.Rect(5, 3, 21, 13),
+	MinHallSize: 2,
+	MaxHallSize: 8,
 	ExitDensity: 25,
 }
 

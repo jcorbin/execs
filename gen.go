@@ -15,6 +15,8 @@ type worldGenConfig struct {
 	Player renderStyle
 
 	RoomSize    image.Rectangle
+	MinHallSize int
+	MaxHallSize int
 	ExitDensity int
 }
 
@@ -127,7 +129,7 @@ func (room *genRoom) create(gen *worldGen, enter image.Point) {
 
 func (room *genRoom) hallway(gen *worldGen, pos image.Point) (_, dir image.Point, clear bool) {
 	dir = room.wallNormal(pos)
-	n := rand.Intn(5) + 1
+	n := rand.Intn(gen.MaxHallSize-gen.MinHallSize) + gen.MinHallSize
 	orth := orthNormal(dir)
 	log.Printf("hallway dir:%v n:%v", dir, n)
 
