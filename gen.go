@@ -41,13 +41,15 @@ func (gen *worldGen) init() {
 	gen.q = append(gen.q, room)
 }
 
-func (gen *worldGen) elaborate() bool {
-	if len(gen.q) == 0 {
+func (g *game) runGen() bool {
+	if len(g.gen.q) == 0 {
+		log.Printf("generation done")
 		return false
 	}
-	room := gen.q[0]
-	gen.q = gen.q[:copy(gen.q, gen.q[1:])]
-	room.elaborate(gen)
+	room := g.gen.q[0]
+	g.gen.q = g.gen.q[:copy(g.gen.q, g.gen.q[1:])]
+	room.elaborate(&g.gen)
+	log.Printf("gen up to %v entities", g.Scope.Len())
 	return true
 }
 

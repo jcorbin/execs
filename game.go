@@ -124,21 +124,11 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 	// start/stop generation
 	if !g.genning && ctx.Input.CountRune('\x07') > 0 {
 		g.genning = true
-		log.Printf("starting generation len(q):%v", len(g.gen.q))
+		log.Printf("starting generation")
 	} else if g.genning && err == errInt {
 		err = nil
 		g.genning = false
 		log.Printf("stopping generation")
-	}
-
-	// run generation
-	if g.genning {
-		if !g.gen.elaborate() {
-			g.genning = false
-			log.Printf("generation done")
-		} else {
-			log.Printf("gen up to %v entities", g.Scope.Len())
-		}
 	}
 
 	// process any drag region
@@ -167,6 +157,13 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 	agCtx, agErr := g.ag.update(agCtx, &g.Scope)
 	if err == nil {
 		err = agErr
+	}
+
+	// run generation
+	if g.genning {
+		if !g.runGen() {
+			g.genning = false
+		}
 	}
 
 	// center view on player (if any)
