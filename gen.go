@@ -55,10 +55,10 @@ func (room genRoom) elaborate(gen *worldGen) {
 	log.Printf("elaborate %v", room.r)
 	// choose and build exit door
 	doorway := room.chooseDoorWall(gen)
-	if doorway == ecs.ZE {
+	if doorway.zero() {
 		return
 	}
-	exit := gen.g.pos.Get(doorway).Point()
+	exit := doorway.Point()
 	pos, dir, clear := room.hallway(gen, exit)
 	if !clear {
 		return
@@ -114,9 +114,9 @@ func (room *genRoom) create(gen *worldGen, enter image.Point) {
 	} else {
 		// entrance door
 		for i, wall := range room.walls {
-			if pt := gen.g.pos.Get(wall).Point(); pt == enter {
-				copy(gen.ents[i:], gen.ents[i+1:])
-				gen.ents = gen.ents[:len(gen.ents)-1]
+			if pt := wall.Point(); pt == enter {
+				copy(gen.built[i:], gen.built[i+1:])
+				gen.built = gen.built[:len(gen.built)-1]
 				gen.doorway(wall, enter)
 				room.exits = append(room.exits, enter)
 				break
@@ -228,20 +228,19 @@ func (gen *worldGen) placeRoom(enter, dir, sz image.Point) (r image.Rectangle) {
 	return r
 }
 
-func (gen *worldGen) doorway(ent ecs.Entity, p image.Point) ecs.Entity {
-	floor := gen.g.ren.Get(ent)
+func (gen *worldGen) doorway(floor renderable, p image.Point) renderable {
 	log.Printf("doorway @%v", p)
 	floor.apply(gen.Floor)
 	door := gen.g.ren.create(p, gen.Door)
 	// TODO set door behavior
-	return door.Entity()
+	return door
 }
 
 type genRoom struct {
 	depth int
 	r     image.Rectangle
 	exits []image.Point
-	walls []ecs.Entity
+	walls []renderable
 }
 
 func (room *genRoom) wallNormal(p image.Point) (dir image.Point) {
@@ -259,33 +258,32 @@ func (room *genRoom) wallNormal(p image.Point) (dir image.Point) {
 
 func (room *genRoom) collectWalls(gen *worldGen) {
 	if room.walls == nil {
-		room.walls = make([]ecs.Entity, 0, len(gen.ents))
+		room.walls = make([]renderable, 0, len(gen.built))
 	}
-	for _, wall := range gen.ents {
-		if wall.Type() == gen.Wall.t {
-			if pt := gen.g.pos.Get(wall).Point(); !isCorner(pt, room.r) {
+	for _, wall := range gen.built {
+		if wall.Entity().Type() == gen.Wall.t {
+			if pt := wall.Point(); !isCorner(pt, room.r) {
 				room.walls = append(room.walls, wall)
 			}
 		}
 	}
 }
 
-func (room *genRoom) chooseDoorWall(gen *worldGen) (ent ecs.Entity) {
+func (room *genRoom) chooseDoorWall(gen *worldGen) (rend renderable) {
 	var j int
-	for i := range room.walls {
-		wall := gen.g.pos.Get(room.walls[i])
+	for i, wall := range room.walls {
 		if !wall.zero() && room.sharesWallWithExit(wall.Point()) {
 			continue
 		}
-		if ent == ecs.ZE || rand.Intn(i+1) <= 1 {
-			j, ent = i, room.walls[i]
+		if rend.zero() || rand.Intn(i+1) <= 1 {
+			j, rend = i, wall
 		}
 	}
-	if ent != ecs.ZE {
+	if !rend.zero() {
 		copy(room.walls[j:], room.walls[j+1:])
 		room.walls = room.walls[:len(room.walls)-1]
 	}
-	return ent
+	return rend
 }
 
 func (room *genRoom) sharesWallWithExit(p image.Point) bool {
@@ -298,15 +296,15 @@ func (room *genRoom) sharesWallWithExit(p image.Point) bool {
 }
 
 type builder struct {
-	g    *game
-	pos  image.Point
-	ents []ecs.Entity
+	g     *game
+	pos   image.Point
+	built []renderable
 
 	style renderStyle
 }
 
 func (bld *builder) reset() {
-	bld.ents = bld.ents[:0]
+	bld.built = bld.built[:0]
 }
 
 func (bld *builder) moveTo(pos image.Point) {
@@ -321,36 +319,28 @@ func (bld *builder) rectangle(box image.Rectangle) {
 	bld.lineTo(image.Pt(-1, 0), box.Dx()-1)
 }
 
-func (bld *builder) point(p image.Point) ecs.Entity {
+func (bld *builder) point(p image.Point) renderable {
 	bld.pos = p
-	return bld.create()
+	rend := bld.g.ren.create(bld.pos, bld.style)
+	bld.built = append(bld.built, rend)
+	return rend
 }
 
 func (bld *builder) fill(r image.Rectangle) {
 	for bld.moveTo(r.Min); bld.pos.Y < r.Max.Y; bld.pos.Y++ {
 		for bld.pos.X = r.Min.X; bld.pos.X < r.Max.X; bld.pos.X++ {
-			bld.create()
+			rend := bld.g.ren.create(bld.pos, bld.style)
+			bld.built = append(bld.built, rend)
 		}
 	}
 }
 
 func (bld *builder) lineTo(p image.Point, n int) {
 	for i := 0; i < n; i++ {
-		bld.create()
+		rend := bld.g.ren.create(bld.pos, bld.style)
+		bld.built = append(bld.built, rend)
 		bld.pos = bld.pos.Add(p)
 	}
-}
-
-func (bld *builder) create() ecs.Entity {
-	ent := bld.g.ren.create(bld.pos, bld.style).Entity()
-	bld.ents = append(bld.ents, ent)
-	return ent
-}
-
-func (bld *builder) applyTo(ent ecs.Entity) {
-	rend := bld.g.ren.Get(ent)
-	rend.apply(bld.style)
-	bld.ents = append(bld.ents, ent)
 }
 
 func isCorner(p image.Point, r image.Rectangle) bool {
