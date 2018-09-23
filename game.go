@@ -193,12 +193,6 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 	return err
 }
 
-func removeEntity(ents []ecs.Entity, i int) []ecs.Entity {
-	copy(ents[i:], ents[i+1:])
-	ents = ents[:len(ents)-1]
-	return ents
-}
-
 type dragState struct {
 	active bool
 	r      image.Rectangle

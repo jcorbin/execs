@@ -118,7 +118,8 @@ func (room *genRoom) create(gen *worldGen, enter image.Point) {
 		// entrance door
 		for i, wall := range room.walls {
 			if pt := gen.g.pos.Get(wall).Point(); pt == enter {
-				gen.ents = removeEntity(gen.ents, i)
+				copy(gen.ents[i:], gen.ents[i+1:])
+				gen.ents = gen.ents[:len(gen.ents)-1]
 				gen.doorway(wall, enter)
 				room.exits = append(room.exits, enter)
 				break
@@ -282,7 +283,8 @@ func (room *genRoom) chooseDoorWall(gen *worldGen) (ent ecs.Entity) {
 		}
 	}
 	if ent != ecs.ZE {
-		room.walls = removeEntity(room.walls, j)
+		copy(room.walls[j:], room.walls[j+1:])
+		room.walls = room.walls[:len(room.walls)-1]
 	}
 	return ent
 }
