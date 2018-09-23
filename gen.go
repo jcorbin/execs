@@ -8,6 +8,16 @@ import (
 	"github.com/jcorbin/execs/internal/ecs"
 )
 
+type worldGenConfig struct {
+	Floor  renderStyle
+	Wall   renderStyle
+	Door   renderStyle
+	Player renderStyle
+
+	RoomSize    image.Rectangle
+	ExitDensity int
+}
+
 type worldGen struct {
 	builder
 	worldGenConfig
@@ -17,16 +27,6 @@ type worldGen struct {
 	atDoor  ecs.Entity
 
 	q []genRoom
-}
-
-type worldGenConfig struct {
-	Floor  renderStyle
-	Wall   renderStyle
-	Door   renderStyle
-	Player renderStyle
-
-	RoomSize    image.Rectangle
-	ExitDensity int
 }
 
 func (gen *worldGen) init() {
