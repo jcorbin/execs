@@ -56,16 +56,17 @@ func (room genRoom) elaborate(gen *worldGen) {
 
 	log.Printf("elaborate %v", room.r)
 	// choose and build exit door
-	doorway := room.chooseDoorWall(gen)
-	if doorway.zero() {
+	wall := room.chooseDoorWall(gen)
+	if wall.zero() {
 		return
 	}
-	exit := doorway.Point()
+	exit := wall.Point()
 	pos, dir, clear := room.hallway(gen, exit)
 	if !clear {
 		return
 	}
-	gen.doorway(doorway, exit)
+	wall.apply(gen.Floor)
+	gen.createDoorway(exit)
 	room.exits = append(room.exits, exit)
 
 	// record exit
@@ -102,6 +103,13 @@ func (room genRoom) elaborate(gen *worldGen) {
 	}
 }
 
+func (gen *worldGen) createDoorway(pt image.Point) renderable {
+	log.Printf("doorway @%v", pt)
+	door := gen.g.ren.create(pt, gen.Door)
+	// TODO set door behavior
+	return door
+}
+
 func (room *genRoom) create(gen *worldGen, enter image.Point) {
 	// create room
 	gen.room(room)
@@ -119,7 +127,8 @@ func (room *genRoom) create(gen *worldGen, enter image.Point) {
 			if pt := wall.Point(); pt == enter {
 				copy(gen.built[i:], gen.built[i+1:])
 				gen.built = gen.built[:len(gen.built)-1]
-				gen.doorway(wall, enter)
+				wall.apply(gen.Floor)
+				gen.createDoorway(enter)
 				room.exits = append(room.exits, enter)
 				break
 			}
@@ -228,14 +237,6 @@ func (gen *worldGen) placeRoom(enter, dir, sz image.Point) (r image.Rectangle) {
 	}
 	r.Max = r.Min.Add(sz)
 	return r
-}
-
-func (gen *worldGen) doorway(floor renderable, p image.Point) renderable {
-	log.Printf("doorway @%v", p)
-	floor.apply(gen.Floor)
-	door := gen.g.ren.create(p, gen.Door)
-	// TODO set door behavior
-	return door
 }
 
 type genRoom struct {
