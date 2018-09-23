@@ -11,12 +11,6 @@ import (
 	"github.com/jcorbin/execs/internal/ecs"
 )
 
-const (
-	playerMoveKey     = "playerMove"
-	playerCentroidKey = "playerCentroid"
-	playerCountKey    = "playerCount"
-)
-
 func (g *game) movePlayers(ctx agentContext, es ecs.Entities) (agentContext, error) {
 	move, haveMove := ctx.Value(playerMoveKey).(image.Point)
 	var centroid image.Point

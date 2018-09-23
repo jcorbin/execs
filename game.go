@@ -45,6 +45,10 @@ const (
 	gameCharacter  = gamePosition | gameRender | gameCollides
 	gamePlayer     = gameCharacter | gameInput
 	gameDoor       = gamePosition | gameRender // FIXME | gameCollides | gameInteract
+
+	playerMoveKey     = "playerMove"
+	playerCentroidKey = "playerCentroid"
+	playerCountKey    = "playerCount"
 )
 
 func (g *game) describe(w io.Writer, ent ecs.Entity) {
