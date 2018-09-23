@@ -67,7 +67,7 @@ func (ren *render) rezort(pq positionQuery) {
 		if h := pq.handle(); !h.zero() {
 			if i, def := ren.GetID(h.ID()); def {
 				ren.zord.ri = append(ren.zord.ri, i)
-				ren.zord.pi = append(ren.zord.pi, h.i)
+				ren.zord.pi = append(ren.zord.pi, h.pi)
 			}
 		}
 	}

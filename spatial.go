@@ -16,7 +16,7 @@ type position struct {
 
 type positioned struct {
 	pos *position
-	i   int
+	pi  int
 }
 
 func (pos *position) EntityCreated(ent ecs.Entity, _ ecs.Type) {
@@ -75,22 +75,22 @@ func (posd positioned) Point() image.Point {
 	if posd.pos == nil {
 		return image.ZP
 	}
-	return posd.pos.pt[posd.i]
+	return posd.pos.pt[posd.pi]
 }
 
 func (posd positioned) SetPoint(p image.Point) {
 	if posd.pos != nil {
-		posd.pos.pt[posd.i] = p
-		posd.pos.qi.Update(posd.i, p)
+		posd.pos.pt[posd.pi] = p
+		posd.pos.qi.Update(posd.pi, p)
 	}
 }
 
-func (posd positioned) Entity() ecs.Entity { return posd.pos.Entity(posd.i) }
-func (posd positioned) ID() ecs.ID         { return posd.pos.ID(posd.i) }
+func (posd positioned) Entity() ecs.Entity { return posd.pos.Entity(posd.pi) }
+func (posd positioned) ID() ecs.ID         { return posd.pos.ID(posd.pi) }
 
 func (posd positioned) String() string {
 	if posd.pos == nil {
 		return fmt.Sprintf("no-position")
 	}
-	return fmt.Sprintf("pt: %v", posd.pos.pt[posd.i])
+	return fmt.Sprintf("pt: %v", posd.pos.pt[posd.pi])
 }
