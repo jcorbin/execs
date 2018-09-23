@@ -97,20 +97,16 @@ func (ren *render) EntityCreated(ent ecs.Entity, _ ecs.Type) {
 }
 
 type renderable struct {
-	ren    *render
-	pi, ri int
+	positioned
+	ren *render
+	ri  int
 }
 
 func (ren *render) Get(ent ecs.Entity) renderable {
 	if ri, def := ren.ArrayIndex.Get(ent); def {
-		pi, _ := ren.pos.ArrayIndex.Get(ent)
-		return renderable{ren, pi, ri}
+		return renderable{ren.pos.GetID(ent.ID), ren, ri}
 	}
 	return renderable{}
-}
-
-func (rend renderable) pos() positioned {
-	return positioned{rend.ren.pos, rend.pi}
 }
 
 func (rend renderable) Z() int {
