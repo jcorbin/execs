@@ -53,6 +53,37 @@ func (g *game) runGen() bool {
 	return true
 }
 
+func (gen *worldGen) createRoom(room *genRoom, enter image.Point) {
+	log.Printf("room @%v", room.r)
+	room.maxExits = room.r.Dx() * room.r.Dy() / gen.ExitDensity
+
+	// create room
+	gen.reset()
+	gen.style = gen.Floor
+	gen.fill(room.r.Inset(1))
+	gen.style = gen.Wall
+	gen.rectangle(room.r)
+	room.collectWalls(gen)
+
+	if enter == image.ZP {
+		// create spawn in non-enterable rooms
+		mid := room.r.Min.Add(room.r.Size().Div(2))
+		gen.g.pos.Get(gen.g.Create(gameSpawnPoint)).SetPoint(mid)
+	} else {
+		// entrance door
+		for i, wall := range room.walls {
+			if pt := wall.Point(); pt == enter {
+				copy(gen.built[i:], gen.built[i+1:])
+				gen.built = gen.built[:len(gen.built)-1]
+				wall.apply(gen.Floor)
+				gen.createDoorway(enter)
+				room.exits = append(room.exits, enter)
+				break
+			}
+		}
+	}
+}
+
 func (room genRoom) elaborate(gen *worldGen) {
 	const placeAttempts = 10
 
@@ -101,37 +132,6 @@ func (room genRoom) elaborate(gen *worldGen) {
 	// further elaborate if large enough
 	if len(room.exits) < room.maxExits {
 		gen.q = append(gen.q, room)
-	}
-}
-
-func (gen *worldGen) createRoom(room *genRoom, enter image.Point) {
-	log.Printf("room @%v", room.r)
-	room.maxExits = room.r.Dx() * room.r.Dy() / gen.ExitDensity
-
-	// create room
-	gen.reset()
-	gen.style = gen.Floor
-	gen.fill(room.r.Inset(1))
-	gen.style = gen.Wall
-	gen.rectangle(room.r)
-	room.collectWalls(gen)
-
-	if enter == image.ZP {
-		// create spawn in non-enterable rooms
-		mid := room.r.Min.Add(room.r.Size().Div(2))
-		gen.g.pos.Get(gen.g.Create(gameSpawnPoint)).SetPoint(mid)
-	} else {
-		// entrance door
-		for i, wall := range room.walls {
-			if pt := wall.Point(); pt == enter {
-				copy(gen.built[i:], gen.built[i+1:])
-				gen.built = gen.built[:len(gen.built)-1]
-				wall.apply(gen.Floor)
-				gen.createDoorway(enter)
-				room.exits = append(room.exits, enter)
-				break
-			}
-		}
 	}
 }
 
