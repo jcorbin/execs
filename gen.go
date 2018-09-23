@@ -85,8 +85,6 @@ func (gen *worldGen) createRoom(room *genRoom, enter image.Point) {
 }
 
 func (room genRoom) elaborate(gen *worldGen) {
-	const placeAttempts = 10
-
 	log.Printf("elaborate %v", room.r)
 	// choose and build exit door
 	wall := room.chooseDoorWall(gen)
@@ -117,22 +115,30 @@ func (room genRoom) elaborate(gen *worldGen) {
 
 	// place and create next room
 	room = genRoom{depth: room.depth + 1}
-	for i := 0; ; i++ {
-		if i >= placeAttempts {
-			room.r = image.ZR
-			break
-		}
-		room.r = gen.placeRoom(enter, dir, gen.chooseRoomSize())
-		if !gen.anyWithin(room.r) {
-			break
-		}
-	}
+	room.r = gen.placeNextRoom(enter, dir)
 	gen.createRoom(&room, enter)
 
 	// further elaborate if large enough
 	if len(room.exits) < room.maxExits {
 		gen.q = append(gen.q, room)
 	}
+}
+
+func (gen *worldGen) placeNextRoom(enter, dir image.Point) image.Rectangle {
+	const placeAttempts = 10
+
+	var r image.Rectangle
+	for i := 0; ; i++ {
+		if i >= placeAttempts {
+			r = image.ZR
+			break
+		}
+		r = gen.placeRoom(enter, dir, gen.chooseRoomSize())
+		if !gen.anyWithin(r) {
+			break
+		}
+	}
+	return r
 }
 
 func (gen *worldGen) createDoorway(pt image.Point) renderable {
