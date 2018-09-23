@@ -37,7 +37,7 @@ func (gen *worldGen) init() {
 	}
 	room := genRoom{r: image.Rectangle{image.ZP, gen.chooseRoomSize()}}
 	log.Printf("init %v", room.r)
-	room.create(gen, image.ZP)
+	gen.createRoom(&room, image.ZP)
 	gen.q = append(gen.q, room)
 }
 
@@ -94,7 +94,7 @@ func (room genRoom) elaborate(gen *worldGen) {
 			break
 		}
 	}
-	room.create(gen, enter)
+	gen.createRoom(&room, enter)
 
 	// further elaborate if large enough
 	if len(room.exits) < cap(room.exits) {
@@ -102,16 +102,17 @@ func (room genRoom) elaborate(gen *worldGen) {
 	}
 }
 
-func (gen *worldGen) createDoorway(pt image.Point) renderable {
-	log.Printf("doorway @%v", pt)
-	door := gen.g.ren.create(pt, gen.Door)
-	// TODO set door behavior
-	return door
-}
+func (gen *worldGen) createRoom(room *genRoom, enter image.Point) {
+	log.Printf("room @%v", room.r)
 
-func (room *genRoom) create(gen *worldGen, enter image.Point) {
 	// create room
-	gen.room(room)
+	gen.reset()
+	gen.style = gen.Floor
+	gen.fill(room.r.Inset(1))
+	gen.style = gen.Wall
+	gen.rectangle(room.r)
+	room.collectWalls(gen)
+
 	if maxExits := room.r.Dx() * room.r.Dy() / gen.ExitDensity; maxExits > 1 {
 		room.exits = make([]image.Point, 0, maxExits)
 	}
@@ -133,6 +134,13 @@ func (room *genRoom) create(gen *worldGen, enter image.Point) {
 			}
 		}
 	}
+}
+
+func (gen *worldGen) createDoorway(pt image.Point) renderable {
+	log.Printf("doorway @%v", pt)
+	door := gen.g.ren.create(pt, gen.Door)
+	// TODO set door behavior
+	return door
 }
 
 func (gen *worldGen) buildHallway(room *genRoom, exit image.Point) (pos, dir image.Point, _ bool) {
@@ -186,16 +194,6 @@ func (gen *worldGen) fillWallAt() {
 		gen.g.ren.Get(gen.atFloor).apply(gen.Wall)
 		gen.atFloor, gen.atWall = ecs.ZE, gen.atFloor
 	}
-}
-
-func (gen *worldGen) room(room *genRoom) {
-	log.Printf("room @%v", room.r)
-	gen.reset()
-	gen.style = gen.Floor
-	gen.fill(room.r.Inset(1))
-	gen.style = gen.Wall
-	gen.rectangle(room.r)
-	room.collectWalls(gen)
 }
 
 func (gen *worldGen) at(p image.Point) (any bool) {
