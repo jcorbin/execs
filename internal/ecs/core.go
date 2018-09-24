@@ -102,11 +102,7 @@ func (sc *Scope) Len() int {
 // Conversely, Watcher Destroy is called when any of the given "all" bits is
 // removed; in other words, compound Destroy watching fires early and often.
 //
-// If registered with all=0, the Watcher is passed any new/old type bits to
-// Create/Destroy; otherwise it's passed the all mask with which it was
-// registered.
-//
-// TODO also support an "any" bitmask?
+// The Watcher is passed any new/old type bits to Create/Destroy.
 func (sc *Scope) Watch(all, any Type, wat Watcher) {
 	sc.watAll = append(sc.watAll, all)
 	sc.watAny = append(sc.watAny, any)
