@@ -75,6 +75,10 @@ type Entity struct {
 	ID    ID
 }
 
+func (ent Entity) String() string {
+	return fmt.Sprintf("entity(%p %v %v)", ent.Scope, ent.ID, ent.Type())
+}
+
 // Watcher is a stakeholder in Entity's type changes, uses include: component
 // data manager (de)allocation and logic systems updating their entity subject
 // collections.
