@@ -28,10 +28,6 @@ type worldGen struct {
 	builder
 	worldGenConfig
 
-	atFloor ecs.Entity
-	atWall  ecs.Entity
-	atDoor  ecs.Entity
-
 	ecs.ArrayIndex
 	data []genRoom
 	q    []int
@@ -167,14 +163,7 @@ func (gen *worldGen) elaborateRoom(room genRoomHandle) (ok bool) {
 	var pos, dir image.Point
 	if pos, ok = gen.addExit(room); ok {
 		if pos, dir, ok = gen.buildHallway(room, pos); ok {
-			pos = pos.Add(dir)
-			if ok = !gen.at(pos); ok {
-				// place next room if entrance clear
-				gen.enqueue(room.depth+1, pos, gen.placeNextRoom(pos, dir))
-			} else {
-				// otherwise, cap hallway. TODO maybe doorway back into a room.
-				gen.fillWallAt()
-			}
+			gen.enqueue(room.depth+1, pos, gen.placeNextRoom(pos, dir))
 		}
 	}
 	return ok
@@ -224,23 +213,27 @@ func (gen *worldGen) buildHallway(room genRoomHandle, pos image.Point) (_, dir i
 	gen.logf("hallway dir:%v n:%v", dir, n)
 	orth := orthNormal(dir)
 
+	// +1 spot for the landing
+	r := image.Rectangle{pos, pos.Add(dir.Mul(n + 2))}.Canon()
+	// TODO care about checking for wall cells too?
+	for q := gen.g.pos.Within(r); q.Next(); {
+		// TODO may care to filter entity type
+		// ent := q.handle().Entity()
+		return pos, dir, false
+	}
+
 	gen.reset()
 	for i := 0; i < n; i++ {
 		pos = pos.Add(dir)
-		if gen.at(pos) {
-			// TODO destroy partial?
-			return pos, dir, false
-		}
-
 		gen.style = gen.Floor
 		gen.point(pos)
-
-		// TODO deconflict?
-
 		gen.style = gen.Wall
 		gen.point(pos.Add(orth))
 		gen.point(pos.Sub(orth))
 	}
+
+	// advance to entrance
+	pos = pos.Add(dir)
 
 	return pos, dir, true
 }
@@ -254,34 +247,6 @@ func (gen *worldGen) anyWithin(r image.Rectangle) bool {
 		}
 	}
 	return false
-}
-
-func (gen *worldGen) fillWallAt() {
-	if gen.atDoor != ecs.ZE {
-		gen.atDoor.SetType(0)
-	}
-	if gen.atFloor != ecs.ZE && gen.atWall == ecs.ZE {
-		gen.g.ren.Get(gen.atFloor).apply(gen.Wall)
-		gen.atFloor, gen.atWall = ecs.ZE, gen.atFloor
-	}
-}
-
-func (gen *worldGen) at(p image.Point) (any bool) {
-	for q := gen.g.pos.At(p); q.Next(); {
-		ent := q.handle().Entity()
-		switch ent.Type() {
-		case gen.Floor.t:
-			gen.atFloor = ent
-			any = true
-		case gen.Wall.t:
-			gen.atWall = ent
-			any = true
-		case gen.Door.t:
-			gen.atDoor = ent
-			any = true
-		}
-	}
-	return any
 }
 
 func (gen *worldGen) chooseRoomSize() image.Point {
