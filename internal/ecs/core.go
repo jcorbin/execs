@@ -31,9 +31,9 @@ const (
 // numbers.
 func (id ID) String() string {
 	gen, seq := id>>56, id&idSeqMask
-	if seq == 0 {
-		if gen != 0 {
-			return fmt.Sprintf("INVALID_ZeroID(gen:%d)", gen)
+	if gen == 0 {
+		if seq != 0 {
+			return fmt.Sprintf("INVALID_ZeroID(seq:%d)", gen)
 		}
 		return "ZeroID"
 	}
@@ -43,8 +43,8 @@ func (id ID) String() string {
 // genseq returns the 8-bit generation number and 56-bit sequence numbers.
 func (id ID) genseq() (uint8, uint64) {
 	gen, seq := id>>56, id&idSeqMask
-	if seq == 0 {
-		panic("invalid use of seq-0 ID")
+	if gen == 0 {
+		panic("invalid use of gen-0 ID")
 	}
 	return uint8(gen), uint64(seq)
 }
@@ -53,8 +53,8 @@ func (id ID) genseq() (uint8, uint64) {
 // the given ones.
 func (id ID) setgen(gen uint8) ID {
 	seq := id & idSeqMask
-	if seq == 0 {
-		panic("invalid use of seq-0 ID")
+	if gen == 0 {
+		panic("invalid use of gen-0 ID")
 	}
 	return seq | (ID(gen) << 56)
 }
@@ -167,11 +167,8 @@ func (sc *Scope) create() ID {
 		sc.free = sc.free[:i]
 		return id
 	}
-	if len(sc.typs) == 0 {
-		sc.typs = append(sc.typs, genType{0xff, 0})
-	}
-	sc.typs = append(sc.typs, genType{})
-	return ID(len(sc.typs) - 1)
+	sc.typs = append(sc.typs, genType{gen: 1})
+	return ID(len(sc.typs) - 1).setgen(1)
 }
 
 // Destroy the Entity; a convenience for SetType(0).
@@ -181,8 +178,8 @@ func (ent Entity) Destroy() bool {
 
 func (ent Entity) typ() (genType, uint64) {
 	gen, seq := ent.ID.genseq()
-	if seq == 0 {
-		panic("invalid use of seq-0 ID")
+	if gen == 0 {
+		panic("invalid use of gen-0 ID")
 	}
 	typ := ent.Scope.typs[seq]
 	if gen != typ.gen {
@@ -255,6 +252,9 @@ func (ent Entity) setType(priorTyp genType, seq uint64, newType Type) bool {
 
 	if newType == 0 {
 		gen := priorTyp.gen + 1
+		if gen == 0 {
+			gen = 1
+		}
 		ent.Scope.typs[seq].gen = gen // further reuse of this Entity handle should panic
 		ent.Scope.free = append(ent.Scope.free, ent.ID.setgen(gen))
 		return true
