@@ -28,36 +28,40 @@ type worldGen struct {
 	atWall  ecs.Entity
 	atDoor  ecs.Entity
 
-	q []genRoom
+	rooms []genRoom
+	roomq []int
 }
 
 func (gen *worldGen) run() bool {
-	if len(gen.q) == 0 {
+	if len(gen.roomq) == 0 {
 		log.Printf("generation done")
 		return false
 	}
-	if room := &gen.q[0]; !room.done {
+	if room := &gen.rooms[gen.roomq[0]]; !room.done {
 		gen.createRoom(room)
 		room.done = true
 	} else {
 		ok := gen.elaborateRoom(room)
 		further := len(room.exits) < room.maxExits
-		gen.q = gen.q[:copy(gen.q, gen.q[1:])]
+		i := gen.roomq[0]
+		gen.roomq = gen.roomq[:copy(gen.roomq, gen.roomq[1:])]
 		if ok && further {
-			gen.q = append(gen.q, *room)
+			gen.roomq = append(gen.roomq, i)
 		}
 	}
 	return true
 }
 
-func (gen *worldGen) enqueue(depth int, enter image.Point, r image.Rectangle) *genRoom {
-	gen.q = append(gen.q, genRoom{})
-	room := &gen.q[len(gen.q)-1]
+func (gen *worldGen) enqueue(depth int, enter image.Point, r image.Rectangle) (int, *genRoom) {
+	i := len(gen.rooms)
+	gen.rooms = append(gen.rooms, genRoom{})
+	gen.roomq = append(gen.roomq, i)
+	room := &gen.rooms[i]
 	room.depth = depth
 	room.enter = enter
 	room.r = r
-	log.Printf("enqueue %+v", room)
-	return room
+	log.Printf("enqueue %v %+v", i, room)
+	return i, room
 }
 
 func (gen *worldGen) createRoom(room *genRoom) {
