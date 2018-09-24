@@ -82,11 +82,6 @@ func (gen *worldGen) GetID(id ecs.ID) (h genRoomHandle) {
 	return h
 }
 
-func (gen *worldGen) get(i int) (h genRoomHandle) {
-	h.load(gen, i, gen.ArrayIndex.ID(i))
-	return h
-}
-
 func (room *genRoomHandle) load(gen *worldGen, i int, id ecs.ID) {
 	room.gen = gen
 	room.i = i
@@ -99,15 +94,18 @@ func (gen *worldGen) run() bool {
 		gen.logf("generation done")
 		return false
 	}
-	i := gen.q[0]
-	if room := gen.get(i); !room.done {
-		gen.createRoom(room)
-		room.done = true
-	} else if gen.elaborateRoom(room) && len(room.exits) < room.maxExits {
-		n := copy(gen.q, gen.q[1:])
-		gen.q[n] = i
-	} else {
-		gen.Entity(i).DeleteType(gameGen)
+	if id := gen.ArrayIndex.ID(i); id != 0 {
+		i := gen.q[0]
+		var room genRoomHandle
+		if room.load(gen, i, id); !room.done {
+			gen.createRoom(room)
+			room.done = true
+		} else if gen.elaborateRoom(room) && len(room.exits) < room.maxExits {
+			n := copy(gen.q, gen.q[1:])
+			gen.q[n] = i
+		} else {
+			gen.Entity(i).DeleteType(gameGen)
+		}
 	}
 	return true
 }
