@@ -35,9 +35,7 @@ func (gen *worldGen) init() {
 	if len(gen.q) > 0 {
 		gen.q = gen.q[:0]
 	}
-	room := genRoom{r: image.Rectangle{image.ZP, gen.chooseRoomSize()}}
-	log.Printf("init %v", room.r)
-	gen.q = append(gen.q, room)
+	gen.enqueue(0, image.ZP, image.Rectangle{image.ZP, gen.chooseRoomSize()})
 }
 
 func (g *game) runGen() bool {
@@ -65,6 +63,16 @@ func (gen *worldGen) run() bool {
 		}
 	}
 	return true
+}
+
+func (gen *worldGen) enqueue(depth int, enter image.Point, r image.Rectangle) *genRoom {
+	gen.q = append(gen.q, genRoom{})
+	room := &gen.q[len(gen.q)-1]
+	room.depth = depth
+	room.enter = enter
+	room.r = r
+	log.Printf("enqueue %+v", room)
+	return room
 }
 
 func (gen *worldGen) createRoom(room *genRoom) {
@@ -106,10 +114,7 @@ func (gen *worldGen) elaborateRoom(room *genRoom) (ok bool) {
 			pos = pos.Add(dir)
 			if ok = !gen.at(pos); ok {
 				// place next room if entrance clear
-				nextRoom := genRoom{depth: room.depth + 1}
-				nextRoom.enter = pos
-				nextRoom.r = gen.placeNextRoom(pos, dir)
-				gen.q = append(gen.q, nextRoom)
+				gen.enqueue(room.depth+1, pos, gen.placeNextRoom(pos, dir))
 			} else {
 				// otherwise, cap hallway. TODO maybe doorway back into a room.
 				gen.fillWallAt()
