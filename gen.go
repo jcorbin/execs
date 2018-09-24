@@ -85,38 +85,32 @@ func (gen *worldGen) createRoom(room *genRoom, enter image.Point) {
 }
 
 func (room genRoom) elaborate(gen *worldGen) {
+	var ok bool
 	log.Printf("elaborate %v", room.r)
-	pos, ok := gen.addExit(&room)
-	if !ok {
-		return
-	}
-	pos, dir, clear := gen.buildHallway(&room, pos)
-	if !clear {
-		return
-	}
+	var pos, dir image.Point
+	if pos, ok = gen.addExit(&room); ok {
+		if pos, dir, ok = gen.buildHallway(&room, pos); ok {
+			if len(room.exits) < room.maxExits {
+				// room can be further elaborated
+				gen.q = append(gen.q, room)
+			}
 
-	// record exit
-	if len(room.exits) < room.maxExits {
-		// room can be further elaborated
-		gen.q = append(gen.q, room)
-	}
+			pos = pos.Add(dir)
+			if ok = !gen.at(pos); ok {
+				// place and create next room
+				room = genRoom{depth: room.depth + 1}
+				room.r = gen.placeNextRoom(pos, dir)
+				gen.createRoom(&room, pos)
 
-	// entrance clear?
-	enter := pos.Add(dir)
-	if gen.at(enter) {
-		// otherwise, cap hallway. TODO maybe doorway back into a room.
-		gen.fillWallAt()
-		return
-	}
-
-	// place and create next room
-	room = genRoom{depth: room.depth + 1}
-	room.r = gen.placeNextRoom(enter, dir)
-	gen.createRoom(&room, enter)
-
-	// further elaborate if large enough
-	if len(room.exits) < room.maxExits {
-		gen.q = append(gen.q, room)
+				// further elaborate if large enough
+				if len(room.exits) < room.maxExits {
+					gen.q = append(gen.q, room)
+				}
+			} else {
+				// otherwise, cap hallway. TODO maybe doorway back into a room.
+				gen.fillWallAt()
+			}
+		}
 	}
 }
 
