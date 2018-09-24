@@ -37,7 +37,7 @@ func (gen *worldGen) init() {
 	}
 	room := genRoom{r: image.Rectangle{image.ZP, gen.chooseRoomSize()}}
 	log.Printf("init %v", room.r)
-	gen.createRoom(&room, image.ZP)
+	gen.createRoom(&room)
 	gen.q = append(gen.q, room)
 }
 
@@ -53,7 +53,7 @@ func (g *game) runGen() bool {
 	return true
 }
 
-func (gen *worldGen) createRoom(room *genRoom, enter image.Point) {
+func (gen *worldGen) createRoom(room *genRoom) {
 	log.Printf("room @%v", room.r)
 	room.maxExits = room.r.Dx() * room.r.Dy() / gen.ExitDensity
 
@@ -65,19 +65,19 @@ func (gen *worldGen) createRoom(room *genRoom, enter image.Point) {
 	gen.rectangle(room.r)
 	room.collectWalls(gen)
 
-	if enter == image.ZP {
+	if room.enter == image.ZP {
 		// create spawn in non-enterable rooms
 		mid := room.r.Min.Add(room.r.Size().Div(2))
 		gen.g.pos.Get(gen.g.Create(gameSpawnPoint)).SetPoint(mid)
 	} else {
 		// entrance door
 		for i, wall := range room.walls {
-			if pt := wall.Point(); pt == enter {
+			if pt := wall.Point(); pt == room.enter {
 				copy(gen.built[i:], gen.built[i+1:])
 				gen.built = gen.built[:len(gen.built)-1]
 				wall.apply(gen.Floor)
-				gen.createDoorway(enter)
-				room.exits = append(room.exits, enter)
+				gen.createDoorway(room.enter)
+				room.exits = append(room.exits, room.enter)
 				break
 			}
 		}
@@ -98,8 +98,9 @@ func (gen *worldGen) elaborateRoom(room *genRoom) (ok bool) {
 			if ok = !gen.at(pos); ok {
 				// place and create next room
 				nextRoom := genRoom{depth: room.depth + 1}
+				nextRoom.enter = pos
 				nextRoom.r = gen.placeNextRoom(pos, dir)
-				gen.createRoom(&nextRoom, pos)
+				gen.createRoom(&nextRoom)
 
 				// further elaborate if large enough
 				if len(nextRoom.exits) < nextRoom.maxExits {
@@ -250,6 +251,7 @@ func (gen *worldGen) placeRoom(enter, dir, sz image.Point) (r image.Rectangle) {
 type genRoom struct {
 	depth    int
 	maxExits int
+	enter    image.Point
 	r        image.Rectangle
 	exits    []image.Point
 	walls    []renderable
