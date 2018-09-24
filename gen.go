@@ -9,6 +9,8 @@ import (
 )
 
 type worldGenConfig struct {
+	Log bool
+
 	Floor  renderStyle
 	Wall   renderStyle
 	Door   renderStyle
@@ -21,6 +23,8 @@ type worldGenConfig struct {
 }
 
 type worldGen struct {
+	rooms *rooms
+
 	builder
 	worldGenConfig
 
@@ -29,87 +33,106 @@ type worldGen struct {
 	atDoor  ecs.Entity
 
 	ecs.ArrayIndex
-	rooms []genRoom
-	roomq []int
+	data []genRoom
+	q    []int
+}
+
+func (gen *worldGen) logf(mess string, args ...interface{}) {
+	if gen.Log {
+		log.Printf(mess, args...)
+	}
 }
 
 func (gen *worldGen) EntityCreated(ent ecs.Entity, _ ecs.Type) {
 	i := gen.ArrayIndex.Insert(ent)
-	for i >= len(gen.rooms) {
-		if i < cap(gen.rooms) {
-			gen.rooms = gen.rooms[:i+1]
+	for i >= len(gen.data) {
+		if i < cap(gen.data) {
+			gen.data = gen.data[:i+1]
 		} else {
-			gen.rooms = append(gen.rooms, genRoom{})
+			gen.data = append(gen.data, genRoom{})
 		}
 	}
-	gen.rooms[i] = genRoom{
-		exits: gen.rooms[i].exits[:0],
-		walls: gen.rooms[i].walls[:0],
+	gen.data[i] = genRoom{
+		exits: gen.data[i].exits[:0],
+		walls: gen.data[i].walls[:0],
 	}
 }
 
 func (gen *worldGen) EntityDestroyed(ent ecs.Entity, _ ecs.Type) {
 	i := 0
-	for j := 0; j < len(gen.roomq); j++ {
-		if gen.ID(gen.roomq[j]) == ent.ID {
+	for j := 0; j < len(gen.q); j++ {
+		if gen.ID(gen.q[j]) == ent.ID {
 			continue
 		}
-		gen.roomq[i] = gen.roomq[j]
+		gen.q[i] = gen.q[j]
 		i++
 	}
-	gen.roomq = gen.roomq[:i]
+	gen.q = gen.q[:i]
 	gen.ArrayIndex.Delete(ent)
 }
 
-func (gen *worldGen) Get(ent ecs.Entity) *genRoom {
+func (gen *worldGen) Get(ent ecs.Entity) (h genRoomHandle) {
 	if i, def := gen.ArrayIndex.Get(ent); def {
-		return &gen.rooms[i]
+		h.load(gen, i, ent.ID)
 	}
-	return nil
+	return h
 }
 
-func (gen *worldGen) GetID(id ecs.ID) *genRoom {
-	if i, def := gen.ArrayIndex.GetID(id); def {
-		return &gen.rooms[i]
+func (gen *worldGen) GetID(id ecs.ID) (h genRoomHandle) {
+	i, def := gen.ArrayIndex.GetID(id)
+	if def {
+		h.load(gen, i, id)
 	}
-	return nil
+	return h
+}
+
+func (gen *worldGen) get(i int) (h genRoomHandle) {
+	h.load(gen, i, gen.ArrayIndex.ID(i))
+	return h
+}
+
+func (room *genRoomHandle) load(gen *worldGen, i int, id ecs.ID) {
+	room.gen = gen
+	room.i = i
+	room.genRoom = &gen.data[i]
+	room.r = gen.rooms.GetID(id)
 }
 
 func (gen *worldGen) run() bool {
-	if len(gen.roomq) == 0 {
-		log.Printf("generation done")
+	if len(gen.q) == 0 {
+		gen.logf("generation done")
 		return false
 	}
-	i := gen.roomq[0]
-	if room := &gen.rooms[i]; !room.done {
+	i := gen.q[0]
+	if room := gen.get(i); !room.done {
 		gen.createRoom(room)
 		room.done = true
 	} else if gen.elaborateRoom(room) && len(room.exits) < room.maxExits {
-		n := copy(gen.roomq, gen.roomq[1:])
-		gen.roomq[n] = i
+		n := copy(gen.q, gen.q[1:])
+		gen.q[n] = i
 	} else {
-		gen.Entity(i).Destroy()
+		gen.Entity(i).DeleteType(gameGen)
 	}
 	return true
 }
 
-func (gen *worldGen) enqueue(depth int, enter image.Point, r image.Rectangle) (ecs.Entity, *genRoom) {
-	ent := gen.Scope.Create(gameGen)
-	i, def := gen.ArrayIndex.GetID(ent.ID)
-	if !def {
-		   panic("missing new genRoom data")
+func (gen *worldGen) enqueue(depth int, enter image.Point, r image.Rectangle) genRoomHandle {
+	ent := gen.Scope.Create(gameRoom | gameGen)
+	room := gen.GetID(ent.ID)
+	if room.gen == nil {
+		panic("missing new genRoom data")
 	}
-	room := &gen.rooms[i]
+
 	room.depth = depth
 	room.enter = enter
-	room.r = r
-	log.Printf("enqueue %v %+v", ent, room)
-	gen.roomq = append(gen.roomq, i)
-	return ent, room
+	*room.r = r
+	gen.logf("enqueue %v %+v", ent, room)
+	gen.q = append(gen.q, room.i)
+	return room
 }
 
-func (gen *worldGen) createRoom(room *genRoom) {
-	log.Printf("room @%v", room.r)
+func (gen *worldGen) createRoom(room genRoomHandle) {
+	gen.logf("room @%v", room.r)
 	room.maxExits = room.r.Dx() * room.r.Dy() / gen.ExitDensity
 
 	// create room
@@ -117,7 +140,7 @@ func (gen *worldGen) createRoom(room *genRoom) {
 	gen.style = gen.Floor
 	gen.fill(room.r.Inset(1))
 	gen.style = gen.Wall
-	gen.rectangle(room.r)
+	gen.rectangle(*room.r)
 	room.collectWalls(gen)
 
 	if room.enter == image.ZP {
@@ -139,8 +162,8 @@ func (gen *worldGen) createRoom(room *genRoom) {
 	}
 }
 
-func (gen *worldGen) elaborateRoom(room *genRoom) (ok bool) {
-	log.Printf("elaborate %v", room.r)
+func (gen *worldGen) elaborateRoom(room genRoomHandle) (ok bool) {
+	gen.logf("elaborate %v", room.r)
 	var pos, dir image.Point
 	if pos, ok = gen.addExit(room); ok {
 		if pos, dir, ok = gen.buildHallway(room, pos); ok {
@@ -157,7 +180,7 @@ func (gen *worldGen) elaborateRoom(room *genRoom) (ok bool) {
 	return ok
 }
 
-func (gen *worldGen) addExit(room *genRoom) (pos image.Point, ok bool) {
+func (gen *worldGen) addExit(room genRoomHandle) (pos image.Point, ok bool) {
 	wall := room.chooseDoorWall(gen)
 	if ok = !wall.zero(); ok {
 		pos = wall.Point()
@@ -186,19 +209,19 @@ func (gen *worldGen) placeNextRoom(enter, dir image.Point) image.Rectangle {
 }
 
 func (gen *worldGen) createDoorway(pt image.Point) renderable {
-	log.Printf("doorway @%v", pt)
+	gen.logf("doorway @%v", pt)
 	door := gen.g.ren.create(pt, gen.Door)
 	// TODO set door behavior
 	return door
 }
 
-func (gen *worldGen) buildHallway(room *genRoom, pos image.Point) (_, dir image.Point, _ bool) {
+func (gen *worldGen) buildHallway(room genRoomHandle, pos image.Point) (_, dir image.Point, _ bool) {
 	// TODO hallways with turns
 
 	dir = room.wallNormal(pos)
 	n := rand.Intn(gen.MaxHallSize-gen.MinHallSize) + gen.MinHallSize
 
-	log.Printf("hallway dir:%v n:%v", dir, n)
+	gen.logf("hallway dir:%v n:%v", dir, n)
 	orth := orthNormal(dir)
 
 	gen.reset()
@@ -290,17 +313,24 @@ func (gen *worldGen) placeRoom(enter, dir, sz image.Point) (r image.Rectangle) {
 	return r
 }
 
+type genRoomHandle struct {
+	gen *worldGen
+	i   int
+
+	r *image.Rectangle
+	*genRoom
+}
+
 type genRoom struct {
 	done     bool
 	depth    int
 	maxExits int
 	enter    image.Point
-	r        image.Rectangle
 	exits    []image.Point
 	walls    []renderable
 }
 
-func (room *genRoom) wallNormal(p image.Point) (dir image.Point) {
+func (room genRoomHandle) wallNormal(p image.Point) (dir image.Point) {
 	if p.X == room.r.Min.X {
 		dir.X = -1
 	} else if p.Y == room.r.Min.Y {
@@ -313,20 +343,20 @@ func (room *genRoom) wallNormal(p image.Point) (dir image.Point) {
 	return dir
 }
 
-func (room *genRoom) collectWalls(gen *worldGen) {
+func (room genRoomHandle) collectWalls(gen *worldGen) {
 	if room.walls == nil {
 		room.walls = make([]renderable, 0, len(gen.built))
 	}
 	for _, wall := range gen.built {
 		if wall.Entity().Type() == gen.Wall.t {
-			if pt := wall.Point(); !isCorner(pt, room.r) {
+			if pt := wall.Point(); !isCorner(pt, *room.r) {
 				room.walls = append(room.walls, wall)
 			}
 		}
 	}
 }
 
-func (room *genRoom) chooseDoorWall(gen *worldGen) (rend renderable) {
+func (room genRoomHandle) chooseDoorWall(gen *worldGen) (rend renderable) {
 	var j int
 	for i, wall := range room.walls {
 		if !wall.zero() && room.sharesWallWithExit(wall.Point()) {
@@ -343,7 +373,7 @@ func (room *genRoom) chooseDoorWall(gen *worldGen) (rend renderable) {
 	return rend
 }
 
-func (room *genRoom) sharesWallWithExit(p image.Point) bool {
+func (room genRoomHandle) sharesWallWithExit(p image.Point) bool {
 	for j := range room.exits {
 		if room.exits[j].X == p.X || room.exits[j].Y == p.Y {
 			return true

@@ -18,9 +18,10 @@ type game struct {
 
 	// TODO shard(s)
 	ecs.Scope
-	ren render
-	pos position
-	gen worldGen
+	rooms rooms
+	ren   render
+	pos   position
+	gen   worldGen
 
 	// ui
 	genning bool
@@ -36,6 +37,7 @@ const (
 	gameInput
 	gameSpawn
 	gameInteract
+	gameRoom
 	gameGen
 
 	gameWall       = gamePosition | gameRender | gameCollides
@@ -85,12 +87,14 @@ func newGame() *game {
 	g := &game{}
 
 	// TODO better shard construction
+	g.rooms.Scope = &g.Scope
 	g.gen.Scope = &g.Scope
 	g.pos.Scope = &g.Scope
 	g.ren.Scope = &g.Scope
 
 	// TODO better dep coupling
 	g.ren.pos = &g.pos
+	g.gen.rooms = &g.rooms
 	g.gen.g = g
 	g.gen.worldGenConfig = worldConfig
 
@@ -98,6 +102,7 @@ func newGame() *game {
 	g.ag.registerFunc(g.movePlayers, 0, gamePlayer)
 	g.ag.registerFunc(g.spawnPlayers, 1, gameSpawnPoint)
 
+	g.Scope.Watch(gameRoom, 0, &g.rooms)
 	g.Scope.Watch(gameGen, 0, &g.gen)
 	g.Scope.Watch(gamePosition, 0, &g.pos)
 	g.Scope.Watch(gamePosition|gameRender, 0, &g.ren)
