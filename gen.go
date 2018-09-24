@@ -96,6 +96,7 @@ func (room genRoom) elaborate(gen *worldGen) {
 	if !clear {
 		return
 	}
+	room.exits = append(room.exits, exit)
 	wall.apply(gen.Floor)
 	gen.createDoorway(exit)
 
@@ -148,10 +149,9 @@ func (gen *worldGen) createDoorway(pt image.Point) renderable {
 	return door
 }
 
-func (gen *worldGen) buildHallway(room *genRoom, exit image.Point) (pos, dir image.Point, _ bool) {
+func (gen *worldGen) buildHallway(room *genRoom, pos image.Point) (_, dir image.Point, _ bool) {
 	// TODO hallways with turns
 
-	pos = exit
 	dir = room.wallNormal(pos)
 	n := rand.Intn(gen.MaxHallSize-gen.MinHallSize) + gen.MinHallSize
 
@@ -176,7 +176,6 @@ func (gen *worldGen) buildHallway(room *genRoom, exit image.Point) (pos, dir ima
 		gen.point(pos.Sub(orth))
 	}
 
-	room.exits = append(room.exits, exit)
 	return pos, dir, true
 }
 
