@@ -11,6 +11,9 @@ type ArrayIndex struct {
 // Len returns how many id slots have been allocated.
 func (ai *ArrayIndex) Len() int { return len(ai.id) }
 
+// Used returns how many id slots are currently in use.
+func (ai *ArrayIndex) Used() int { return len(ai.id) - len(ai.free) }
+
 // Entity returns the entity stored for the given array index.
 func (ai *ArrayIndex) Entity(i int) Entity {
 	if i < len(ai.id) {
