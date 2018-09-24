@@ -87,6 +87,24 @@ type Watcher interface {
 	EntityDestroyed(Entity, Type)
 }
 
+// EntityCreatedFunc is a convenience for a creation-only watcher.
+type EntityCreatedFunc func(Entity, Type)
+
+// EntityDestroyedFunc is a convenience for a destruction-only watcher.
+type EntityDestroyedFunc func(Entity, Type)
+
+// EntityCreated calls the aliased function.
+func (f EntityCreatedFunc) EntityCreated(e Entity, t Type) { f(e, t) }
+
+// EntityDestroyed is a no-op.
+func (f EntityCreatedFunc) EntityDestroyed(e Entity, t Type) {}
+
+// EntityCreated is a no-op.
+func (f EntityDestroyedFunc) EntityCreated(e Entity, t Type) {}
+
+// EntityDestroyed calls the aliased function.
+func (f EntityDestroyedFunc) EntityDestroyed(e Entity, t Type) { f(e, t) }
+
 // Len returns the number of existent entities (with non-zero type).
 func (sc *Scope) Len() int {
 	return len(sc.typs) - len(sc.free)
