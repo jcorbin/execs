@@ -37,7 +37,6 @@ func (gen *worldGen) init() {
 	}
 	room := genRoom{r: image.Rectangle{image.ZP, gen.chooseRoomSize()}}
 	log.Printf("init %v", room.r)
-	gen.createRoom(&room)
 	gen.q = append(gen.q, room)
 }
 
@@ -46,9 +45,17 @@ func (g *game) runGen() bool {
 		log.Printf("generation done")
 		return false
 	}
-	room := &g.gen.q[0]
-	g.gen.q = g.gen.q[:copy(g.gen.q, g.gen.q[1:])]
-	g.gen.elaborateRoom(room)
+	if room := &g.gen.q[0]; !room.done {
+		g.gen.createRoom(room)
+		room.done = true
+	} else {
+		ok := g.gen.elaborateRoom(room)
+		further := len(room.exits) < room.maxExits
+		g.gen.q = g.gen.q[:copy(g.gen.q, g.gen.q[1:])]
+		if ok && further {
+			g.gen.q = append(g.gen.q, *room)
+		}
+	}
 	log.Printf("gen up to %v entities", g.Scope.Len())
 	return true
 }
@@ -89,23 +96,13 @@ func (gen *worldGen) elaborateRoom(room *genRoom) (ok bool) {
 	var pos, dir image.Point
 	if pos, ok = gen.addExit(room); ok {
 		if pos, dir, ok = gen.buildHallway(room, pos); ok {
-			if len(room.exits) < room.maxExits {
-				// room can be further elaborated
-				gen.q = append(gen.q, *room)
-			}
-
 			pos = pos.Add(dir)
 			if ok = !gen.at(pos); ok {
-				// place and create next room
+				// place next room if entrance clear
 				nextRoom := genRoom{depth: room.depth + 1}
 				nextRoom.enter = pos
 				nextRoom.r = gen.placeNextRoom(pos, dir)
-				gen.createRoom(&nextRoom)
-
-				// further elaborate if large enough
-				if len(nextRoom.exits) < nextRoom.maxExits {
-					gen.q = append(gen.q, nextRoom)
-				}
+				gen.q = append(gen.q, nextRoom)
 			} else {
 				// otherwise, cap hallway. TODO maybe doorway back into a room.
 				gen.fillWallAt()
@@ -249,6 +246,7 @@ func (gen *worldGen) placeRoom(enter, dir, sz image.Point) (r image.Rectangle) {
 }
 
 type genRoom struct {
+	done     bool
 	depth    int
 	maxExits int
 	enter    image.Point
