@@ -206,8 +206,8 @@ func (ent Entity) Seq() uint64 {
 	return seq
 }
 
-// SetType updates returns the type of the entity, calling any requisite
-// watchers. Panics if Entity's generation is out of sync with Scope's.
+// SetType updates the type of the entity, calling any requisite watchers.
+// Panics if Entity's generation is out of sync with Scope's.
 //
 // Setting the type to 0 will completely destroy the entity, marking its ID for
 // future reuse. In a best-effort to prevent use-after-free bugs, the ID's
@@ -218,7 +218,30 @@ func (ent Entity) SetType(newType Type) bool {
 		panic("invalid entity handle")
 	}
 	priorTyp, seq := ent.typ()
+	return ent.setType(priorTyp, seq, newType)
+}
 
+// AddType adds type bits to the entity.
+// It's a more cohesive version of ent.SetType(ent.Type() | typ).
+func (ent Entity) AddType(typ Type) bool {
+	if ent.Scope == nil || ent.ID == 0 {
+		panic("invalid entity handle")
+	}
+	priorTyp, seq := ent.typ()
+	return ent.setType(priorTyp, seq, priorTyp.Type|typ)
+}
+
+// DeleteType adds type bits to the entity.
+// It's a more cohesive version of ent.SetType(ent.Type() & ^typ).
+func (ent Entity) DeleteType(typ Type) bool {
+	if ent.Scope == nil || ent.ID == 0 {
+		panic("invalid entity handle")
+	}
+	priorTyp, seq := ent.typ()
+	return ent.setType(priorTyp, seq, priorTyp.Type&^typ)
+}
+
+func (ent Entity) setType(priorTyp genType, seq uint64, newType Type) bool {
 	typeChange := priorTyp.Type ^ newType
 	if typeChange == 0 {
 		return false
