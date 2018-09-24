@@ -99,9 +99,9 @@ func newGame() *game {
 	g.Scope.Watch(gamePosition, 0, &g.pos)
 	g.Scope.Watch(gamePosition|gameRender, 0, &g.ren)
 
+	g.gen.enqueue(0, image.ZP, image.Rectangle{image.ZP, g.gen.chooseRoomSize()})
+
 	// TODO agent-based gen
-	// generate level
-	g.gen.init()
 
 	return g
 }

@@ -31,13 +31,6 @@ type worldGen struct {
 	q []genRoom
 }
 
-func (gen *worldGen) init() {
-	if len(gen.q) > 0 {
-		gen.q = gen.q[:0]
-	}
-	gen.enqueue(0, image.ZP, image.Rectangle{image.ZP, gen.chooseRoomSize()})
-}
-
 func (g *game) runGen() bool {
 	if !g.gen.run() {
 		return false
