@@ -41,22 +41,29 @@ func (gen *worldGen) init() {
 }
 
 func (g *game) runGen() bool {
-	if len(g.gen.q) == 0 {
+	if !g.gen.run() {
+		return false
+	}
+	log.Printf("gen up to %v entities", g.Scope.Len())
+	return true
+}
+
+func (gen *worldGen) run() bool {
+	if len(gen.q) == 0 {
 		log.Printf("generation done")
 		return false
 	}
-	if room := &g.gen.q[0]; !room.done {
-		g.gen.createRoom(room)
+	if room := &gen.q[0]; !room.done {
+		gen.createRoom(room)
 		room.done = true
 	} else {
-		ok := g.gen.elaborateRoom(room)
+		ok := gen.elaborateRoom(room)
 		further := len(room.exits) < room.maxExits
-		g.gen.q = g.gen.q[:copy(g.gen.q, g.gen.q[1:])]
+		gen.q = gen.q[:copy(gen.q, gen.q[1:])]
 		if ok && further {
-			g.gen.q = append(g.gen.q, *room)
+			gen.q = append(gen.q, *room)
 		}
 	}
-	log.Printf("gen up to %v entities", g.Scope.Len())
 	return true
 }
 
