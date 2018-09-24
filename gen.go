@@ -4,6 +4,7 @@ import (
 	"image"
 	"log"
 	"math/rand"
+	"time"
 
 	"github.com/jcorbin/execs/internal/ecs"
 )
@@ -30,7 +31,7 @@ type worldGen struct {
 
 	ecs.ArrayIndex
 	data []genRoom
-	q    []int
+	tick int
 }
 
 func (gen *worldGen) logf(mess string, args ...interface{}) {
@@ -52,19 +53,6 @@ func (gen *worldGen) EntityCreated(ent ecs.Entity, _ ecs.Type) {
 		exits: gen.data[i].exits[:0],
 		walls: gen.data[i].walls[:0],
 	}
-}
-
-func (gen *worldGen) EntityDestroyed(ent ecs.Entity, _ ecs.Type) {
-	i := 0
-	for j := 0; j < len(gen.q); j++ {
-		if gen.ID(gen.q[j]) == ent.ID {
-			continue
-		}
-		gen.q[i] = gen.q[j]
-		i++
-	}
-	gen.q = gen.q[:i]
-	gen.ArrayIndex.Delete(ent)
 }
 
 func (gen *worldGen) Get(ent ecs.Entity) (h genRoomHandle) {
@@ -90,27 +78,32 @@ func (room *genRoomHandle) load(gen *worldGen, i int, id ecs.ID) {
 }
 
 func (gen *worldGen) run() bool {
-	if len(gen.q) == 0 {
-		gen.logf("generation done")
-		return false
-	}
-	if id := gen.ArrayIndex.ID(i); id != 0 {
-		i := gen.q[0]
-		var room genRoomHandle
-		if room.load(gen, i, id); !room.done {
-			gen.createRoom(room)
-			room.done = true
-		} else if gen.elaborateRoom(room) && len(room.exits) < room.maxExits {
-			n := copy(gen.q, gen.q[1:])
-			gen.q[n] = i
-		} else {
-			gen.Entity(i).DeleteType(gameGen)
+	const deadline = 3 * time.Millisecond
+	t0 := time.Now()
+	for i := 0; i < len(gen.data); i++ {
+		if gen.data[i].tick >= gen.tick {
+			continue
+		}
+		if id := gen.ArrayIndex.ID(i); id != 0 {
+			var room genRoomHandle
+			if room.load(gen, i, id); !room.done {
+				gen.createRoom(room)
+				room.done = true
+			} else if !gen.elaborateRoom(room) || len(room.exits) >= room.maxExits {
+				gen.Entity(i).DeleteType(gameGen)
+			}
+		}
+		gen.data[i].tick = gen.tick
+		t1 := time.Now()
+		if t1.Sub(t0) > deadline {
+			return true
 		}
 	}
-	return true
+	gen.tick++
+	return len(gen.data) > 0
 }
 
-func (gen *worldGen) enqueue(depth int, enter image.Point, r image.Rectangle) genRoomHandle {
+func (gen *worldGen) create(depth int, enter image.Point, r image.Rectangle) genRoomHandle {
 	ent := gen.Scope.Create(gameRoom | gameGen)
 	room := gen.GetID(ent.ID)
 	if room.gen == nil {
@@ -120,8 +113,7 @@ func (gen *worldGen) enqueue(depth int, enter image.Point, r image.Rectangle) ge
 	room.depth = depth
 	room.enter = enter
 	*room.r = r
-	gen.logf("enqueue %v %+v", ent, room)
-	gen.q = append(gen.q, room.i)
+	gen.logf("gen %v %+v", ent, room)
 	return room
 }
 
@@ -161,7 +153,7 @@ func (gen *worldGen) elaborateRoom(room genRoomHandle) (ok bool) {
 	var pos, dir image.Point
 	if pos, ok = gen.addExit(room); ok {
 		if pos, dir, ok = gen.buildHallway(room, pos); ok {
-			gen.enqueue(room.depth+1, pos, gen.placeNextRoom(pos, dir))
+			gen.create(room.depth+1, pos, gen.placeNextRoom(pos, dir))
 		}
 	}
 	return ok
@@ -287,6 +279,7 @@ type genRoomHandle struct {
 type genRoom struct {
 	done     bool
 	depth    int
+	tick     int
 	maxExits int
 	enter    image.Point
 	exits    []image.Point

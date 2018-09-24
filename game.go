@@ -107,7 +107,7 @@ func newGame() *game {
 	g.Scope.Watch(gamePosition, 0, &g.pos)
 	g.Scope.Watch(gamePosition|gameRender, 0, &g.ren)
 
-	g.gen.enqueue(0, image.ZP, image.Rectangle{image.ZP, g.gen.chooseRoomSize()})
+	g.gen.create(0, image.ZP, image.Rectangle{image.ZP, g.gen.chooseRoomSize()})
 
 	// TODO agent-based gen
 
@@ -208,7 +208,9 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 
 	// entity count in upper-left
 	ctx.Output.To(image.Pt(1, 1))
-	fmt.Fprintf(ctx.Output, "%v entities", g.Scope.Len())
+	fmt.Fprintf(ctx.Output, "%v entities %v rooms (%v generating)",
+		g.Scope.Len(), g.rooms.Used(), g.gen.Used(),
+	)
 
 	if g.drag.active {
 		dr := g.drag.r.Canon()
