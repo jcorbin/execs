@@ -46,9 +46,9 @@ func (g *game) runGen() bool {
 		log.Printf("generation done")
 		return false
 	}
-	room := g.gen.q[0]
+	room := &g.gen.q[0]
 	g.gen.q = g.gen.q[:copy(g.gen.q, g.gen.q[1:])]
-	room.elaborate(&g.gen)
+	g.gen.elaborateRoom(room)
 	log.Printf("gen up to %v entities", g.Scope.Len())
 	return true
 }
@@ -84,27 +84,26 @@ func (gen *worldGen) createRoom(room *genRoom, enter image.Point) {
 	}
 }
 
-func (room genRoom) elaborate(gen *worldGen) {
-	var ok bool
+func (gen *worldGen) elaborateRoom(room *genRoom) (ok bool) {
 	log.Printf("elaborate %v", room.r)
 	var pos, dir image.Point
-	if pos, ok = gen.addExit(&room); ok {
-		if pos, dir, ok = gen.buildHallway(&room, pos); ok {
+	if pos, ok = gen.addExit(room); ok {
+		if pos, dir, ok = gen.buildHallway(room, pos); ok {
 			if len(room.exits) < room.maxExits {
 				// room can be further elaborated
-				gen.q = append(gen.q, room)
+				gen.q = append(gen.q, *room)
 			}
 
 			pos = pos.Add(dir)
 			if ok = !gen.at(pos); ok {
 				// place and create next room
-				room = genRoom{depth: room.depth + 1}
-				room.r = gen.placeNextRoom(pos, dir)
-				gen.createRoom(&room, pos)
+				nextRoom := genRoom{depth: room.depth + 1}
+				nextRoom.r = gen.placeNextRoom(pos, dir)
+				gen.createRoom(&nextRoom, pos)
 
 				// further elaborate if large enough
-				if len(room.exits) < room.maxExits {
-					gen.q = append(gen.q, room)
+				if len(nextRoom.exits) < nextRoom.maxExits {
+					gen.q = append(gen.q, nextRoom)
 				}
 			} else {
 				// otherwise, cap hallway. TODO maybe doorway back into a room.
@@ -112,6 +111,7 @@ func (room genRoom) elaborate(gen *worldGen) {
 			}
 		}
 	}
+	return ok
 }
 
 func (gen *worldGen) addExit(room *genRoom) (pos image.Point, ok bool) {
