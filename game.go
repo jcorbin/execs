@@ -36,6 +36,7 @@ const (
 	gameInput
 	gameSpawn
 	gameInteract
+	gameGen
 
 	gameWall       = gamePosition | gameRender | gameCollides
 	gameFloor      = gamePosition | gameRender
@@ -84,6 +85,7 @@ func newGame() *game {
 	g := &game{}
 
 	// TODO better shard construction
+	g.gen.Scope = &g.Scope
 	g.pos.Scope = &g.Scope
 	g.ren.Scope = &g.Scope
 
@@ -96,6 +98,7 @@ func newGame() *game {
 	g.ag.registerFunc(g.movePlayers, 0, gamePlayer)
 	g.ag.registerFunc(g.spawnPlayers, 1, gameSpawnPoint)
 
+	g.Scope.Watch(gameGen, 0, &g.gen)
 	g.Scope.Watch(gamePosition, 0, &g.pos)
 	g.Scope.Watch(gamePosition|gameRender, 0, &g.ren)
 

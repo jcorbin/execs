@@ -28,8 +28,51 @@ type worldGen struct {
 	atWall  ecs.Entity
 	atDoor  ecs.Entity
 
+	ecs.ArrayIndex
 	rooms []genRoom
 	roomq []int
+}
+
+func (gen *worldGen) EntityCreated(ent ecs.Entity, _ ecs.Type) {
+	i := gen.ArrayIndex.Insert(ent)
+	for i >= len(gen.rooms) {
+		if i < cap(gen.rooms) {
+			gen.rooms = gen.rooms[:i+1]
+		} else {
+			gen.rooms = append(gen.rooms, genRoom{})
+		}
+	}
+	gen.rooms[i] = genRoom{
+		exits: gen.rooms[i].exits[:0],
+		walls: gen.rooms[i].walls[:0],
+	}
+}
+
+func (gen *worldGen) EntityDestroyed(ent ecs.Entity, _ ecs.Type) {
+	i := 0
+	for j := 0; j < len(gen.roomq); j++ {
+		if gen.ID(gen.roomq[j]) == ent.ID {
+			continue
+		}
+		gen.roomq[i] = gen.roomq[j]
+		i++
+	}
+	gen.roomq = gen.roomq[:i]
+	gen.ArrayIndex.Delete(ent)
+}
+
+func (gen *worldGen) Get(ent ecs.Entity) *genRoom {
+	if i, def := gen.ArrayIndex.Get(ent); def {
+		return &gen.rooms[i]
+	}
+	return nil
+}
+
+func (gen *worldGen) GetID(id ecs.ID) *genRoom {
+	if i, def := gen.ArrayIndex.GetID(id); def {
+		return &gen.rooms[i]
+	}
+	return nil
 }
 
 func (gen *worldGen) run() bool {
@@ -37,31 +80,32 @@ func (gen *worldGen) run() bool {
 		log.Printf("generation done")
 		return false
 	}
-	if room := &gen.rooms[gen.roomq[0]]; !room.done {
+	i := gen.roomq[0]
+	if room := &gen.rooms[i]; !room.done {
 		gen.createRoom(room)
 		room.done = true
+	} else if gen.elaborateRoom(room) && len(room.exits) < room.maxExits {
+		n := copy(gen.roomq, gen.roomq[1:])
+		gen.roomq[n] = i
 	} else {
-		ok := gen.elaborateRoom(room)
-		further := len(room.exits) < room.maxExits
-		i := gen.roomq[0]
-		gen.roomq = gen.roomq[:copy(gen.roomq, gen.roomq[1:])]
-		if ok && further {
-			gen.roomq = append(gen.roomq, i)
-		}
+		gen.Entity(i).Destroy()
 	}
 	return true
 }
 
-func (gen *worldGen) enqueue(depth int, enter image.Point, r image.Rectangle) (int, *genRoom) {
-	i := len(gen.rooms)
-	gen.rooms = append(gen.rooms, genRoom{})
-	gen.roomq = append(gen.roomq, i)
+func (gen *worldGen) enqueue(depth int, enter image.Point, r image.Rectangle) (ecs.Entity, *genRoom) {
+	ent := gen.Scope.Create(gameGen)
+	i, def := gen.ArrayIndex.GetID(ent.ID)
+	if !def {
+		   panic("missing new genRoom data")
+	}
 	room := &gen.rooms[i]
 	room.depth = depth
 	room.enter = enter
 	room.r = r
-	log.Printf("enqueue %v %+v", i, room)
-	return i, room
+	log.Printf("enqueue %v %+v", ent, room)
+	gen.roomq = append(gen.roomq, i)
+	return ent, room
 }
 
 func (gen *worldGen) createRoom(room *genRoom) {
