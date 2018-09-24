@@ -198,6 +198,10 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 	ctx.Output.Clear()
 	g.ren.drawRegionInto(g.view, &ctx.Output.Grid)
 
+	// entity count in upper-left
+	ctx.Output.To(image.Pt(1, 1))
+	fmt.Fprintf(ctx.Output, "%v entities", g.Scope.Len())
+
 	if g.drag.active {
 		dr := g.drag.r.Canon()
 		eachCell(&ctx.Output.Grid, dr, func(cell anansi.Cell) {
