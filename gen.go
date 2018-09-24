@@ -86,19 +86,14 @@ func (gen *worldGen) createRoom(room *genRoom, enter image.Point) {
 
 func (room genRoom) elaborate(gen *worldGen) {
 	log.Printf("elaborate %v", room.r)
-	// choose and build exit door
-	wall := room.chooseDoorWall(gen)
-	if wall.zero() {
+	pos, ok := gen.addExit(&room)
+	if !ok {
 		return
 	}
-	exit := wall.Point()
-	pos, dir, clear := gen.buildHallway(&room, exit)
+	pos, dir, clear := gen.buildHallway(&room, pos)
 	if !clear {
 		return
 	}
-	room.exits = append(room.exits, exit)
-	wall.apply(gen.Floor)
-	gen.createDoorway(exit)
 
 	// record exit
 	if len(room.exits) < room.maxExits {
@@ -123,6 +118,17 @@ func (room genRoom) elaborate(gen *worldGen) {
 	if len(room.exits) < room.maxExits {
 		gen.q = append(gen.q, room)
 	}
+}
+
+func (gen *worldGen) addExit(room *genRoom) (pos image.Point, ok bool) {
+	wall := room.chooseDoorWall(gen)
+	if ok = !wall.zero(); ok {
+		pos = wall.Point()
+		wall.apply(gen.Floor)
+		gen.createDoorway(pos)
+		room.exits = append(room.exits, pos)
+	}
+	return pos, ok
 }
 
 func (gen *worldGen) placeNextRoom(enter, dir image.Point) image.Rectangle {
