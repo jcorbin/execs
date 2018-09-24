@@ -31,14 +31,6 @@ type worldGen struct {
 	q []genRoom
 }
 
-func (g *game) runGen() bool {
-	if !g.gen.run() {
-		return false
-	}
-	log.Printf("gen up to %v entities", g.Scope.Len())
-	return true
-}
-
 func (gen *worldGen) run() bool {
 	if len(gen.q) == 0 {
 		log.Printf("generation done")

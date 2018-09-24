@@ -161,7 +161,7 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 
 	// run generation
 	if g.genning {
-		if !g.runGen() {
+		if !g.gen.run() {
 			g.genning = false
 		}
 	}
