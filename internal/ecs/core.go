@@ -320,3 +320,15 @@ func Ent(s *Scope, id ID) Entity { return Entity{s, id} }
 
 // Ents is a convenience constructor for a collection of entity handles.
 func Ents(s *Scope, ids []ID) Entities { return Entities{s, ids} }
+
+func withoutID(ids []ID, id ID) []ID {
+	i := 0
+	for j := 0; j < len(ids); j++ {
+		if ids[j] == id {
+			continue
+		}
+		ids[i] = ids[j]
+		i++
+	}
+	return ids[:i]
+}
