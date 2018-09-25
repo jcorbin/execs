@@ -110,10 +110,10 @@ func (g *game) init() {
 	g.ag.registerFunc(g.spawnPlayers, 1, gameSpawnPoint)
 
 	// TODO better shard construction
-	g.rooms.Scope = &g.Scope
-	g.gen.Scope = &g.Scope
-	g.pos.Scope = &g.Scope
-	g.ren.Scope = &g.Scope
+	g.pos.Init(&g.Scope)
+	g.ren.Init(&g.Scope)
+	g.rooms.Init(&g.Scope)
+	g.gen.Init(&g.Scope)
 
 	// TODO better dep coupling
 	g.ren.pos = &g.pos

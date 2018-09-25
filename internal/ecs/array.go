@@ -8,6 +8,15 @@ type ArrayIndex struct {
 	free  []int
 }
 
+// Init sets the index's scope; panics if one is already set.
+func (ai *ArrayIndex) Init(scope *Scope) {
+	if ai.Scope == nil {
+		ai.Scope = scope
+	} else if scope != ai.Scope {
+		panic("multi-scope use of ArrayIndex")
+	}
+}
+
 // Len returns how many id slots have been allocated.
 func (ai *ArrayIndex) Len() int { return len(ai.id) }
 
