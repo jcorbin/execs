@@ -15,6 +15,8 @@ const (
 	keyBits     = 64 - iota
 	keyCompBits = keyBits / 2
 
+	keyCompMask = 1<<(keyCompBits+1) - 1
+
 	minInt = -1<<(keyCompBits-1) + 1
 	maxInt = 1<<(keyCompBits-1) - 1
 )
@@ -64,10 +66,17 @@ func MakeKey(p image.Point) Key {
 }
 
 func zkey(x, y uint32) (z uint64) {
-	for i := uint(0); i < keyCompBits; i++ {
-		z |= uint64(x&(1<<i)) << i
-		z |= uint64(y&(1<<i)) << (i + 1)
-	}
+	return split(x) | split(y)<<1
+}
+
+func split(value uint32) (z uint64) {
+	z = uint64(value & keyCompMask)
+	z = (z ^ (z << 32)) & 0x000000007fffffff
+	z = (z ^ (z << 16)) & 0x0000ffff0000ffff
+	z = (z ^ (z << 8)) & 0x00ff00ff00ff00ff // 11111111000000001111111100000000..
+	z = (z ^ (z << 4)) & 0x0f0f0f0f0f0f0f0f // 1111000011110000
+	z = (z ^ (z << 2)) & 0x3333333333333333 // 11001100..
+	z = (z ^ (z << 1)) & 0x5555555555555555 // 1010...
 	return z
 }
 
