@@ -59,13 +59,16 @@ func (k Key) Pt() (p image.Point) {
 // MakeKey encodes an image point, truncating it if necessary, returning its
 // Corresponding key value.
 func MakeKey(p image.Point) Key {
-	x, y := truncQuadComponent(p.X), truncQuadComponent(p.Y)
-	var z uint64
+	z := zkey(truncQuadComponent(p.X), truncQuadComponent(p.Y))
+	return Key(z) | keySet
+}
+
+func zkey(x, y uint32) (z uint64) {
 	for i := uint(0); i < keyCompBits; i++ {
 		z |= uint64(x&(1<<i)) << i
 		z |= uint64(y&(1<<i)) << (i + 1)
 	}
-	return Key(z) | keySet
+	return z
 }
 
 func truncQuadComponent(n int) uint32 {
