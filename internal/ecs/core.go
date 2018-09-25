@@ -65,6 +65,14 @@ func (id ID) setgen(gen uint8) ID {
 // registered with a distinct type bit.
 type Type uint64
 
+// HasAll returns true only if the receiver type has all of the argument type
+// bits set.
+func (typ Type) HasAll(t Type) bool { return typ&t == t }
+
+// HasAny returns true only if the receiver type has any of the argument type
+// bit set.
+func (typ Type) HasAny(t Type) bool { return typ&t != 0 }
+
 func (typ Type) String() string {
 	return fmt.Sprintf("T+%016X", uint64(typ))
 }
