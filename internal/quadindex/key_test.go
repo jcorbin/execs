@@ -10,27 +10,26 @@ import (
 )
 
 func TestKey(t *testing.T) {
-	for _, tc := range []struct{p, e image.Point}{
-		{p:image.ZP},
-		{p:image.Pt(1, 0)},
-		{p:image.Pt(0, 1)},
-		{p:image.Pt(-1, 0)},
-		{p:image.Pt(0, -1)},
-		{p:image.Pt(1, 1)},
-		{p:image.Pt(-1, 1)},
-		{p:image.Pt(1, -1)},
-		{p:image.Pt(-1, -1)},
+	for _, tc := range []struct{ p, e image.Point }{
+		{p: image.ZP},
+		{p: image.Pt(1, 0)},
+		{p: image.Pt(0, 1)},
+		{p: image.Pt(-1, 0)},
+		{p: image.Pt(0, -1)},
+		{p: image.Pt(1, 1)},
+		{p: image.Pt(-1, 1)},
+		{p: image.Pt(1, -1)},
+		{p: image.Pt(-1, -1)},
 
 		// positive limit
-		{p:image.Pt(0x1ffffffe, 0x3ffffffe)},
-		{p:image.Pt(0x3fffffff, 0x3fffffff)},
-		{p:image.Pt(0x40000000, 0x40000000), e:image.Pt(0x3fffffff, 0x3fffffff)},
+		{p: image.Pt(0x1ffffffe, 0x3ffffffe)},
+		{p: image.Pt(0x3fffffff, 0x3fffffff)},
+		{p: image.Pt(0x40000000, 0x40000000), e: image.Pt(0x3fffffff, 0x3fffffff)},
 
 		// negative limit
-		{p:image.Pt(-0x3ffffffe, -0x3ffffffe)},
-		{p:image.Pt(-0x3fffffff, -0x3fffffff)},
-		{p:image.Pt(-0x40000000, -0x40000000), e:image.Pt(-0x3fffffff, -0x3fffffff)},
-
+		{p: image.Pt(-0x3ffffffe, -0x3ffffffe)},
+		{p: image.Pt(-0x3fffffff, -0x3fffffff)},
+		{p: image.Pt(-0x40000000, -0x40000000), e: image.Pt(-0x3fffffff, -0x3fffffff)},
 	} {
 		t.Run(tc.p.String(), func(t *testing.T) {
 			k := quadindex.MakeKey(tc.p)
@@ -45,4 +44,26 @@ func TestKey(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestKey_NextWithin(t *testing.T) {
+	r := image.Rect(2, 2, 8, 8)
+	k := quadindex.MakeKey(r.Min)
+
+	lim := r.Dx() * r.Dy() * 4
+	for i := 0; i < lim && k < quadindex.MakeKey(r.Max); i++ {
+		nk, within := k.NextWithin(r)
+		if within {
+			t.Logf("[%v] %v", i, k)
+			k++
+		} else {
+			t.Logf("[%v] SKIP %v => %v (%v)", i, k, nk, int(nk-k))
+			if nk < k {
+				t.FailNow()
+			}
+			k = nk
+		}
+	}
+
+	t.Fail()
 }

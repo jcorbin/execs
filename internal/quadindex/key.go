@@ -50,9 +50,64 @@ func (k Key) Pt() (p image.Point) {
 		return image.ZP
 	}
 	x, y := combine(uint64(k&keyMask)), combine(uint64(k&keyMask)>>1)
-	p.X = int(x) + minInt
-	p.Y = int(y) + minInt
+	p.X = int(x)
+	p.Y = int(y)
 	return p
+}
+
+// NextWithin returns k and true if k is inside the given rectangle, the next
+// smallest Key value that is and false otherwise.
+func (k Key) NextWithin(r image.Rectangle) (Key, bool) {
+	within := k.Pt().In(r)
+	if !within {
+		bigmin, _ := zdivide(
+			uint64(k&keyMask),
+			zkey(truncQuadComponent(r.Min.X), truncQuadComponent(r.Min.Y)),
+			zkey(truncQuadComponent(r.Max.X-1), truncQuadComponent(r.Max.Y-1)),
+		)
+		k = Key(bigmin) | keySet
+	}
+	return k, within
+}
+
+// https://web.archive.org/web/20170422120027/http://docs.raima.com/rdme/9_1/Content/GS/POIexample.htm
+
+// zdivide implements the algorithm defined in the Tropf and Herzog paper to
+// find the minimum z-index (bigmin) in range greater than and the maximum
+// z-index (litmax) in range smaller than a given point outside the range.
+// NOTE The rangue values, rmin and rmax, are both inclusive.
+func zdivide(p, rmin, rmax uint64) (bigmin, litmax uint64) {
+	zmin, zmax := rmin, rmax
+	for i := uint(keyBits); i > 0; i-- {
+
+		bits, dim := i/2, i%2
+
+		v := ((p & (1 << i)) >> (i - 2)) |
+			((zmin & (1 << i)) >> (i - 1)) |
+			((zmax & (1 << i)) >> i)
+
+		switch v {
+		case 0, 7: // (0, 0, 0), (1, 1, 1)
+			continue
+		case 3: // (0, 1, 1)
+			return zmin, litmax
+		case 4: // (1, 0, 0)
+			return bigmin, zmax
+		case 2, 6: // (0, 1, 0), (1, 1, 0)
+			panic(fmt.Sprintf("inconceivable: min <= max v:%v @%v", v, i))
+		}
+
+		mask := ^(split(keyCompMask>>(keyCompBits-bits-1)) << dim)
+		nmin := zmin&mask | (split(1<<bits) << dim)
+		nmax := zmax&mask | (split((1<<bits)-1) << dim)
+		if v == 1 { // (0, 0, 1)
+			bigmin, zmax = nmin, nmax
+		} else { // v == 5 (1, 0, 1)
+			zmin, litmax = nmin, nmax
+		}
+
+	}
+	return bigmin, litmax
 }
 
 // MakeKey encodes an image point, truncating it if necessary, returning its
@@ -88,11 +143,5 @@ func combine(z uint64) uint32 {
 }
 
 func truncQuadComponent(n int) uint32 {
-	if n < minInt {
-		n = minInt
-	}
-	if n > maxInt {
-		n = maxInt
-	}
-	return uint32(n - minInt)
+	return uint32(n)
 }

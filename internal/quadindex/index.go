@@ -3,8 +3,20 @@ package quadindex
 import (
 	"fmt"
 	"image"
+	"log"
 	"sort"
 )
+
+// TODO kill Key
+// template <typename POINT>
+// bool z_less(POINT a, POINT b)
+// {
+//  auto xdif = a.x ^ b.x, ydif = a.y ^ b.y;
+//  if (ydif <= xdif && ydif < (xdif ^ ydif))
+//  return a.x < b.x;
+//  else
+//  return a.y < b.y;
+// }
 
 // Index implements a linear quadtree.
 type Index struct {
@@ -158,10 +170,14 @@ func (qq *Cursor) Next() bool {
 		}
 		if qq.r == image.ZR {
 			return true
-		} else if qq.ks[qq.ix[qq.ii]].Pt().In(qq.r) {
-			// TODO implement BIGMIN; turns out that Key.Pt above is the long pole
+		}
+		k, within := qq.ks[qq.ix[qq.ii]].NextWithin(qq.r)
+		if within {
 			return true
 		}
+		jj := qq.index.search(k)
+		log.Printf("[%v] %v.NextWithin(%v) => %v [%v]", qq.ii, qq.ks[qq.ix[qq.ii]], qq.r, k, jj)
+		qq.ii = jj
 	}
 	return false
 }
