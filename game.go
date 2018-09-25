@@ -32,9 +32,9 @@ type game struct {
 
 	// TODO shard(s)
 	ecs.Scope
-	rooms rooms
 	ren   render
 	pos   position
+	rooms rooms
 	gen   worldGen
 
 	// ui
@@ -99,6 +99,15 @@ var worldConfig = worldGenConfig{
 
 func newGame() *game {
 	g := &game{}
+	g.init()
+	g.gen.worldGenConfig = worldConfig
+	g.gen.create(0, image.ZP, image.Rectangle{image.ZP, g.gen.chooseRoomSize()})
+	return g
+}
+
+func (g *game) init() {
+	g.ag.registerFunc(g.movePlayers, 0, gamePlayer)
+	g.ag.registerFunc(g.spawnPlayers, 1, gameSpawnPoint)
 
 	// TODO better shard construction
 	g.rooms.Scope = &g.Scope
@@ -110,20 +119,12 @@ func newGame() *game {
 	g.ren.pos = &g.pos
 	g.gen.rooms = &g.rooms
 	g.gen.g = g
-	g.gen.worldGenConfig = worldConfig
-
-	g.ag.watch(&g.Scope)
-	g.ag.registerFunc(g.movePlayers, 0, gamePlayer)
-	g.ag.registerFunc(g.spawnPlayers, 1, gameSpawnPoint)
 
 	g.Scope.Watch(gameRoom, 0, &g.rooms)
 	g.Scope.Watch(gameGen, 0, &g.gen)
 	g.Scope.Watch(gamePosition, 0, &g.pos)
 	g.Scope.Watch(gamePosition|gameRender, 0, &g.ren)
-
-	g.gen.create(0, image.ZP, image.Rectangle{image.ZP, g.gen.chooseRoomSize()})
-
-	return g
+	g.ag.watch(&g.Scope)
 }
 
 func (g *game) Update(ctx *platform.Context) (err error) {
