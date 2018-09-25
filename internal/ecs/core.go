@@ -333,6 +333,32 @@ type Entities struct {
 // Entity returns an entity handle for the i-th ID.
 func (es Entities) Entity(i int) Entity { return Entity{es.Scope, es.IDs[i]} }
 
+// FilterAll filters the collection of entities to ones whose type has all of
+// the given type bits.
+func (es Entities) FilterAll(t Type) {
+	i := 0
+	for j := 0; j < len(es.IDs); j++ {
+		if es.Entity(j).Type().HasAll(t) {
+			es.IDs[i] = es.IDs[j]
+			i++
+		}
+	}
+	es.IDs = es.IDs[:i]
+}
+
+// FilterAny filters the collection of entities to ones whose type has any of
+// the given type bits.
+func (es Entities) FilterAny(t Type) {
+	i := 0
+	for j := 0; j < len(es.IDs); j++ {
+		if es.Entity(j).Type().HasAny(t) {
+			es.IDs[i] = es.IDs[j]
+			i++
+		}
+	}
+	es.IDs = es.IDs[:i]
+}
+
 // Ent is a convenience constructor for an entity handle.
 func Ent(s *Scope, id ID) Entity { return Entity{s, id} }
 
