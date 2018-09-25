@@ -15,6 +15,7 @@ const (
 	keyBits     = 64 - iota
 	keyCompBits = keyBits / 2
 
+	keyMask     = 1<<(keyBits+1) - 1
 	keyCompMask = 1<<(keyCompBits+1) - 1
 
 	minInt = -1<<(keyCompBits-1) + 1
@@ -48,11 +49,7 @@ func (k Key) Pt() (p image.Point) {
 	if k&keySet == 0 {
 		return image.ZP
 	}
-	var x, y uint32
-	for i := uint(0); i < keyCompBits; i++ {
-		x |= uint32((k & (1 << (2 * i))) >> i)
-		y |= uint32((k & (1 << (2*i + 1))) >> (i + 1))
-	}
+	x, y := combine(uint64(k&keyMask)), combine(uint64(k&keyMask)>>1)
 	p.X = int(x) + minInt
 	p.Y = int(y) + minInt
 	return p
@@ -78,6 +75,16 @@ func split(value uint32) (z uint64) {
 	z = (z ^ (z << 2)) & 0x3333333333333333 // 11001100..
 	z = (z ^ (z << 1)) & 0x5555555555555555 // 1010...
 	return z
+}
+
+func combine(z uint64) uint32 {
+	z = z & 0x5555555555555555
+	z = (z ^ (z >> 1)) & 0x3333333333333333
+	z = (z ^ (z >> 2)) & 0x0f0f0f0f0f0f0f0f
+	z = (z ^ (z >> 4)) & 0x00ff00ff00ff00ff
+	z = (z ^ (z >> 8)) & 0x0000ffff0000ffff
+	z = (z ^ (z >> 16)) & 0x000000007fffffff
+	return uint32(z)
 }
 
 func truncQuadComponent(n int) uint32 {
