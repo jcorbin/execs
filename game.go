@@ -13,6 +13,20 @@ import (
 	"github.com/jcorbin/execs/internal/ecs"
 )
 
+/* TODO
+- shift genRoom.{exits,walls} to relation on gameRoom entities
+- planning / blueprinting mechanic
+- ui for placing room / hallway blueprints
+- digging mechanic
+- building mechanic
+- goal mechanic
+- automated agents that do goals
+- shard(s):
+  - world database (at least for level)
+  - simulation shards around agent regions
+  - agent FoS (field of simulation)
+*/
+
 type game struct {
 	ag agentSystem
 
@@ -108,8 +122,6 @@ func newGame() *game {
 	g.Scope.Watch(gamePosition|gameRender, 0, &g.ren)
 
 	g.gen.create(0, image.ZP, image.Rectangle{image.ZP, g.gen.chooseRoomSize()})
-
-	// TODO agent-based gen
 
 	return g
 }
