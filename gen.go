@@ -89,8 +89,14 @@ func (gen *worldGen) run() bool {
 			if room.load(gen, i, id); !room.done {
 				gen.createRoom(room)
 				room.done = true
-			} else if !gen.elaborateRoom(room) || len(room.exits) >= room.maxExits {
-				gen.Entity(i).DeleteType(gameGen)
+			} else {
+				ok := gen.elaborateRoom(room)
+				if ok {
+					ok = len(room.exits) < room.maxExits
+				}
+				if !ok {
+					gen.Entity(i).DeleteType(gameGen)
+				}
 			}
 		}
 		gen.data[i].tick = gen.tick
