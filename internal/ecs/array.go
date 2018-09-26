@@ -39,10 +39,10 @@ func (ai *ArrayIndex) ID(i int) ID {
 	return 0
 }
 
-// Create minimally implements Watcher by inserting the entity.
-func (ai *ArrayIndex) Create(ent Entity, _ Type) { ai.Insert(ent) }
+// EntityCreated calls Create to note the entity id.
+func (ai *ArrayIndex) EntityCreated(ent Entity, _ Type) { ai.Insert(ent) }
 
-// EntityDestroyed minimally implements Watcher by deleting the entity.
+// EntityDestroyed calls Delete to remove the entity id.
 func (ai *ArrayIndex) EntityDestroyed(ent Entity, _ Type) { ai.Delete(ent) }
 
 // Insert index entries for the given entity, re-using from the free list if
