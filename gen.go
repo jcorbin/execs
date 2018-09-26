@@ -157,23 +157,17 @@ func (gen *worldGen) createRoom(room genRoomHandle) {
 func (gen *worldGen) elaborateRoom(room genRoomHandle) (ok bool) {
 	gen.logf("elaborate %v", room.r)
 	var pos, dir image.Point
-	if pos, ok = gen.addExit(room); ok {
-		if pos, dir, ok = gen.buildHallway(room, pos); ok {
-			gen.create(room.depth+1, pos, gen.placeNextRoom(pos, dir))
-		}
-	}
-	return ok
-}
-
-func (gen *worldGen) addExit(room genRoomHandle) (pos image.Point, ok bool) {
 	wall := room.chooseDoorWall(gen)
 	if ok = !wall.zero(); ok {
 		pos = wall.Point()
 		wall.apply(gen.Floor)
 		gen.createDoorway(pos)
 		room.exits = append(room.exits, pos)
+		if pos, dir, ok = gen.buildHallway(room, pos); ok {
+			gen.create(room.depth+1, pos, gen.placeNextRoom(pos, dir))
+		}
 	}
-	return pos, ok
+	return ok
 }
 
 func (gen *worldGen) placeNextRoom(enter, dir image.Point) image.Rectangle {
