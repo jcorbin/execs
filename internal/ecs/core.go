@@ -171,6 +171,16 @@ func (sc *Scope) Create(newType Type) (ent Entity) {
 	return ent
 }
 
+// CreateN creates N entities with the given type, returning a collection of
+// their IDs.
+func (sc *Scope) CreateN(newType Type, n int) (es Entities) {
+	es.Scope = sc
+	for i := 0; i < n; i++ {
+		es.IDs = append(es.IDs, sc.Create(newType).ID)
+	}
+	return es
+}
+
 // Entity resolves an ID to an Entity within the scope.
 // Returns zero Entity value for zero id.
 // Panics if the ID is invalid.
