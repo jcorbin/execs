@@ -24,14 +24,16 @@ type worldGenConfig struct {
 }
 
 type worldGen struct {
-	rooms *rooms
-
-	builder
 	worldGenConfig
 
+	// generation state
 	ecs.ArrayIndex
-	data []genRoom
-	tick int
+	data  []genRoom
+	rooms *rooms
+	tick  int
+
+	// scratch space
+	builder
 }
 
 func (gen *worldGen) logf(mess string, args ...interface{}) {
