@@ -124,7 +124,8 @@ func (gen *worldGen) create(depth int, enter image.Point, r image.Rectangle) gen
 }
 
 func (gen *worldGen) createRoom(room genRoomHandle) {
-	gen.logf("room @%v", room.r)
+	id := room.ID()
+	gen.logf("room id:%v r:%v", id, room.r)
 	room.maxExits = room.r.Dx() * room.r.Dy() / gen.ExitDensity
 
 	// create room
@@ -286,6 +287,10 @@ type genRoom struct {
 	enter    image.Point
 	exits    []image.Point
 	walls    []renderable
+}
+
+func (room genRoomHandle) ID() ecs.ID {
+	return room.gen.ArrayIndex.ID(room.i)
 }
 
 func (room genRoomHandle) wallNormal(p image.Point) (dir image.Point) {
