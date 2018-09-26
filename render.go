@@ -65,7 +65,7 @@ func (ren *render) rezort(pq positionQuery) {
 	}
 	for pq.Next() {
 		if h := pq.handle(); !h.zero() {
-			if i, def := ren.GetID(h.ID()); def {
+			if i, def := ren.ArrayIndex.GetID(h.ID()); def {
 				ren.zord.ri = append(ren.zord.ri, i)
 				ren.zord.pi = append(ren.zord.pi, h.pi)
 			}
@@ -114,6 +114,13 @@ type renderable struct {
 func (ren *render) Get(ent ecs.Entity) renderable {
 	if ri, def := ren.ArrayIndex.Get(ent); def {
 		return renderable{ren.pos.GetID(ent.ID), ren, ri}
+	}
+	return renderable{}
+}
+
+func (ren *render) GetID(id ecs.ID) renderable {
+	if ri, def := ren.ArrayIndex.GetID(id); def {
+		return renderable{ren.pos.GetID(id), ren, ri}
 	}
 	return renderable{}
 }
