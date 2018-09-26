@@ -147,9 +147,7 @@ func (gen *worldGen) createRoom(room genRoomHandle) {
 			if pt := wall.Point(); pt == room.enter {
 				copy(gen.built[i:], gen.built[i+1:])
 				gen.built = gen.built[:len(gen.built)-1]
-				wall.apply(gen.Floor)
-				gen.createDoorway(room.enter)
-				room.exits = append(room.exits, room.enter)
+				gen.carveDoorway(room, wall)
 				break
 			}
 		}
@@ -162,10 +160,7 @@ func (gen *worldGen) elaborateRoom(room genRoomHandle) bool {
 	if wall.zero() {
 		return false
 	}
-	pos := wall.Point()
-	wall.apply(gen.Floor)
-	gen.createDoorway(pos)
-	room.exits = append(room.exits, pos)
+	pos := gen.carveDoorway(room, wall).Point()
 	pos, dir, ok := gen.buildHallway(room, pos)
 	if ok {
 		gen.create(room.depth+1, pos, gen.placeNextRoom(pos, dir))
@@ -188,6 +183,14 @@ func (gen *worldGen) placeNextRoom(enter, dir image.Point) image.Rectangle {
 		}
 	}
 	return r
+}
+
+func (gen *worldGen) carveDoorway(room genRoomHandle, wall renderable) renderable {
+	pos := wall.Point()
+	wall.apply(gen.Floor)
+	door := gen.createDoorway(pos)
+	room.exits = append(room.exits, pos)
+	return door
 }
 
 func (gen *worldGen) createDoorway(pt image.Point) renderable {
