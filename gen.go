@@ -36,6 +36,24 @@ type worldGen struct {
 	builder
 }
 
+type genRoom struct {
+	done     bool
+	depth    int
+	tick     int
+	maxExits int
+	enter    image.Point
+	exits    []image.Point
+	walls    []renderable
+}
+
+type genRoomHandle struct {
+	gen *worldGen
+	i   int
+
+	r *image.Rectangle
+	*genRoom
+}
+
 func (gen *worldGen) logf(mess string, args ...interface{}) {
 	if gen.Log {
 		log.Printf(mess, args...)
@@ -70,13 +88,6 @@ func (gen *worldGen) GetID(id ecs.ID) (h genRoomHandle) {
 		h.load(gen, i, id)
 	}
 	return h
-}
-
-func (room *genRoomHandle) load(gen *worldGen, i int, id ecs.ID) {
-	room.gen = gen
-	room.i = i
-	room.genRoom = &gen.data[i]
-	room.r = gen.rooms.GetID(id)
 }
 
 func (gen *worldGen) run() bool {
@@ -276,22 +287,11 @@ func (gen *worldGen) placeRoom(enter, dir, sz image.Point) (r image.Rectangle) {
 	return r
 }
 
-type genRoomHandle struct {
-	gen *worldGen
-	i   int
-
-	r *image.Rectangle
-	*genRoom
-}
-
-type genRoom struct {
-	done     bool
-	depth    int
-	tick     int
-	maxExits int
-	enter    image.Point
-	exits    []image.Point
-	walls    []renderable
+func (room *genRoomHandle) load(gen *worldGen, i int, id ecs.ID) {
+	room.gen = gen
+	room.i = i
+	room.genRoom = &gen.data[i]
+	room.r = gen.rooms.GetID(id)
 }
 
 func (room genRoomHandle) ID() ecs.ID {
