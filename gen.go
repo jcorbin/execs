@@ -347,12 +347,14 @@ func (room genRoomHandle) sharesWallWithExit(p image.Point) bool {
 type builder struct {
 	g     *game
 	pos   image.Point
+	ids   []ecs.ID
 	built []renderable
 
 	style renderStyle
 }
 
 func (bld *builder) reset() {
+	bld.ids = bld.ids[:0]
 	bld.built = bld.built[:0]
 }
 
@@ -390,6 +392,7 @@ func (bld *builder) lineTo(p image.Point, n int) {
 
 func (bld *builder) create() renderable {
 	rend := bld.g.ren.create(bld.pos, bld.style)
+	bld.ids = append(bld.ids, rend.ID())
 	bld.built = append(bld.built, rend)
 	return rend
 }
