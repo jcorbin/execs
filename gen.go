@@ -370,26 +370,28 @@ func (bld *builder) rectangle(box image.Rectangle) {
 
 func (bld *builder) point(p image.Point) renderable {
 	bld.pos = p
-	rend := bld.g.ren.create(bld.pos, bld.style)
-	bld.built = append(bld.built, rend)
-	return rend
+	return bld.create()
 }
 
 func (bld *builder) fill(r image.Rectangle) {
 	for bld.moveTo(r.Min); bld.pos.Y < r.Max.Y; bld.pos.Y++ {
 		for bld.pos.X = r.Min.X; bld.pos.X < r.Max.X; bld.pos.X++ {
-			rend := bld.g.ren.create(bld.pos, bld.style)
-			bld.built = append(bld.built, rend)
+			bld.create()
 		}
 	}
 }
 
 func (bld *builder) lineTo(p image.Point, n int) {
 	for i := 0; i < n; i++ {
-		rend := bld.g.ren.create(bld.pos, bld.style)
-		bld.built = append(bld.built, rend)
+		bld.create()
 		bld.pos = bld.pos.Add(p)
 	}
+}
+
+func (bld *builder) create() renderable {
+	rend := bld.g.ren.create(bld.pos, bld.style)
+	bld.built = append(bld.built, rend)
+	return rend
 }
 
 func isCorner(p image.Point, r image.Rectangle) bool {
