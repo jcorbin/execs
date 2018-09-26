@@ -316,7 +316,18 @@ func (room genRoomHandle) collectWalls(gen *worldGen) {
 func (room genRoomHandle) chooseDoorWall(gen *worldGen) (rend renderable) {
 	var j int
 	for i, wall := range room.walls {
-		if !wall.zero() && room.sharesWallWithExit(wall.Point()) {
+		if wall.zero() {
+			continue
+		}
+		skip := false
+		p := wall.Point()
+		for j := range room.exits {
+			if room.exits[j].X == p.X || room.exits[j].Y == p.Y {
+				skip = true
+				break
+			}
+		}
+		if skip {
 			continue
 		}
 		if rend.zero() || rand.Intn(i+1) <= 1 {
@@ -328,15 +339,6 @@ func (room genRoomHandle) chooseDoorWall(gen *worldGen) (rend renderable) {
 		room.walls = room.walls[:len(room.walls)-1]
 	}
 	return rend
-}
-
-func (room genRoomHandle) sharesWallWithExit(p image.Point) bool {
-	for j := range room.exits {
-		if room.exits[j].X == p.X || room.exits[j].Y == p.Y {
-			return true
-		}
-	}
-	return false
 }
 
 type builder struct {
