@@ -138,7 +138,8 @@ func (gen *worldGen) createRoom(room genRoomHandle) {
 	if room.enter == image.ZP {
 		// create spawn in non-enterable rooms
 		mid := room.r.Min.Add(room.r.Size().Div(2))
-		gen.g.pos.Get(gen.g.Create(gameSpawnPoint)).SetPoint(mid)
+		spawn := gen.g.Create(gameSpawnPoint)
+		gen.g.pos.Get(spawn).SetPoint(mid)
 	} else {
 		// entrance door
 		for i, wall := range room.walls {
