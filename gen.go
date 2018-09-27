@@ -183,19 +183,15 @@ func (gen *worldGen) elaborateRoom(room genRoomHandle) bool {
 
 func (gen *worldGen) placeNextRoom(enter, dir image.Point) image.Rectangle {
 	const placeAttempts = 10
-
-	var r image.Rectangle
 	for i := 0; ; i++ {
 		if i >= placeAttempts {
-			r = image.ZR
-			break
+			return image.ZR
 		}
-		r = gen.placeRoom(enter, dir, gen.chooseRoomSize())
+		r := gen.placeRoom(enter, dir, gen.chooseRoomSize())
 		if !gen.anyWithin(r) {
-			break
+			return r
 		}
 	}
-	return r
 }
 
 func (gen *worldGen) carveDoorway(room genRoomHandle, wall renderable) renderable {
