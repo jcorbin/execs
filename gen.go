@@ -167,6 +167,20 @@ func (gen *worldGen) createRoom(room genRoomHandle) {
 	}
 }
 
+func (gen *worldGen) createCorridor(pos, dir image.Point, n int) image.Point {
+	orth := orthNormal(dir)
+	gen.reset()
+	for i := 0; i < n; i++ {
+		pos = pos.Add(dir)
+		gen.style = gen.Floor
+		gen.point(pos)
+		gen.style = gen.Wall
+		gen.point(pos.Add(orth))
+		gen.point(pos.Sub(orth))
+	}
+	return pos
+}
+
 func (gen *worldGen) elaborateRoom(room genRoomHandle) bool {
 	gen.logf("elaborate %v", room.r)
 	wall := room.chooseDoorWall(gen)
@@ -216,7 +230,6 @@ func (gen *worldGen) buildHallway(room genRoomHandle, pos image.Point) (_, dir i
 	n := rand.Intn(gen.MaxHallSize-gen.MinHallSize) + gen.MinHallSize
 
 	gen.logf("hallway dir:%v n:%v", dir, n)
-	orth := orthNormal(dir)
 
 	// +1 spot for the landing
 	r := image.Rectangle{pos, pos.Add(dir.Mul(n + 2))}.Canon()
@@ -227,15 +240,7 @@ func (gen *worldGen) buildHallway(room genRoomHandle, pos image.Point) (_, dir i
 		return pos, dir, false
 	}
 
-	gen.reset()
-	for i := 0; i < n; i++ {
-		pos = pos.Add(dir)
-		gen.style = gen.Floor
-		gen.point(pos)
-		gen.style = gen.Wall
-		gen.point(pos.Add(orth))
-		gen.point(pos.Sub(orth))
-	}
+	pos = gen.createCorridor(pos, dir, n)
 
 	// advance to entrance
 	pos = pos.Add(dir)
