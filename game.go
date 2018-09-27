@@ -60,7 +60,9 @@ const (
 	gameCharacter  = gamePosition | gameRender | gameCollides
 	gamePlayer     = gameCharacter | gameInput
 	gameDoor       = gamePosition | gameRender // FIXME | gameCollides | gameInteract
+)
 
+const (
 	playerMoveKey     = "playerMove"
 	playerCentroidKey = "playerCentroid"
 	playerCountKey    = "playerCount"
