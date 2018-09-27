@@ -101,7 +101,14 @@ func newGame() *game {
 	g := &game{}
 	g.init()
 	g.gen.worldGenConfig = worldConfig
-	g.gen.create(0, image.ZP, image.Rectangle{image.ZP, g.gen.chooseRoomSize()})
+
+	for minsz := g.gen.RoomSize.Size().Div(4).Mul(3); ; {
+		if sz := g.gen.chooseRoomSize(); sz.X >= minsz.X && sz.Y >= minsz.Y {
+			g.gen.create(0, image.ZP, image.Rectangle{image.ZP, sz})
+			break
+		}
+	}
+
 	return g
 }
 
