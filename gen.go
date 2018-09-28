@@ -9,7 +9,7 @@ import (
 	"github.com/jcorbin/execs/internal/ecs"
 )
 
-const placeAttempts = 10
+const placeAttempts = 5 // TODO config
 
 type worldGenConfig struct {
 	Log bool
