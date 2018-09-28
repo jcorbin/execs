@@ -9,6 +9,8 @@ import (
 	"github.com/jcorbin/execs/internal/ecs"
 )
 
+const placeAttempts = 10
+
 type worldGenConfig struct {
 	Log bool
 
@@ -205,23 +207,22 @@ func (gen *worldGen) elaborateRoom(room genRoomHandle) bool {
 }
 
 func (gen *worldGen) placeCorridor(pos, dir image.Point) (image.Point, int) {
-	n := rand.Intn(gen.MaxHallSize-gen.MinHallSize) + gen.MinHallSize
-	end := pos.Add(dir.Mul(n + 1))
-
-	// +1 spot for the landing
-	r := image.Rectangle{pos, end.Add(dir)}.Canon()
-	// TODO care about checking for wall cells too?
-	for q := gen.g.pos.Within(r); q.Next(); {
-		// TODO may care to filter entity type
-		// ent := q.handle().Entity()
-		return image.ZP, 0
+	for i := 0; ; i++ {
+		if i >= placeAttempts {
+			return pos, 0
+		}
+		n := rand.Intn(gen.MaxHallSize-gen.MinHallSize) + gen.MinHallSize
+		end := pos.Add(dir.Mul(n + 1)) // +1 to include landing
+		r := image.Rectangle{pos, end.Add(dir)}.Canon()
+		// TODO care about checking for wall cells too?
+		if q := gen.g.pos.Within(r); !q.Next() {
+			// TODO may care to filter entity type
+			return end, n
+		}
 	}
-
-	return end, n
 }
 
 func (gen *worldGen) placeNextRoom(enter, dir image.Point) image.Rectangle {
-	const placeAttempts = 10
 	for i := 0; ; i++ {
 		if i >= placeAttempts {
 			return image.ZR
