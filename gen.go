@@ -182,12 +182,30 @@ func (gen *worldGen) elaborateRoom(room genRoomHandle) bool {
 		return false
 	}
 	pos := gen.carveDoorway(room, wall).Point()
-	pos, dir, ok := gen.buildHallway(room, pos)
-	if ok {
-		gen.create(room.depth+1, pos, gen.placeNextRoom(pos, dir))
-		ok = len(room.exits) < room.maxExits
+	dir := room.wallNormal(pos)
+
+	// TODO hallways with turns
+
+	n := rand.Intn(gen.MaxHallSize-gen.MinHallSize) + gen.MinHallSize
+
+	gen.logf("hallway dir:%v n:%v", dir, n)
+
+	// +1 spot for the landing
+	r := image.Rectangle{pos, pos.Add(dir.Mul(n + 2))}.Canon()
+	// TODO care about checking for wall cells too?
+	for q := gen.g.pos.Within(r); q.Next(); {
+		// TODO may care to filter entity type
+		// ent := q.handle().Entity()
+		return false
 	}
-	return ok
+
+	pos = gen.createCorridor(pos, dir, n)
+
+	// advance to entrance
+	pos = pos.Add(dir)
+
+	gen.create(room.depth+1, pos, gen.placeNextRoom(pos, dir))
+	return len(room.exits) < room.maxExits
 }
 
 func (gen *worldGen) placeNextRoom(enter, dir image.Point) image.Rectangle {
@@ -216,31 +234,6 @@ func (gen *worldGen) createDoorway(pt image.Point) renderable {
 	door := gen.g.ren.create(pt, gen.Door)
 	// TODO set door behavior
 	return door
-}
-
-func (gen *worldGen) buildHallway(room genRoomHandle, pos image.Point) (_, dir image.Point, _ bool) {
-	// TODO hallways with turns
-
-	dir = room.wallNormal(pos)
-	n := rand.Intn(gen.MaxHallSize-gen.MinHallSize) + gen.MinHallSize
-
-	gen.logf("hallway dir:%v n:%v", dir, n)
-
-	// +1 spot for the landing
-	r := image.Rectangle{pos, pos.Add(dir.Mul(n + 2))}.Canon()
-	// TODO care about checking for wall cells too?
-	for q := gen.g.pos.Within(r); q.Next(); {
-		// TODO may care to filter entity type
-		// ent := q.handle().Entity()
-		return pos, dir, false
-	}
-
-	pos = gen.createCorridor(pos, dir, n)
-
-	// advance to entrance
-	pos = pos.Add(dir)
-
-	return pos, dir, true
 }
 
 func (gen *worldGen) anyWithin(r image.Rectangle) bool {
