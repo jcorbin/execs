@@ -152,8 +152,8 @@ func (gen *worldGen) createRoom(room genRoomHandle) {
 		// entrance door
 		for i, wall := range room.walls {
 			if pt := wall.Point(); pt == room.enter {
-				copy(gen.built[i:], gen.built[i+1:])
-				gen.built = gen.built[:len(gen.built)-1]
+				copy(room.walls[i:], room.walls[i+1:])
+				room.walls = room.walls[:len(room.walls)-1]
 				gen.carveDoorway(room, wall)
 				break
 			}
