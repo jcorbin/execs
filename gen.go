@@ -328,9 +328,7 @@ func (room genRoomHandle) collectWalls(gen *worldGen) {
 	}
 	for _, wall := range gen.built {
 		if wall.Entity().Type() == gen.Wall.t {
-			if pt := wall.Point(); !isCorner(pt, *room.r) {
-				room.walls = append(room.walls, wall)
-			}
+			room.walls = append(room.walls, wall)
 		}
 	}
 }
@@ -341,7 +339,7 @@ func (room genRoomHandle) chooseDoorWall(gen *worldGen) (rend renderable) {
 		if wall.zero() {
 			continue
 		}
-		if sharesPointComponent(wall.Point(), room.exits) {
+		if pt := wall.Point(); isCorner(pt, *room.r) || sharesPointComponent(pt, room.exits) {
 			continue
 		}
 
