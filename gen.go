@@ -245,6 +245,15 @@ func (gen *worldGen) placeNextRoom(enter, dir image.Point) image.Rectangle {
 
 func (gen *worldGen) carveDoorway(room genRoomHandle, wall renderable) renderable {
 	pos := wall.Point()
+	i := 0
+	for j := 0; j < len(room.walls); j++ {
+		if room.walls[j].Point() == pos {
+			continue
+		}
+		room.walls[j] = room.walls[i]
+		i++
+	}
+	room.walls = room.walls[:i]
 	wall.apply(gen.Floor)
 	door := gen.createDoorway(pos)
 	room.exits = append(room.exits, pos)
@@ -334,7 +343,6 @@ func (room genRoomHandle) collectWalls(gen *worldGen) {
 }
 
 func (room genRoomHandle) chooseDoorWall(gen *worldGen) (rend renderable) {
-	var j int
 	for i, wall := range room.walls {
 		if wall.zero() {
 			continue
@@ -342,14 +350,9 @@ func (room genRoomHandle) chooseDoorWall(gen *worldGen) (rend renderable) {
 		if pt := wall.Point(); isCorner(pt, *room.r) || sharesPointComponent(pt, room.exits) {
 			continue
 		}
-
 		if rend.zero() || rand.Intn(i+1) <= 1 {
-			j, rend = i, wall
+			rend = wall
 		}
-	}
-	if !rend.zero() {
-		copy(room.walls[j:], room.walls[j+1:])
-		room.walls = room.walls[:len(room.walls)-1]
 	}
 	return rend
 }
