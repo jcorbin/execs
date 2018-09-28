@@ -215,8 +215,7 @@ func (gen *worldGen) placeCorridor(pos, dir image.Point) (image.Point, int) {
 		end := pos.Add(dir.Mul(n + 1)) // +1 to include landing
 		r := image.Rectangle{pos, end.Add(dir)}.Canon()
 		// TODO care about checking for wall cells too?
-		if q := gen.g.pos.Within(r); !q.Next() {
-			// TODO may care to filter entity type
+		if !gen.anyWithin(r) {
 			return end, n
 		}
 	}
