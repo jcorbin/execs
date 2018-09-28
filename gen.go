@@ -182,32 +182,38 @@ func (gen *worldGen) elaborateRoom(room genRoomHandle) bool {
 
 	// TODO hallways with turns
 
-	wall := room.chooseDoorWall(gen)
-	if wall.zero() {
-		return false
+	for i := 0; ; i++ {
+		if i >= placeAttempts {
+			return false
+		}
+
+		wall := room.chooseDoorWall(gen)
+		if wall.zero() {
+			return false
+		}
+
+		// place hallway
+		start := wall.Point()
+		dir := room.wallNormal(start)
+		end, n := gen.placeCorridor(start, dir)
+		if n == 0 {
+			continue
+		}
+
+		// place next room
+		r := gen.placeNextRoom(end, dir)
+		if r == image.ZR {
+			continue
+		}
+
+		gen.logf("hallway dir:%v n:%v", dir, n)
+		pos := start
+		gen.carveDoorway(room, wall)
+		pos = gen.createCorridor(pos, dir, n)
+		gen.create(room.depth+1, pos.Add(dir), r)
+		numDoors := len(room.exits)
+		return numDoors < room.maxExits
 	}
-
-	pos := wall.Point()
-	dir := room.wallNormal(pos)
-	end, n := gen.placeCorridor(pos, dir)
-	if n == 0 {
-		return false
-	}
-	r := gen.placeNextRoom(end, dir)
-	if r == image.ZR {
-		return false
-	}
-
-	gen.logf("hallway dir:%v n:%v", dir, n)
-	gen.carveDoorway(room, wall)
-
-	pos = gen.createCorridor(pos, dir, n)
-
-	// advance to entrance
-	pos = pos.Add(dir)
-
-	gen.create(room.depth+1, pos, r)
-	return len(room.exits) < room.maxExits
 }
 
 func (gen *worldGen) placeCorridor(pos, dir image.Point) (image.Point, int) {
