@@ -331,17 +331,10 @@ func (room genRoomHandle) chooseDoorWall(gen *worldGen) (rend renderable) {
 		if wall.zero() {
 			continue
 		}
-		skip := false
-		p := wall.Point()
-		for j := range room.exits {
-			if room.exits[j].X == p.X || room.exits[j].Y == p.Y {
-				skip = true
-				break
-			}
-		}
-		if skip {
+		if sharesPointComponent(wall.Point(), room.exits) {
 			continue
 		}
+
 		if rend.zero() || rand.Intn(i+1) <= 1 {
 			j, rend = i, wall
 		}
@@ -404,6 +397,15 @@ func (bld *builder) create() renderable {
 	bld.ids = append(bld.ids, rend.ID())
 	bld.built = append(bld.built, rend)
 	return rend
+}
+
+func sharesPointComponent(pt image.Point, pts []image.Point) bool {
+	for _, pti := range pts {
+		if pti.X == pt.X || pti.Y == pt.Y {
+			return true
+		}
+	}
+	return false
 }
 
 func isCorner(p image.Point, r image.Rectangle) bool {
