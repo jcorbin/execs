@@ -189,8 +189,12 @@ func (gen *worldGen) elaborateRoom(room genRoomHandle) bool {
 
 	pos := wall.Point()
 	dir := room.wallNormal(pos)
-	_, n := gen.placeCorridor(pos, dir)
+	end, n := gen.placeCorridor(pos, dir)
 	if n == 0 {
+		return false
+	}
+	r := gen.placeNextRoom(end, dir)
+	if r == image.ZR {
 		return false
 	}
 
@@ -202,7 +206,7 @@ func (gen *worldGen) elaborateRoom(room genRoomHandle) bool {
 	// advance to entrance
 	pos = pos.Add(dir)
 
-	gen.create(room.depth+1, pos, gen.placeNextRoom(pos, dir))
+	gen.create(room.depth+1, pos, r)
 	return len(room.exits) < room.maxExits
 }
 
