@@ -16,7 +16,6 @@ import (
 
 /* TODO
 - shift genRoom.{exits,walls} to relation on gameRoom entities
-- planning / blueprinting mechanic
 - ui for placing room / hallway blueprints
 - digging mechanic
 - building mechanic
@@ -55,6 +54,8 @@ const (
 	gameRoom
 	gameGen
 
+	gameBlueprint = gamePosition | gameRender | gameGoal
+
 	gameWall       = gamePosition | gameRender | gameCollides
 	gameFloor      = gamePosition | gameRender
 	gameSpawnPoint = gamePosition | gameSpawn
@@ -88,24 +89,35 @@ func (g *game) describeRender(ent ecs.Entity) fmt.Stringer   { return g.ren.Get(
 func (g *game) describePosition(ent ecs.Entity) fmt.Stringer { return g.pos.Get(ent) }
 
 var (
-	playerStyle = renStyle(10, '@', ansi.SGRAttrBold|ansi.RGB(0x60, 0x80, 0xa0).FG())
-	spiritStyle = renStyle(10, '^', ansi.SGRAttrBold|ansi.RGB(0x60, 0xa0, 0x80).FG())
-	wallStyle   = renStyle(5, '#', ansi.SGRAttrBold|ansi.RGB(0x18, 0x18, 0x18).BG()|ansi.RGB(0x30, 0x30, 0x30).FG())
-	floorStyle  = renStyle(4, '·', ansi.RGB(0x10, 0x10, 0x10).BG()|ansi.RGB(0x18, 0x18, 0x18).FG())
-	doorStyle   = renStyle(6, '+', ansi.RGB(0x18, 0x18, 0x18).BG()|ansi.RGB(0x60, 0x40, 0x30).FG())
+	playerStyle    = renStyle(50, '@', ansi.SGRAttrBold|ansi.RGB(0x60, 0xb0, 0xd0).FG())
+	spiritStyle    = renStyle(50, '^', ansi.SGRAttrBold|ansi.RGB(0x60, 0xd0, 0xb0).FG())
+	wallStyle      = renStyle(5, '#', ansi.SGRAttrBold|ansi.RGB(0x18, 0x18, 0x18).BG()|ansi.RGB(0x30, 0x30, 0x30).FG())
+	floorStyle     = renStyle(4, '·', ansi.RGB(0x10, 0x10, 0x10).BG()|ansi.RGB(0x18, 0x18, 0x18).FG())
+	doorStyle      = renStyle(6, '+', ansi.RGB(0x18, 0x18, 0x18).BG()|ansi.RGB(0x60, 0x40, 0x30).FG())
+	blueprintStyle = renStyle(15, '?', ansi.RGB(0x08, 0x18, 0x28).BG()|ansi.RGB(0x50, 0x60, 0x70).FG())
 
 	corporealApp = entApps(playerStyle, addEntityType(gameCollides))
 	ghostApp     = entApps(spiritStyle, deleteEntityType(gameCollides))
 )
+
+func blueprint(t ecs.Type, rs renderStyle, goals ...goal) entitySpec {
+	bs := blueprintStyle
+	bs.r = rs.r
+	return entSpec(gameBlueprint, bs, goalApp(
+		radiusGoal(1),
+		chainGoals(goals...),
+		entSpec(t, rs),
+	))
+}
 
 func newGame() *game {
 	g := &game{}
 	g.init()
 	g.gen.roomGenConfig = roomGenConfig{
 		Player:        entSpec(gamePlayer, playerStyle),
-		Wall:          entSpec(gameWall, wallStyle),
-		Floor:         entSpec(gameFloor, floorStyle),
-		Door:          entSpec(gameDoor, doorStyle),
+		Wall:          blueprint(gameWall, wallStyle),
+		Floor:         blueprint(gameFloor, floorStyle),
+		Door:          blueprint(gameDoor, doorStyle),
 		PlaceAttempts: 3,
 		RoomSize:      image.Rect(5, 3, 21, 13),
 		MinHallSize:   2,
@@ -132,6 +144,7 @@ func (g *game) init() {
 	g.ren.Init(&g.Scope)
 	g.rooms.Init(&g.Scope)
 	g.gen.Init(&g.Scope)
+	g.goals.Init(&g.Scope)
 
 	// TODO better dep coupling
 	g.ren.pos = &g.pos
@@ -142,6 +155,7 @@ func (g *game) init() {
 	g.Scope.Watch(gameGen, 0, &g.gen)
 	g.Scope.Watch(gamePosition, 0, &g.pos)
 	g.Scope.Watch(gamePosition|gameRender, 0, &g.ren)
+	g.Scope.Watch(gameGoal, 0, &g.goals)
 	g.ag.watch(&g.Scope)
 }
 
