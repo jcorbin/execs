@@ -86,30 +86,24 @@ func (g *game) describe(w io.Writer, ent ecs.Entity) {
 func (g *game) describeRender(ent ecs.Entity) fmt.Stringer   { return g.ren.Get(ent) }
 func (g *game) describePosition(ent ecs.Entity) fmt.Stringer { return g.pos.Get(ent) }
 
-var worldConfig = worldGenConfig{
-	Wall: style(gameWall, 5, '#', ansi.SGRAttrBold|
-		ansi.RGB(0x18, 0x18, 0x18).BG()|
-		ansi.RGB(0x30, 0x30, 0x30).FG()),
-	Floor: style(gameFloor, 4, '·',
-		ansi.RGB(0x10, 0x10, 0x10).BG()|
-			ansi.RGB(0x18, 0x18, 0x18).FG()),
-	Door: style(gameDoor, 6, '+',
-		ansi.RGB(0x18, 0x18, 0x18).BG()|
-			ansi.RGB(0x60, 0x40, 0x30).FG()),
-	Player: style(gamePlayer, 10, '@', ansi.SGRAttrBold|
-		ansi.RGB(0x60, 0x80, 0xa0).FG(),
-	),
-	PlaceAttempts: 3,
-	RoomSize:      image.Rect(5, 3, 21, 13),
-	MinHallSize:   2,
-	MaxHallSize:   8,
-	ExitDensity:   25,
-}
-
 func newGame() *game {
 	g := &game{}
 	g.init()
-	g.gen.worldGenConfig = worldConfig
+	g.gen.worldGenConfig = worldGenConfig{
+		Player: style(gamePlayer, 10, '@', ansi.SGRAttrBold|
+			ansi.RGB(0x60, 0x80, 0xa0).FG()),
+		Wall: style(gameWall, 5, '#', ansi.SGRAttrBold|
+			ansi.RGB(0x18, 0x18, 0x18).BG()|ansi.RGB(0x30, 0x30, 0x30).FG()),
+		Floor: style(gameFloor, 4, '·',
+			ansi.RGB(0x10, 0x10, 0x10).BG()|ansi.RGB(0x18, 0x18, 0x18).FG()),
+		Door: style(gameDoor, 6, '+',
+			ansi.RGB(0x18, 0x18, 0x18).BG()|ansi.RGB(0x60, 0x40, 0x30).FG()),
+		PlaceAttempts: 3,
+		RoomSize:      image.Rect(5, 3, 21, 13),
+		MinHallSize:   2,
+		MaxHallSize:   8,
+		ExitDensity:   25,
+	}
 
 	for minsz := g.gen.RoomSize.Size().Div(4).Mul(3); ; {
 		if sz := g.gen.chooseRoomSize(); sz.X >= minsz.X && sz.Y >= minsz.Y {
