@@ -9,8 +9,6 @@ import (
 	"github.com/jcorbin/execs/internal/ecs"
 )
 
-const placeAttempts = 5 // TODO config
-
 type worldGenConfig struct {
 	Log bool
 
@@ -18,6 +16,8 @@ type worldGenConfig struct {
 	Wall   renderStyle
 	Door   renderStyle
 	Player renderStyle
+
+	PlaceAttempts int
 
 	RoomSize    image.Rectangle
 	MinHallSize int
@@ -183,7 +183,7 @@ func (gen *worldGen) elaborateRoom(room genRoomHandle) bool {
 	// TODO hallways with turns
 
 	for i := 0; ; i++ {
-		if i >= placeAttempts {
+		if i >= gen.PlaceAttempts {
 			return false
 		}
 

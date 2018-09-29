@@ -93,10 +93,11 @@ var worldConfig = worldGenConfig{
 	Player: style(gamePlayer, 10, '@', ansi.SGRAttrBold|
 		ansi.RGB(0x60, 0x80, 0xa0).FG(),
 	),
-	RoomSize:    image.Rect(5, 3, 21, 13),
-	MinHallSize: 2,
-	MaxHallSize: 8,
-	ExitDensity: 25,
+	PlaceAttempts: 3,
+	RoomSize:      image.Rect(5, 3, 21, 13),
+	MinHallSize:   2,
+	MaxHallSize:   8,
+	ExitDensity:   25,
 }
 
 func newGame() *game {
