@@ -89,22 +89,46 @@ func (gen *roomGen) GetID(id ecs.ID) genRoomHandle {
 	return genRoomHandle{}
 }
 
-func (gen *roomGen) run() bool {
-	const deadline = 3 * time.Millisecond
-	t0 := time.Now()
+func (gen *roomGen) expandSimRegion(r image.Rectangle) image.Rectangle {
+	// TODO evaluate transitive vs first-level-only expansion
+	maxImpact := gen.RoomSize.Max.Add(image.Pt(gen.MaxHallSize, gen.MaxHallSize))
+	r.Min = r.Min.Sub(maxImpact.Mul(gen.PlaceAttempts / 2))
+	r.Max = r.Max.Add(maxImpact.Mul(gen.PlaceAttempts / 2))
+	res := r
 	for i := 0; i < len(gen.data); i++ {
 		if gen.ArrayIndex.ID(i) != 0 {
 			room := gen.load(i)
-			if room.tick >= gen.tick {
-				continue
+			impact := image.Rectangle{
+				room.r.Min.Sub(maxImpact),
+				room.r.Max.Add(maxImpact)}
+			if impact.Overlaps(r) {
+				res = expandTo(res, impact.Min)
+				res = expandTo(res, impact.Max)
 			}
-			if !room.done {
-				gen.createRoom(room)
-				room.done = true
-			} else if !gen.elaborateRoom(room) {
-				gen.Entity(i).DeleteType(gameGen)
+		}
+	}
+	return res
+}
+
+func (gen *roomGen) run(within image.Rectangle) bool {
+	const deadline = 3 * time.Millisecond
+	t0 := time.Now()
+	any := false
+	for i := 0; i < len(gen.data); i++ {
+		if gen.ArrayIndex.ID(i) != 0 {
+			room := gen.load(i)
+			if room.r.Overlaps(within) {
+				any = true
+				if room.tick < gen.tick {
+					if !room.done {
+						gen.createRoom(room)
+						room.done = true
+					} else if !gen.elaborateRoom(room) {
+						gen.Entity(i).DeleteType(gameGen)
+					}
+					room.tick = gen.tick
+				}
 			}
-			room.tick = gen.tick
 		}
 		t1 := time.Now()
 		if t1.Sub(t0) > deadline {
@@ -112,7 +136,7 @@ func (gen *roomGen) run() bool {
 		}
 	}
 	gen.tick++
-	return len(gen.data) > 0
+	return any && len(gen.data) > 0
 }
 
 func (gen *roomGen) create(depth int, enter image.Point, r image.Rectangle) genRoomHandle {
@@ -424,4 +448,18 @@ func orthNormal(p image.Point) image.Point {
 		return image.Pt(0, 1)
 	}
 	return image.ZP
+}
+
+func expandTo(r image.Rectangle, p image.Point) image.Rectangle {
+	if p.X < r.Min.X {
+		r.Min.X = p.X
+	} else if p.X >= r.Max.X {
+		r.Max.X = p.X + 1
+	}
+	if p.Y < r.Min.Y {
+		r.Min.Y = p.Y
+	} else if p.Y >= r.Max.Y {
+		r.Max.Y = p.Y + 1
+	}
+	return r
 }

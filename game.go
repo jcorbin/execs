@@ -38,10 +38,10 @@ type game struct {
 	gen   roomGen
 
 	// ui
-	genning bool
-	view    image.Rectangle
-	drag    dragState
-	pop     popup
+	sim  image.Rectangle
+	view image.Rectangle
+	drag dragState
+	pop  popup
 }
 
 const (
@@ -152,16 +152,6 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 		}()
 	}
 
-	// start/stop generation
-	if !g.genning && ctx.Input.CountRune('\x07') > 0 {
-		g.genning = true
-		log.Printf("starting generation")
-	} else if g.genning && err == errInt {
-		err = nil
-		g.genning = false
-		log.Printf("stopping generation")
-	}
-
 	// process any drag region
 	if r := g.drag.process(ctx); r != image.ZR {
 		r = r.Canon().Add(g.view.Min)
@@ -190,16 +180,13 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 		err = agErr
 	}
 
-	// run generation
-	if g.genning {
-		if !g.gen.run() {
-			g.genning = false
-		}
-	}
-
 	// center view on player (if any)
 	centroid, _ := agCtx.Value(playerCentroidKey).(image.Point)
 	g.view = centerView(g.view, centroid, ctx.Output.Size)
+
+	// run generation within a simulation region around the player
+	g.sim = g.gen.expandSimRegion(g.view)
+	genning := g.gen.run(g.sim)
 
 	// Ctrl-mouse to inspect entities
 	if m, haveMouse := ctx.Input.LastMouse(false); haveMouse && m.State.IsMotion() {
@@ -231,9 +218,14 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 
 	// entity count in upper-left
 	ctx.Output.To(image.Pt(1, 1))
-	fmt.Fprintf(ctx.Output, "%v entities %v rooms (%v generating)",
-		g.Scope.Len(), g.rooms.Used(), g.gen.Used(),
-	)
+	fmt.Fprintf(ctx.Output, "%v entities %v rooms", g.Scope.Len(), g.rooms.Used())
+	if genning {
+		fmt.Fprintf(ctx.Output, " (%v generating)", g.gen.Used())
+	}
+	ctx.Output.To(image.Pt(1, 2))
+	fmt.Fprintf(ctx.Output, "view:%v", g.view)
+	ctx.Output.To(image.Pt(2, 3))
+	fmt.Fprintf(ctx.Output, "sim:%v", g.sim)
 
 	if g.drag.active {
 		dr := g.drag.r.Canon()
