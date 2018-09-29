@@ -277,17 +277,12 @@ func (gen *worldGen) placeNextRoom(enter, dir image.Point) image.Rectangle {
 }
 
 func (gen *worldGen) carveDoorway(room genRoomHandle, wall renderable) renderable {
-	pos := wall.Point()
-	wall.apply(gen.Floor)
-	door := gen.createDoorway(pos)
-	gen.rooms.parts.Insert(roomDoor, room.ID(), door.ID())
-	return door
-}
-
-func (gen *worldGen) createDoorway(pt image.Point) renderable {
+	pt := wall.Point()
 	gen.logf("doorway @%v", pt)
+	wall.apply(gen.Floor)
 	door := gen.g.ren.create(pt, gen.Door)
 	// TODO set door behavior
+	gen.rooms.parts.Insert(roomDoor, room.ID(), door.ID())
 	return door
 }
 
