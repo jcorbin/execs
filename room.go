@@ -9,6 +9,13 @@ import (
 type rooms struct {
 	ecs.ArrayIndex
 	r []image.Rectangle
+
+	parts ecs.EntityRelation
+}
+
+func (rooms *rooms) Init(scope *ecs.Scope) {
+	rooms.ArrayIndex.Init(scope)
+	rooms.parts.Init(scope, nil)
 }
 
 func (rooms *rooms) EntityCreated(ent ecs.Entity, _ ecs.Type) {

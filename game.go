@@ -63,6 +63,12 @@ const (
 )
 
 const (
+	roomWall ecs.Type = 1 << iota
+	roomFloor
+	roomDoor
+)
+
+const (
 	playerMoveKey     = "playerMove"
 	playerCentroidKey = "playerCentroid"
 	playerCountKey    = "playerCount"
