@@ -227,13 +227,8 @@ func (gen *roomGen) elaborateRoom(room genRoomHandle) bool {
 
 	shuffleIDs(walls.IDs)
 	for _, wallID := range walls.IDs[:gen.PlaceAttempts] {
-		wall := gen.g.ren.GetID(wallID)
-		if wall.zero() {
-			continue
-		}
-
 		// place hallway
-		start := wall.Point()
+		start := gen.g.pos.GetID(wallID).Point()
 		dir := room.wallNormal(start)
 		end, n := gen.placeCorridor(start, dir)
 		if n == 0 {
