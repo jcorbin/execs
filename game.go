@@ -35,7 +35,7 @@ type game struct {
 	ren   render
 	pos   position
 	rooms rooms
-	gen   worldGen
+	gen   roomGen
 
 	// ui
 	genning bool
@@ -89,7 +89,7 @@ func (g *game) describePosition(ent ecs.Entity) fmt.Stringer { return g.pos.Get(
 func newGame() *game {
 	g := &game{}
 	g.init()
-	g.gen.worldGenConfig = worldGenConfig{
+	g.gen.roomGenConfig = roomGenConfig{
 		Player: style(gamePlayer, 10, '@', ansi.SGRAttrBold|
 			ansi.RGB(0x60, 0x80, 0xa0).FG()),
 		Wall: style(gameWall, 5, '#', ansi.SGRAttrBold|
