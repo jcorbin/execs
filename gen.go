@@ -226,9 +226,9 @@ func (gen *roomGen) elaborateRoom(room genRoomHandle) bool {
 	// TODO hallways with turns
 
 	shuffleIDs(walls.IDs)
-	for _, wallID := range walls.IDs[:gen.PlaceAttempts] {
+	for _, id := range walls.IDs[:gen.PlaceAttempts] {
 		// place hallway
-		start := gen.g.pos.GetID(wallID).Point()
+		start := gen.g.pos.GetID(id).Point()
 		dir := room.wallNormal(start)
 		end, n := gen.placeCorridor(start, dir)
 		if n == 0 {
@@ -243,7 +243,7 @@ func (gen *roomGen) elaborateRoom(room genRoomHandle) bool {
 
 		gen.logf("hallway dir:%v n:%v", dir, n)
 		pos := start
-		gen.carveDoorway(room, gen.g.Entity(wallID))
+		gen.carveDoorway(room, gen.g.Entity(id))
 		pos = gen.createCorridor(pos, dir, n)
 		gen.create(room.depth+1, pos.Add(dir), r)
 		numDoors++
