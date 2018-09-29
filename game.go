@@ -5,6 +5,7 @@ import (
 	"image"
 	"io"
 	"log"
+	"math/rand"
 
 	"github.com/jcorbin/anansi"
 	"github.com/jcorbin/anansi/ansi"
@@ -182,12 +183,36 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 
 	// center view on player (if any)
 	centroid, _ := agCtx.Value(playerCentroidKey).(image.Point)
-	view, _ := centerView(g.view, centroid, ctx.Output.Size)
+	view, port := centerView(g.view, centroid, ctx.Output.Size)
 	g.view = view
 
 	// run generation within a simulation region around the player
 	g.sim = g.gen.expandSimRegion(g.view)
 	genning := g.gen.run(g.sim)
+	if !genning {
+		// create a spawn point once generation has stopped
+		if len(g.ag.ids[&g.Scope][gameSpawnPoint]) == 0 {
+			origin := g.rooms.r[0].Min.Add(g.rooms.r[0].Size().Div(2))
+			maxd := compMag(port.Size())
+
+			if id := chooseRandomID(g.rooms.Len(), g.rooms.ID, func(i int, id ecs.ID) int {
+				r := &g.rooms.r[i]
+				if !r.In(port) {
+					return 0
+				}
+				d := compMag(r.Min.Add(r.Size().Div(2)).Sub(origin))
+				sz := r.Size()
+				return (maxd - d) * sz.X * sz.Y
+			}); id != 0 {
+				r := g.rooms.GetID(id)
+				log.Printf("add spawn in id:%v r:%v", id, r)
+				spawn := g.Create(gameSpawnPoint)
+				mid := r.Min.Add(r.Size().Div(2))
+				g.pos.Get(spawn).SetPoint(mid)
+				g.rooms.parts.Insert(0, id, spawn.ID)
+			}
+		}
+	}
 
 	// Ctrl-mouse to inspect entities
 	if m, haveMouse := ctx.Input.LastMouse(false); haveMouse && m.State.IsMotion() {
@@ -254,6 +279,20 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 	return err
 }
 
+func compMag(p image.Point) (n int) {
+	if p.X < 0 {
+		n -= p.X
+	} else {
+		n += p.X
+	}
+	if p.Y < 0 {
+		n -= p.Y
+	} else {
+		n += p.Y
+	}
+	return n
+}
+
 type dragState struct {
 	active bool
 	r      image.Rectangle
@@ -295,4 +334,19 @@ func eachCell(g *anansi.Grid, r image.Rectangle, f func(anansi.Cell)) {
 			f(g.Cell(p))
 		}
 	}
+}
+
+func chooseRandomID(n int, i2id func(i int) ecs.ID, wf func(i int, id ecs.ID) int) (rid ecs.ID) {
+	var ws int
+	for i := 0; i < n; i++ {
+		if id := i2id(i); id != 0 {
+			if w := wf(i, id); w > 0 {
+				ws += w
+				if rid == 0 || rand.Intn(ws+1) <= w {
+					rid = id
+				}
+			}
+		}
+	}
+	return rid
 }

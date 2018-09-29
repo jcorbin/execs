@@ -177,12 +177,6 @@ func (gen *roomGen) createRoom(room genRoomHandle) {
 				break
 			}
 		}
-	} else {
-		// create spawn in non-enterable rooms
-		mid := room.r.Min.Add(room.r.Size().Div(2))
-		spawn := gen.g.Create(gameSpawnPoint)
-		gen.g.pos.Get(spawn).SetPoint(mid)
-		gen.rooms.parts.Insert(0, id, spawn.ID)
 	}
 }
 
