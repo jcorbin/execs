@@ -145,13 +145,7 @@ func (gen *roomGen) createRoom(room genRoomHandle) {
 	gen.rectangle(*room.r)
 	gen.rooms.parts.InsertMany(roomWall, id, gen.builder.ids...)
 
-	if room.enter == image.ZP {
-		// create spawn in non-enterable rooms
-		mid := room.r.Min.Add(room.r.Size().Div(2))
-		spawn := gen.g.Create(gameSpawnPoint)
-		gen.g.pos.Get(spawn).SetPoint(mid)
-		gen.rooms.parts.Insert(0, id, spawn.ID)
-	} else {
+	if room.enter != image.ZP {
 		// entrance door
 		for _, id := range gen.builder.ids {
 			if posd := gen.g.pos.GetID(id); posd.Point() == room.enter {
@@ -159,6 +153,12 @@ func (gen *roomGen) createRoom(room genRoomHandle) {
 				break
 			}
 		}
+	} else {
+		// create spawn in non-enterable rooms
+		mid := room.r.Min.Add(room.r.Size().Div(2))
+		spawn := gen.g.Create(gameSpawnPoint)
+		gen.g.pos.Get(spawn).SetPoint(mid)
+		gen.rooms.parts.Insert(0, id, spawn.ID)
 	}
 }
 
