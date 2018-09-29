@@ -20,7 +20,6 @@ import (
 - ui for placing room / hallway blueprints
 - digging mechanic
 - building mechanic
-- goal mechanic
 - automated agents that do goals
 - shard(s):
   - world database (at least for level)
@@ -37,6 +36,7 @@ type game struct {
 	pos   position
 	rooms rooms
 	gen   roomGen
+	goals goalSystem
 
 	// ui
 	sim  image.Rectangle
@@ -51,7 +51,7 @@ const (
 	gameCollides
 	gameInput
 	gameSpawn
-	gameInteract
+	gameGoal
 	gameRoom
 	gameGen
 
@@ -60,7 +60,7 @@ const (
 	gameSpawnPoint = gamePosition | gameSpawn
 	gameCharacter  = gamePosition | gameRender | gameCollides
 	gamePlayer     = gameCharacter | gameInput
-	gameDoor       = gamePosition | gameRender // FIXME | gameCollides | gameInteract
+	gameDoor       = gamePosition | gameRender // FIXME | gameCollides
 )
 
 const (
