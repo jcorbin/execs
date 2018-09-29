@@ -93,19 +93,19 @@ func (gen *roomGen) run() bool {
 	const deadline = 3 * time.Millisecond
 	t0 := time.Now()
 	for i := 0; i < len(gen.data); i++ {
-		if gen.data[i].tick >= gen.tick {
-			continue
-		}
-		if id := gen.ArrayIndex.ID(i); id != 0 {
+		if gen.ArrayIndex.ID(i) != 0 {
 			room := gen.load(i)
+			if room.tick >= gen.tick {
+				continue
+			}
 			if !room.done {
 				gen.createRoom(room)
 				room.done = true
 			} else if !gen.elaborateRoom(room) {
 				gen.Entity(i).DeleteType(gameGen)
 			}
+			room.tick = gen.tick
 		}
-		gen.data[i].tick = gen.tick
 		t1 := time.Now()
 		if t1.Sub(t0) > deadline {
 			return true
