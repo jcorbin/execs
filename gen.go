@@ -228,15 +228,11 @@ func (gen *worldGen) placeCorridor(pos, dir image.Point) (image.Point, int) {
 }
 
 func (gen *worldGen) placeNextRoom(enter, dir image.Point) image.Rectangle {
-	for i := 0; ; i++ {
-		if i >= placeAttempts {
-			return image.ZR
-		}
-		r := gen.placeRoom(enter, dir, gen.chooseRoomSize())
-		if !gen.anyWithin(r) {
-			return r
-		}
+	r := gen.placeRoom(enter, dir, gen.chooseRoomSize())
+	if gen.anyWithin(r) {
+		return image.ZR
 	}
+	return r
 }
 
 func (gen *worldGen) carveDoorway(room genRoomHandle, wall renderable) renderable {
