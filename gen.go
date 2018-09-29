@@ -217,18 +217,14 @@ func (gen *worldGen) elaborateRoom(room genRoomHandle) bool {
 }
 
 func (gen *worldGen) placeCorridor(pos, dir image.Point) (image.Point, int) {
-	for i := 0; ; i++ {
-		if i >= placeAttempts {
-			return pos, 0
-		}
-		n := rand.Intn(gen.MaxHallSize-gen.MinHallSize) + gen.MinHallSize
-		end := pos.Add(dir.Mul(n + 1)) // +1 to include landing
-		r := image.Rectangle{pos, end.Add(dir)}.Canon()
-		// TODO care about checking for wall cells too?
-		if !gen.anyWithin(r) {
-			return end, n
-		}
+	n := rand.Intn(gen.MaxHallSize-gen.MinHallSize) + gen.MinHallSize
+	end := pos.Add(dir.Mul(n + 1)) // +1 to include landing
+	r := image.Rectangle{pos, end.Add(dir)}.Canon()
+	// TODO care about checking for wall cells too?
+	if gen.anyWithin(r) {
+		return pos, 0
 	}
+	return end, n
 }
 
 func (gen *worldGen) placeNextRoom(enter, dir image.Point) image.Rectangle {
