@@ -182,7 +182,8 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 
 	// center view on player (if any)
 	centroid, _ := agCtx.Value(playerCentroidKey).(image.Point)
-	g.view = centerView(g.view, centroid, ctx.Output.Size)
+	view, _ := centerView(g.view, centroid, ctx.Output.Size)
+	g.view = view
 
 	// run generation within a simulation region around the player
 	g.sim = g.gen.expandSimRegion(g.view)

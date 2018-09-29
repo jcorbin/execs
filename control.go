@@ -130,22 +130,26 @@ func (pos *position) collides(ent ecs.Entity, p image.Point) (hit ecs.Entity) {
 	return hit
 }
 
-func centerView(view image.Rectangle, centroid, size image.Point) image.Rectangle {
+func centerView(view image.Rectangle, centroid, size image.Point) (_, port image.Rectangle) {
 	if view == image.ZR {
 		offset := centroid.Sub(size.Div(2))
-		return image.Rectangle{offset, size.Add(offset)}
-	}
-	if view.Size() != size {
-		return image.Rectangle{
+		view = image.Rectangle{offset, size.Add(offset)}
+	} else if view.Size() != size {
+		view = image.Rectangle{
 			view.Min.Sub(view.Size().Sub(size).Div(2)),
 			view.Min.Add(size),
 		}
 	}
 	ds := view.Size().Div(8)
-	return view.Add(compMinMax(
-		centroid.Sub(view.Min.Add(ds)),
-		centroid.Sub(view.Max.Sub(ds)),
+	port = image.Rectangle{
+		view.Min.Add(ds),
+		view.Max.Sub(ds),
+	}
+	view = view.Add(compMinMax(
+		centroid.Sub(port.Min),
+		centroid.Sub(port.Max),
 	))
+	return view, port
 }
 
 func compMinMax(min, max image.Point) (pt image.Point) {
