@@ -74,19 +74,19 @@ func (gen *roomGen) EntityCreated(ent ecs.Entity, _ ecs.Type) {
 	gen.data[i] = genRoom{}
 }
 
-func (gen *roomGen) Get(ent ecs.Entity) (h genRoomHandle) {
+func (gen *roomGen) Get(ent ecs.Entity) genRoomHandle {
 	if i, def := gen.ArrayIndex.Get(ent); def {
-		h.load(gen, i, ent.ID)
+		return gen.load(i)
 	}
-	return h
+	return genRoomHandle{}
 }
 
-func (gen *roomGen) GetID(id ecs.ID) (h genRoomHandle) {
+func (gen *roomGen) GetID(id ecs.ID) genRoomHandle {
 	i, def := gen.ArrayIndex.GetID(id)
 	if def {
-		h.load(gen, i, id)
+		return gen.load(i)
 	}
-	return h
+	return genRoomHandle{}
 }
 
 func (gen *roomGen) run() bool {
@@ -97,8 +97,8 @@ func (gen *roomGen) run() bool {
 			continue
 		}
 		if id := gen.ArrayIndex.ID(i); id != 0 {
-			var room genRoomHandle
-			if room.load(gen, i, id); !room.done {
+			room := gen.load(i)
+			if !room.done {
 				gen.createRoom(room)
 				room.done = true
 			} else if !gen.elaborateRoom(room) {
@@ -317,11 +317,12 @@ func (gen *roomGen) placeRoom(enter, dir, sz image.Point) (r image.Rectangle) {
 	return r
 }
 
-func (room *genRoomHandle) load(gen *roomGen, i int, id ecs.ID) {
+func (gen *roomGen) load(i int) (room genRoomHandle) {
 	room.gen = gen
 	room.i = i
 	room.genRoom = &gen.data[i]
-	room.r = gen.rooms.GetID(id)
+	room.r = gen.rooms.GetID(gen.ID(i))
+	return room
 }
 
 func (room genRoomHandle) ID() ecs.ID {
