@@ -279,10 +279,10 @@ func (gen *worldGen) anyWithin(r image.Rectangle) bool {
 }
 
 func (gen *worldGen) chooseRoomSize() image.Point {
-	return image.Pt(
-		gen.RoomSize.Min.X+rand.Intn(gen.RoomSize.Dx()),
-		gen.RoomSize.Min.Y+rand.Intn(gen.RoomSize.Dy()),
-	)
+	return gen.RoomSize.Min.Add(image.Pt(
+		rand.Intn(gen.RoomSize.Dx()),
+		rand.Intn(gen.RoomSize.Dy()),
+	))
 }
 
 func (gen *worldGen) placeRoom(enter, dir, sz image.Point) (r image.Rectangle) {
