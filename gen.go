@@ -292,13 +292,9 @@ func (gen *worldGen) placeRoom(enter, dir, sz image.Point) (r image.Rectangle) {
 		if dir.X == -1 {
 			r.Min.X -= sz.X - 1
 		}
-		if d := rand.Intn(sz.Y - 2); d > 0 {
-			r.Min.Y -= d
-		}
+		r.Min.Y -= rand.Intn(sz.Y-2) + 1
 	} else { // dir.X == 0
-		if d := rand.Intn(sz.X - 2); d > 0 {
-			r.Min.X -= d
-		}
+		r.Min.X -= rand.Intn(sz.X-2) + 1
 		if dir.Y == -1 {
 			r.Min.Y -= sz.Y - 1
 		}
