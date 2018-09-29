@@ -87,6 +87,17 @@ func (g *game) describe(w io.Writer, ent ecs.Entity) {
 func (g *game) describeRender(ent ecs.Entity) fmt.Stringer   { return g.ren.Get(ent) }
 func (g *game) describePosition(ent ecs.Entity) fmt.Stringer { return g.pos.Get(ent) }
 
+var (
+	corporealApp = entApps(
+		renStyle(10, '@', ansi.SGRAttrBold|ansi.RGB(0x60, 0x80, 0xa0).FG()),
+		entityAppFunc(func(_ *game, ent ecs.Entity) { ent.AddType(gameCollides) }),
+	)
+	ghostApp = entApps(
+		renStyle(10, '^', ansi.SGRAttrBold|ansi.RGB(0x60, 0xa0, 0x80).FG()),
+		entityAppFunc(func(_ *game, ent ecs.Entity) { ent.DeleteType(gameCollides) }),
+	)
+)
+
 func newGame() *game {
 	g := &game{}
 	g.init()
@@ -167,6 +178,17 @@ func (g *game) Update(ctx *platform.Context) (err error) {
 	}
 
 	// process control input
+	if ctx.Input.CountRune('^')%2 == 1 {
+		for _, id := range g.ag.ids[&g.Scope][gamePlayer] {
+			if rend := g.ren.GetID(id); !rend.zero() {
+				if r, _ := rend.Cell(); r == '^' {
+					corporealApp.apply(g, g.Entity(id))
+				} else {
+					ghostApp.apply(g, g.Entity(id))
+				}
+			}
+		}
+	}
 	agCtx := nopAgentContext
 	if move, interacted := parseTotalMove(ctx.Input); interacted {
 		agCtx = addAgentValue(agCtx, playerMoveKey, move)
