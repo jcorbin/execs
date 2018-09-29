@@ -12,10 +12,10 @@ import (
 type roomGenConfig struct {
 	Log bool
 
-	Floor  renderStyle
-	Wall   renderStyle
-	Door   renderStyle
-	Player renderStyle
+	Floor  entitySpec
+	Wall   entitySpec
+	Door   entitySpec
+	Player entitySpec
 
 	PlaceAttempts int
 
@@ -160,12 +160,12 @@ func (gen *roomGen) createRoom(room genRoomHandle) {
 
 	// create room
 	gen.reset()
-	gen.style = gen.Floor
+	gen.spec = gen.Floor
 	gen.fill(room.r.Inset(1))
 	gen.rooms.parts.InsertMany(roomFloor, id, gen.builder.ids...)
 
 	gen.reset()
-	gen.style = gen.Wall
+	gen.spec = gen.Wall
 	gen.rectangle(*room.r)
 	gen.rooms.parts.InsertMany(roomWall, id, gen.builder.ids...)
 
@@ -185,9 +185,9 @@ func (gen *roomGen) createCorridor(pos, dir image.Point, n int) image.Point {
 	gen.reset()
 	for i := 0; i < n; i++ {
 		pos = pos.Add(dir)
-		gen.style = gen.Floor
+		gen.spec = gen.Floor
 		gen.point(pos)
-		gen.style = gen.Wall
+		gen.spec = gen.Wall
 		gen.point(pos.Add(orth))
 		gen.point(pos.Sub(orth))
 	}
@@ -292,8 +292,8 @@ func (gen *roomGen) placeNextRoom(enter, dir image.Point) image.Rectangle {
 func (gen *roomGen) carveDoorway(room genRoomHandle, wall ecs.Entity) ecs.Entity {
 	pt := gen.g.pos.Get(wall).Point()
 	gen.logf("doorway @%v", pt)
-	gen.g.ren.Get(wall).apply(gen.Floor)
-	door := gen.g.ren.create(pt, gen.Door).Entity()
+	gen.Floor.apply(gen.g, wall)
+	door := gen.Door.create(gen.g, pt)
 	// TODO set door behavior
 	gen.rooms.parts.Insert(roomDoor, room.ID(), door.ID)
 	return door
@@ -365,7 +365,7 @@ type builder struct {
 	pos image.Point
 	ids []ecs.ID
 
-	style renderStyle
+	spec entitySpec
 }
 
 func (bld *builder) reset() {
@@ -384,7 +384,7 @@ func (bld *builder) rectangle(box image.Rectangle) {
 	bld.lineTo(image.Pt(-1, 0), box.Dx()-1)
 }
 
-func (bld *builder) point(p image.Point) renderable {
+func (bld *builder) point(p image.Point) ecs.Entity {
 	bld.pos = p
 	return bld.create()
 }
@@ -404,10 +404,10 @@ func (bld *builder) lineTo(p image.Point, n int) {
 	}
 }
 
-func (bld *builder) create() renderable {
-	rend := bld.g.ren.create(bld.pos, bld.style)
-	bld.ids = append(bld.ids, rend.ID())
-	return rend
+func (bld *builder) create() ecs.Entity {
+	ent := bld.spec.create(bld.g, bld.pos)
+	bld.ids = append(bld.ids, ent.ID)
+	return ent
 }
 
 func sharesPointComponent(pt image.Point, pts []image.Point) bool {

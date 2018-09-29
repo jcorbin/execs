@@ -91,14 +91,14 @@ func newGame() *game {
 	g := &game{}
 	g.init()
 	g.gen.roomGenConfig = roomGenConfig{
-		Player: style(gamePlayer, 10, '@', ansi.SGRAttrBold|
-			ansi.RGB(0x60, 0x80, 0xa0).FG()),
-		Wall: style(gameWall, 5, '#', ansi.SGRAttrBold|
-			ansi.RGB(0x18, 0x18, 0x18).BG()|ansi.RGB(0x30, 0x30, 0x30).FG()),
-		Floor: style(gameFloor, 4, '·',
-			ansi.RGB(0x10, 0x10, 0x10).BG()|ansi.RGB(0x18, 0x18, 0x18).FG()),
-		Door: style(gameDoor, 6, '+',
-			ansi.RGB(0x18, 0x18, 0x18).BG()|ansi.RGB(0x60, 0x40, 0x30).FG()),
+		Player: entSpec(gamePlayer, renStyle(10, '@', ansi.SGRAttrBold|
+			ansi.RGB(0x60, 0x80, 0xa0).FG())),
+		Wall: entSpec(gameWall, renStyle(5, '#', ansi.SGRAttrBold|
+			ansi.RGB(0x18, 0x18, 0x18).BG()|ansi.RGB(0x30, 0x30, 0x30).FG())),
+		Floor: entSpec(gameFloor, renStyle(4, '·',
+			ansi.RGB(0x10, 0x10, 0x10).BG()|ansi.RGB(0x18, 0x18, 0x18).FG())),
+		Door: entSpec(gameDoor, renStyle(6, '+',
+			ansi.RGB(0x18, 0x18, 0x18).BG()|ansi.RGB(0x60, 0x40, 0x30).FG())),
 		PlaceAttempts: 3,
 		RoomSize:      image.Rect(5, 3, 21, 13),
 		MinHallSize:   2,
