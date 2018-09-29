@@ -155,7 +155,7 @@ func (gen *worldGen) createRoom(room genRoomHandle) {
 		// entrance door
 		for _, wall := range gen.built {
 			if wall.Point() == room.enter {
-				gen.carveDoorway(room, wall)
+				gen.carveDoorway(room, wall.Entity())
 				break
 			}
 		}
@@ -248,7 +248,7 @@ func (gen *worldGen) elaborateRoom(room genRoomHandle) bool {
 
 		gen.logf("hallway dir:%v n:%v", dir, n)
 		pos := start
-		gen.carveDoorway(room, wall)
+		gen.carveDoorway(room, gen.g.Entity(wallID))
 		pos = gen.createCorridor(pos, dir, n)
 		gen.create(room.depth+1, pos.Add(dir), r)
 		numDoors++
@@ -276,13 +276,13 @@ func (gen *worldGen) placeNextRoom(enter, dir image.Point) image.Rectangle {
 	return r
 }
 
-func (gen *worldGen) carveDoorway(room genRoomHandle, wall renderable) renderable {
-	pt := wall.Point()
+func (gen *worldGen) carveDoorway(room genRoomHandle, wall ecs.Entity) ecs.Entity {
+	pt := gen.g.pos.Get(wall).Point()
 	gen.logf("doorway @%v", pt)
-	wall.apply(gen.Floor)
-	door := gen.g.ren.create(pt, gen.Door)
+	gen.g.ren.Get(wall).apply(gen.Floor)
+	door := gen.g.ren.create(pt, gen.Door).Entity()
 	// TODO set door behavior
-	gen.rooms.parts.Insert(roomDoor, room.ID(), door.ID())
+	gen.rooms.parts.Insert(roomDoor, room.ID(), door.ID)
 	return door
 }
 
