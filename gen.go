@@ -153,9 +153,9 @@ func (gen *worldGen) createRoom(room genRoomHandle) {
 		gen.rooms.parts.Insert(0, id, spawn.ID)
 	} else {
 		// entrance door
-		for _, wall := range gen.built {
-			if wall.Point() == room.enter {
-				gen.carveDoorway(room, wall.Entity())
+		for _, id := range gen.builder.ids {
+			if posd := gen.g.pos.GetID(id); posd.Point() == room.enter {
+				gen.carveDoorway(room, posd.Entity())
 				break
 			}
 		}
@@ -347,17 +347,15 @@ func (room genRoomHandle) wallNormal(p image.Point) (dir image.Point) {
 }
 
 type builder struct {
-	g     *game
-	pos   image.Point
-	ids   []ecs.ID
-	built []renderable
+	g   *game
+	pos image.Point
+	ids []ecs.ID
 
 	style renderStyle
 }
 
 func (bld *builder) reset() {
 	bld.ids = bld.ids[:0]
-	bld.built = bld.built[:0]
 }
 
 func (bld *builder) moveTo(pos image.Point) {
@@ -395,7 +393,6 @@ func (bld *builder) lineTo(p image.Point, n int) {
 func (bld *builder) create() renderable {
 	rend := bld.g.ren.create(bld.pos, bld.style)
 	bld.ids = append(bld.ids, rend.ID())
-	bld.built = append(bld.built, rend)
 	return rend
 }
 
