@@ -92,3 +92,9 @@ func chainEntityApp(a, b entityApp) entityApp {
 	}
 	return entityApps{a, b}
 }
+
+type addEntityType ecs.Type
+type deleteEntityType ecs.Type
+
+func (t addEntityType) apply(_ *game, ent ecs.Entity)    { ent.AddType(ecs.Type(t)) }
+func (t deleteEntityType) apply(_ *game, ent ecs.Entity) { ent.DeleteType(ecs.Type(t)) }

@@ -94,14 +94,8 @@ var (
 	floorStyle  = renStyle(4, '·', ansi.RGB(0x10, 0x10, 0x10).BG()|ansi.RGB(0x18, 0x18, 0x18).FG())
 	doorStyle   = renStyle(6, '+', ansi.RGB(0x18, 0x18, 0x18).BG()|ansi.RGB(0x60, 0x40, 0x30).FG())
 
-	corporealApp = entApps(
-		playerStyle,
-		entityAppFunc(func(_ *game, ent ecs.Entity) { ent.AddType(gameCollides) }),
-	)
-	ghostApp = entApps(
-		spiritStyle,
-		entityAppFunc(func(_ *game, ent ecs.Entity) { ent.DeleteType(gameCollides) }),
-	)
+	corporealApp = entApps(playerStyle, addEntityType(gameCollides))
+	ghostApp     = entApps(spiritStyle, deleteEntityType(gameCollides))
 )
 
 func newGame() *game {
