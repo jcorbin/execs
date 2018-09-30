@@ -88,12 +88,18 @@ func (g *game) describeRender(ent ecs.Entity) fmt.Stringer   { return g.ren.Get(
 func (g *game) describePosition(ent ecs.Entity) fmt.Stringer { return g.pos.Get(ent) }
 
 var (
+	playerStyle = renStyle(10, '@', ansi.SGRAttrBold|ansi.RGB(0x60, 0x80, 0xa0).FG())
+	spiritStyle = renStyle(10, '^', ansi.SGRAttrBold|ansi.RGB(0x60, 0xa0, 0x80).FG())
+	wallStyle   = renStyle(5, '#', ansi.SGRAttrBold|ansi.RGB(0x18, 0x18, 0x18).BG()|ansi.RGB(0x30, 0x30, 0x30).FG())
+	floorStyle  = renStyle(4, '·', ansi.RGB(0x10, 0x10, 0x10).BG()|ansi.RGB(0x18, 0x18, 0x18).FG())
+	doorStyle   = renStyle(6, '+', ansi.RGB(0x18, 0x18, 0x18).BG()|ansi.RGB(0x60, 0x40, 0x30).FG())
+
 	corporealApp = entApps(
-		renStyle(10, '@', ansi.SGRAttrBold|ansi.RGB(0x60, 0x80, 0xa0).FG()),
+		playerStyle,
 		entityAppFunc(func(_ *game, ent ecs.Entity) { ent.AddType(gameCollides) }),
 	)
 	ghostApp = entApps(
-		renStyle(10, '^', ansi.SGRAttrBold|ansi.RGB(0x60, 0xa0, 0x80).FG()),
+		spiritStyle,
 		entityAppFunc(func(_ *game, ent ecs.Entity) { ent.DeleteType(gameCollides) }),
 	)
 )
@@ -102,14 +108,10 @@ func newGame() *game {
 	g := &game{}
 	g.init()
 	g.gen.roomGenConfig = roomGenConfig{
-		Player: entSpec(gamePlayer, renStyle(10, '@', ansi.SGRAttrBold|
-			ansi.RGB(0x60, 0x80, 0xa0).FG())),
-		Wall: entSpec(gameWall, renStyle(5, '#', ansi.SGRAttrBold|
-			ansi.RGB(0x18, 0x18, 0x18).BG()|ansi.RGB(0x30, 0x30, 0x30).FG())),
-		Floor: entSpec(gameFloor, renStyle(4, '·',
-			ansi.RGB(0x10, 0x10, 0x10).BG()|ansi.RGB(0x18, 0x18, 0x18).FG())),
-		Door: entSpec(gameDoor, renStyle(6, '+',
-			ansi.RGB(0x18, 0x18, 0x18).BG()|ansi.RGB(0x60, 0x40, 0x30).FG())),
+		Player:        entSpec(gamePlayer, playerStyle),
+		Wall:          entSpec(gameWall, wallStyle),
+		Floor:         entSpec(gameFloor, floorStyle),
+		Door:          entSpec(gameDoor, doorStyle),
 		PlaceAttempts: 3,
 		RoomSize:      image.Rect(5, 3, 21, 13),
 		MinHallSize:   2,
